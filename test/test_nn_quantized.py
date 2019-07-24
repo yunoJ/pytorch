@@ -8,6 +8,7 @@ import torch.nn.quantized as nnq
 import torch.nn.quantized.functional as qF
 from torch.nn.quantized.modules import Conv2d
 from common_utils import TestCase, run_tests, tempfile
+from common_quantized import _calculate_dynamic_qparams
 from hypothesis import given
 from hypothesis import strategies as st
 
@@ -32,6 +33,26 @@ class FunctionalAPITest(TestCase):
 
 
 class ModuleAPITest(TestCase):
+    def test_dynamic_linear_api(self):
+        """test API functionality for nn.quantized.DynamicLinear"""
+        batch_size = 1
+        in_features = 2
+        out_features = 2
+        W = torch.rand(out_features, in_features).float()
+        W_scale, W_zp = _calculate_dynamic_qparams(W, torch.qint8)
+        W_q = torch.quantize_linear(W, W_scale, W_zp, torch.qint8)
+        W_pack_col_offset = torch.ops.quantized.fbgemm_linear_prepack(W_q)
+        X = torch.rand(batch_size, in_features).float()
+        B = torch.rand(out_features).float()
+        qlinear = nnq.DynamicLinear(in_features, out_features)
+        qlinear._packed_weight = W_pack_col_offset
+        qlinear.bias = B
+
+        Z_dq = qlinear(X)
+        Z_ref = torch.ops.quantized.fbgemm_linear_dynamic(X, W_pack_col_offset, B)
+
+        self.assertEqual(Z_ref, Z_dq)
+
     @given(
         batch_size=st.integers(1, 5),
         in_features=st.integers(16, 32),
