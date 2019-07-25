@@ -1235,14 +1235,6 @@ CAFFE2_API std::ostream& operator<<(std::ostream & out, const VaryingShape & t);
 // what is the type, ignoring extra size/shape information?
 // e.g. Tensor(2x3) -> Dynamic, and Tuple(Tensor(2x3),...) -> Tuple(Dynamic,...)
 
-inline TypePtr unshapedType(const TypePtr& type) {
-  if (type->kind() == TypeKind::DimensionedTensorType ||
-      type->kind() == TypeKind::CompleteTensorType) {
-    return TensorType::get();
-  }
-  return type->withContained(fmap(type->containedTypes(), unshapedType));
-}
-
 inline TypePtr CompleteTensorType::fromNumberType(TypePtr typ) {
   if (typ->isSubtypeOf(IntType::get())) {
     return CompleteTensorType::create(at::kLong, at::kCPU, {});
@@ -1529,4 +1521,23 @@ struct CAFFE2_API ClassType : public NamedType {
   // List of methods associated with this class.
   std::vector<Function*> methods_;
 };
+
+inline TypePtr unshapedType(const TypePtr& type) {
+  if (type->kind() == TypeKind::DimensionedTensorType ||
+      type->kind() == TypeKind::CompleteTensorType) {
+    return TensorType::get();
+  }
+  if (type->kind() == TypeKind::ClassType) {
+    auto class_type = type->expect<ClassType>();
+    auto unshaped_class = ClassType::create(
+        class_type->qualname(), class_type->compilation_unit());
+
+    for (auto name : class_type->attributeNames()) {
+      auto old_type = class_type->getAttribute(name);
+      unshaped_class->addAttribute(name, unshapedType(old_type), false);
+    }
+    return unshaped_class;
+  }
+  return type->withContained(fmap(type->containedTypes(), unshapedType));
+}
 } // namespace c10
