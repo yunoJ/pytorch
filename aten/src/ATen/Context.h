@@ -20,6 +20,8 @@ namespace at {
 
 class Tensor;
 
+using Tid=int; // tensor id
+using Oid=int; // operation id
 class CAFFE2_API Context {
  public:
   Context();
@@ -100,6 +102,34 @@ class CAFFE2_API Context {
   void setBenchmarkCuDNN(bool);
   bool deterministicCuDNN() const;
   void setDeterministicCuDNN(bool);
+ 
+  struct ARCGlobalContext {
+    // tid, oid manipulation
+    Tid getTid(at::Tensor& t);
+    void setNewTid(at::Tensor& t);
+    void updateTid(at::Tensor& t, int tid);
+    void resetGlobalTid();
+    
+    Oid getCurOid();
+    Oid getNewOid();
+    void resetGlobalOid();
+    // dictionary, vector manipulation API
+    void pushBackOid(Oid oid); // must be called only in on-demand mode
+    std::vector<Oid> getBackPath(); 
+  
+    // set flags
+    void startForward();
+    void endForward(); 
+    void endOnDemand(); 
+
+    // flag checks 
+    bool isForward();
+    bool isOnDemand();
+    bool isDebugMode();
+  };
+  ARCGlobalContext ARCGlobal;
+
+
 private:
   void initCUDAIfNeeded(DeviceType p) {
     if (p == DeviceType::CUDA) {

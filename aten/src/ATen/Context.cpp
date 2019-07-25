@@ -109,4 +109,56 @@ struct LegacyDeviceTypeInit : public LegacyDeviceTypeInitInterface {
 };
 REGISTER_LEGACY_TYPE_INIT(LegacyDeviceTypeInit);
 
+/////////////////////////////////////////////////////
+// Implemented by SNU-ARC Function/Data Structures///
+// //////////////////////////////////////////////////
+
+// Data structure definitions
+// tensor, operation counts
+static int global_tensor_id_ = 0;
+static int global_operation_id_ = 0;
+// flags  
+// on_demand_mode is required to construct back_path_
+static bool on_debug_mode_ = 0;
+static bool on_demand_mode_ = 1; // default 1. Set 0 after first iteration(Profiling Stage) 
+static bool on_forwarding_ = 1; // 1 in forwarding phase. 0 in backprop. phase
+// vector for prefetching
+//Note: C++ standard containers are thread-safe.
+static std::vector<Oid> back_path_; 
+
+// tid, oid manipulation
+Tid Context::ARCGlobalContext::getTid(Tensor& t) { return t.unsafeGetTensorImpl()->tensor_id; }
+
+void Context::ARCGlobalContext::setNewTid(Tensor& t) { t.unsafeGetTensorImpl()->tensor_id = ++global_tensor_id_; }
+void Context::ARCGlobalContext::updateTid(Tensor& t, int tid) { t.unsafeGetTensorImpl()->tensor_id = tid; }
+void Context::ARCGlobalContext::resetGlobalTid() { global_tensor_id_ = 0; }
+Oid Context::ARCGlobalContext::getCurOid() { return global_operation_id_; }
+Oid Context::ARCGlobalContext::getNewOid() { return ++global_operation_id_; }
+void Context::ARCGlobalContext::resetGlobalOid() { global_operation_id_ = 0; }
+
+// set flags
+void Context::ARCGlobalContext::startForward() { on_forwarding_ = 1; }
+void Context::ARCGlobalContext::endForward() { on_forwarding_ = 0; }
+void Context::ARCGlobalContext::endOnDemand() { on_demand_mode_ = 0; }
+// flag checks 
+bool Context::ARCGlobalContext::isForward() { return on_forwarding_; }
+bool Context::ARCGlobalContext::isOnDemand() { return on_demand_mode_; }
+bool Context::ARCGlobalContext::isDebugMode() { return on_debug_mode_; }
+
+void Context::ARCGlobalContext::pushBackOid(Oid oid) { 
+  if (!on_demand_mode_) std::cerr << "Illegal call: not on-demand mode" << std::endl;
+  back_path_.push_back(oid); 
+}
+
+std::vector<Oid> Context::ARCGlobalContext::getBackPath() { 
+  std::cout << back_path_.size() << std::endl;
+  std::vector<Oid> copy(back_path_);
+  return copy; 
+}; 
+ 
+
+
+
+
+
 }
