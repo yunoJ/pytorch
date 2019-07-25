@@ -1620,6 +1620,9 @@ protected:
   // then subsequent Resize()s will not free up Storage.
   bool reserved_ = false;
 
+public:
+  int tensor_id = 0;
+
 };
 
 // Note [TensorImpl size constraints]
