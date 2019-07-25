@@ -3,6 +3,7 @@
 #else
 
 #include "ATen/cuda/CUDAContext.h"
+#include <ATen/NativeFunctions.h>
 
 #define ERROR_ONLY_FP_TYPES(func) \
   THError("%s for CUDA tensors only supports floating-point types. Try converting the tensors with .float()", func);
@@ -138,10 +139,10 @@ void THCTensor_(addmv)(THCState *state, THCTensor *r_, scalar_t beta, THCTensor 
 
 #elif defined(THC_REAL_IS_HALF)
     // Currently no Hgemv/SgemvEx in Cublas
-    THCTensor *vecAsMatrix = THCTensor_(newWithTensor)(state, vec);
+    THCTensor *vecAsMatrix = at::native::alias(THTensor_wrap(vec)).unsafeGetTensorImpl();
     THCTensor_(resize2d)(state, vecAsMatrix, vec_size, 1);
 
-    THCTensor *tAsMatrix = THCTensor_(newWithTensor)(state, t);
+    THCTensor *tAsMatrix = at::native::alias(THTensor_wrap(t)).unsafeGetTensorImpl();
     THCTensor_(resize2d)(state, tAsMatrix, THTensor_sizeLegacyNoScalars(tAsMatrix, 0), 1);
 
     THCTensor_(addmm)(state, r_, beta, tAsMatrix, alpha, mat, vecAsMatrix);
@@ -237,11 +238,11 @@ void THCTensor_(addr)(THCState *state, THCTensor *r_, scalar_t beta, THCTensor *
   }
 #elif defined(THC_REAL_IS_HALF)
   // currently no Hger/SgerEx in Cublas.
-  THCTensor *vec2T = THCTensor_(newWithTensor)(state, vec2);
+  THCTensor *vec2T = at::native::alias(THTensor_wrap(vec2)).unsafeGetTensorImpl();
   THCTensor_(resize2d)(state, vec2T, vec2_size, 1);
   THCTensor_(transpose)(state, vec2T, NULL, 0, 1);
 
-  THCTensor *vec1M = THCTensor_(newWithTensor)(state, vec1);
+  THCTensor *vec1M = at::native::alias(THTensor_wrap(vec1)).unsafeGetTensorImpl();
   THCTensor_(resize2d)(state, vec1M, vec1_size, 1);
 
   THCTensor_(addmm)(state, r_, beta, t, alpha, vec1M, vec2T);
