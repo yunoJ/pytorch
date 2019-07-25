@@ -340,6 +340,17 @@ struct TraceableFunction : public Node {
   bool is_traceable() final {
     return true;
   }
+
+// by sam, SNU-ARC
+private:
+  Oid oid; // needs to be set when making grad_fn for each operation
+  int required_tensor_num = 0; //the number of required tensors for back prop. used for Sync
+public:
+  Oid getOid() { return this->oid; }
+  void setOid(Oid oid) { this->oid = oid; }
+  int getTNum() { return required_tensor_num; }
+  void incrTNum() { required_tensor_num++; }
+
 };
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -7,10 +7,18 @@
 #include <cstdint>
 #include <memory>
 
+//SNU-ARC
+#include <map>
+#include <vector>
+#include <utility>
+
+
+
 namespace torch { namespace autograd {
 
 struct Variable;
 struct Node;
+struct TraceableFunction;
 
 TORCH_API extern const char* ERR_BACKWARD_TWICE;
 
@@ -53,4 +61,50 @@ class TORCH_API SavedVariable {
   bool requires_grad_ = false;
   bool has_grad_fn_ = false;
 };
+
+// Implemented by SNU-ARC Function/Data Structures
+// typedef
+using Tid=int; // tensor id
+using Oid=int; // operation id
+using PFInfo=std::pair<SavedVariable*, Tid>; // information required in prefetching
+enum ARCSync {Sync, Async};
+
+// ARCEngine for libtorch.so
+// support async prefetching, offloading operation 
+struct ARCCppEngine{
+public:
+  // basic fetch/offload operation
+  static void offLoad(at::Tensor& t, TraceableFunction* grad_fn, ARCSync sync, Oid curOid, SavedVariable* fetch_loc);
+  static void explicitAllSync();
+  // prefetching at curOid
+  static void preFetch(Oid curOid, int required_tensor_num, ARCSync sync);
+  static void preFetchSync(Oid curOid, int required_tensor_num);
+
+  static void startAndDetachPrefetchThread();
+
+  static void resetCppEngine();
+
+private:
+  // worker function for fetching/offloaidng
+  static void htod_(at::Tensor t, Oid oid, SavedVariable* fetch_loc);
+  static void dtoh_(at::Tensor t, Oid oid, SavedVariable* fetch_loc);
+ 
+  // Sync!
+  static void offLoadSync_(Oid oid, int required_tensor_num); // Are all tensors required for oid's back prop offloaded?  
+
+  static void fetch_(at::Tensor& t, Oid oid, ARCSync sync, SavedVariable* fetch_loc);
+
+  static void insertToPFSyncDict_(Oid oid);
+  static void insertToTensorDict_(at::Tensor& backup);
+  static void insertToPFDict_(Oid oid, SavedVariable* loc, at::Tensor& backup);
+  
+  // internal function implementing prefetching
+  static void fetchRequiredTensors_(Oid oid, int required_tensors ,ARCSync sync); 
+  static Oid whoWillPrefetched_(Oid curOid); //output is subject to change according to the prefetching policy
+
+};
+
+// end ARC
+
+
 }} // namespace torch::autograd

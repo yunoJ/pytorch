@@ -36,3 +36,22 @@ inline torch::autograd::Variable& THPVariable_Unpack(PyObject* obj) {
   auto var = (THPVariable*)obj;
   return var->cdata;
 }
+
+// Implemented by SNU-ARC Function/Data Structures
+// typedef
+
+// ARCPyEngine for libtorch_python.so
+// support sync fetching, offloading operation 
+struct ARCPyEngine{
+public:
+  // basic fetch/offload operation
+  static void fetch(at::Tensor &t);
+  static void offLoad(at::Tensor &t);
+};
+
+//ARCPyEngine global_arc;
+//ARCPyEngine& ARCPyEng();
+//global arc
+ 
+
+// end ARC

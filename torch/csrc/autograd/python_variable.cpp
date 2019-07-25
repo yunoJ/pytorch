@@ -599,3 +599,38 @@ bool THPVariable_initModule(PyObject *module)
   torch::autograd::initTensorImplConversion(module);
   return true;
 }
+
+/////////////////////////////////////////////////////
+// Implemented by SNU-ARC Function/Data Structures///
+// //////////////////////////////////////////////////
+
+
+//Note: Not referecne but copy a tensor to make it alive
+void ARCPyEngine::offLoad(Tensor& t) {
+  c10::TensorOptions opt = c10::TensorOptions();
+  opt = opt.device(c10::Device(c10::DeviceType::CPU));
+  opt = opt.dtype(t.scalar_type());
+  int stored_id = t.unsafeGetTensorImpl()->tensor_id;
+
+
+  Tensor device_t = t.to(opt);
+  
+  t.unsafeGetIntrusivePtr().swap(device_t.unsafeGetIntrusivePtr());
+  t.unsafeGetTensorImpl()->tensor_id = stored_id;
+  device_t.reset();
+}
+
+//Note: Not referecne but copy a tensor to make it alive
+void ARCPyEngine::fetch(Tensor& t) { 
+  c10::TensorOptions opt = c10::TensorOptions();
+  opt = opt.device(c10::Device(c10::DeviceType::CUDA));
+  opt = opt.dtype(t.scalar_type());
+  int stored_id = t.unsafeGetTensorImpl()->tensor_id; 
+  
+  Tensor host_t = t.to(opt);
+
+  t.unsafeGetIntrusivePtr().swap(host_t.unsafeGetIntrusivePtr());
+  t.unsafeGetTensorImpl()->tensor_id = stored_id;
+  host_t.reset();
+}
+// end by sam
