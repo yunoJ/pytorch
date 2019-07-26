@@ -2119,23 +2119,24 @@ static PyObject * THPVariable_addmm(PyObject* self_, PyObject* args, PyObject* k
   if(at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
     ARCPyEngine::fetch(input);
 
+  Tensor output;
   if (r.idx == 0) {
     if (r.isNone(5)) {
-      output dispatch_addmm(r.scalar(0), input, r.scalar(2), r.tensor(3), r.tensor(4));
+      output = dispatch_addmm(r.scalar(0), input, r.scalar(2), r.tensor(3), r.tensor(4));
     } else {
-      output dispatch_addmm(r.scalar(0), input, r.scalar(2), r.tensor(3), r.tensor(4), r.tensor(5));
+      output = dispatch_addmm(r.scalar(0), input, r.scalar(2), r.tensor(3), r.tensor(4), r.tensor(5));
     }
   } else if (r.idx == 1) {
     if (r.isNone(4)) {
-      output dispatch_addmm(r.scalar(0), input, r.tensor(2), r.tensor(3));
+      output = dispatch_addmm(r.scalar(0), input, r.tensor(2), r.tensor(3));
     } else {
-      output dispatch_addmm(r.scalar(0), input, r.tensor(2), r.tensor(3), r.tensor(4));
+      output = dispatch_addmm(r.scalar(0), input, r.tensor(2), r.tensor(3), r.tensor(4));
     }
   } else if (r.idx == 2) {
     if (r.isNone(5)) {
-      output dispatch_addmm(r.tensor(0), input, r.tensor(2), r.scalar(3), r.scalar(4));
+      output = dispatch_addmm(r.tensor(0), input, r.tensor(2), r.scalar(3), r.scalar(4));
     } else {
-      output dispatch_addmm(r.tensor(0), input, r.tensor(2), r.scalar(3), r.scalar(4), r.tensor(5));
+      output = dispatch_addmm(r.tensor(0), input, r.tensor(2), r.scalar(3), r.scalar(4), r.tensor(5));
     }
   }
 
@@ -2144,12 +2145,15 @@ static PyObject * THPVariable_addmm(PyObject* self_, PyObject* args, PyObject* k
 
   // DEBUG: print output tid
   std::cout << "OUTPUT TENSOR ID: ";
-  std::cout << at::globalContxt().ARCGlobal.getTid(output) << std::endl;
+  std::cout << at::globalContext().ARCGlobal.getTid(output) << std::endl;
   
   // ON_DEMAND_MODE: offloads output to host memory
   if (at::globalContext().ARCGlobal.isOnDemand()) {
     ARCPyEngine::offLoad(output);
   }
+  
+  return wrap(output);
+
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }
@@ -2636,7 +2640,7 @@ static PyObject * THPVariable_batch_norm(PyObject* self_, PyObject* args, PyObje
 
   Tensor output;
   if (r.idx == 0) {
-    output dispatch_batch_norm(input, r.tensor(1), r.tensor(2), r.tensor(3), r.tensor(4), r.toBool(5), r.toDouble(6), r.toDouble(7), r.toBool(8));
+    output = dispatch_batch_norm(input, r.tensor(1), r.tensor(2), r.tensor(3), r.tensor(4), r.toBool(5), r.toDouble(6), r.toDouble(7), r.toBool(8));
   }
   
   at::globalContext().ARCGlobal.setNewTid(output);
@@ -3350,7 +3354,7 @@ static PyObject * THPVariable_conv2d(PyObject* self_, PyObject* args, PyObject* 
 
   Tensor output;
   if (r.idx == 0) {
-    output dispatch_conv2d(input, r.tensor(1), r.tensor(2), r.intlist(3), r.intlist(4), r.intlist(5), r.toInt64(6));
+    output = dispatch_conv2d(input, r.tensor(1), r.tensor(2), r.intlist(3), r.intlist(4), r.intlist(5), r.toInt64(6));
   }
 
   at::globalContext().ARCGlobal.setNewTid(output);
@@ -8024,7 +8028,7 @@ static PyObject * THPVariable_relu(PyObject* self_, PyObject* args, PyObject* kw
   auto r = parser.parse(args, kwargs, parsed_args);
 
   auto oid = at::globalContext().ARCGlobal.getNewOid();
-  if (at::globalcontext().ARCGlobal.isDebugMode()) {
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "OPERATOIN ReLU, OPID: ";
     std::cout << at::globalContext().ARCGlobal.getNewOid() << std::endl;
   }
@@ -8033,6 +8037,7 @@ static PyObject * THPVariable_relu(PyObject* self_, PyObject* args, PyObject* kw
   if(at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
     ARCPyEngine::fetch(input);
 
+  Tensor output;
   if (r.idx == 0) {
     output = dispatch_relu(input);
   }
