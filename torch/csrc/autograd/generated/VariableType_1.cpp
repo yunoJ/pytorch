@@ -199,14 +199,24 @@ Tensor VariableType::__rshift__(const Tensor & self, const Tensor & other) {
   }
   return result;
 }
-Tensor VariableType::_adaptive_avg_pool2d(const Tensor & self, IntArrayRef output_size) {
+Tensor VariableType::_adaptive_avg_pool2d(Tensor & self, IntArrayRef output_size) {
   RECORD_FUNCTION("_adaptive_avg_pool2d", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
   auto& self_ = unpack(self, "self", 0);
   std::shared_ptr<AdaptiveAvgPool2DBackward> grad_fn;
+  
   if (compute_requires_grad( self )) {
-    grad_fn = std::shared_ptr<AdaptiveAvgPool2DBackward>(new AdaptiveAvgPool2DBackward(), deleteNode);
+    grad_fn = std::shared_ptr<AdaptiveAvgPool2DBackward>(new AdaptiveAvgPool2DBackward(), deleteFunction);
     grad_fn->set_next_edges(collect_next_edges( self ));
-    grad_fn->self_ = SavedVariable(self, false);
+ 
+    if (at::globalContext().ARCGlobal.isForward()) { 
+      // no allocation on GPU
+      ARCCppEngine::offLoad(self, (TraceableFunction *)(grad_fn.get()), Async, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_));
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else {
+      grad_fn->self_ = SavedVariable(self, false);
+    }
+
   }
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
@@ -13172,7 +13182,7 @@ static auto& registerer = globalATenDispatch()
   .registerVariableOp<Tensor & (Tensor &, const Tensor &)>("aten::__irshift__(Tensor(a!) self, Tensor other) -> Tensor(a!)", &VariableType::__irshift__)
   .registerVariableOp<Tensor (const Tensor &, Scalar)>("aten::__rshift__(Tensor self, Scalar other) -> Tensor", &VariableType::__rshift__)
   .registerVariableOp<Tensor (const Tensor &, const Tensor &)>("aten::__rshift__(Tensor self, Tensor other) -> Tensor", &VariableType::__rshift__)
-  .registerVariableOp<Tensor (const Tensor &, IntArrayRef)>("aten::_adaptive_avg_pool2d(Tensor self, int[2] output_size) -> Tensor", &VariableType::_adaptive_avg_pool2d)
+  .registerVariableOp<Tensor (Tensor &, IntArrayRef)>("aten::_adaptive_avg_pool2d(Tensor self, int[2] output_size) -> Tensor", &VariableType::_adaptive_avg_pool2d)
   .registerVariableOp<Tensor (const Tensor &, const Tensor &, const Tensor &, Scalar, Scalar)>("aten::_addr(Tensor self, Tensor vec1, Tensor vec2, *, Scalar beta=1, Scalar alpha=1) -> Tensor", &VariableType::_addr)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, const Tensor &, Scalar, Scalar)>("aten::_addr_(Tensor(a!) self, Tensor vec1, Tensor vec2, *, Scalar beta=1, Scalar alpha=1) -> Tensor(a!)", &VariableType::_addr_)
   .registerVariableOp<Tensor (const Tensor &, bool)>("aten::_cast_Byte(Tensor self, bool non_blocking=False) -> Tensor", &VariableType::_cast_Byte)

@@ -3268,6 +3268,8 @@ static PyObject * THPVariable_conv2d(PyObject* self_, PyObject* args, PyObject* 
   ParsedArgs<7> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
+  std::cout << "hello" << std::endl;  
+
   if (r.idx == 0) {
     return wrap(dispatch_conv2d(r.tensor(0), r.tensor(1), r.tensor(2), r.intlist(3), r.intlist(4), r.intlist(5), r.toInt64(6)));
   }

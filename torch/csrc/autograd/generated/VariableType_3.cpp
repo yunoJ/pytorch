@@ -10870,6 +10870,10 @@ Tensor VariableType::view(const Tensor & self, IntArrayRef size) {
     return self_.view(size);
   })();
   auto result = as_view(self, tmp, true);
+  // by sam SUN-ARC
+  auto self_tid = self.unsafeGetTensorImpl()->tensor_id;
+  result.unsafeGetTensorImpl()->tensor_id = self_tid;
+
   #ifndef NDEBUG
   if (self__storage_saved.has_value())
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));

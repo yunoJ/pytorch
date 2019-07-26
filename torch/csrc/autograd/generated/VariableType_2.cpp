@@ -6417,9 +6417,18 @@ std::tuple<Tensor,Tensor> VariableType::max_pool2d_with_indices(const Tensor & s
   auto& self_ = unpack(self, "self", 0);
   std::shared_ptr<MaxPool2DWithIndicesBackward> grad_fn;
   if (compute_requires_grad( self )) {
-    grad_fn = std::shared_ptr<MaxPool2DWithIndicesBackward>(new MaxPool2DWithIndicesBackward(), deleteNode);
+    grad_fn = std::shared_ptr<MaxPool2DWithIndicesBackward>(new MaxPool2DWithIndicesBackward(), deleteFunction);
     grad_fn->set_next_edges(collect_next_edges( self ));
-    grad_fn->self_ = SavedVariable(self, false);
+  
+    if (at::globalContext().ARCGlobal.isForward()) { 
+      // no allocation on GPU
+      ARCCppEngine::offLoad(self, (TraceableFunction *)(grad_fn.get()), Async, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_));
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else {
+      grad_fn->self_ = SavedVariable(self, false);
+    }
+ 
     grad_fn->kernel_size = kernel_size.vec();
     grad_fn->stride = stride.vec();
     grad_fn->padding = padding.vec();
