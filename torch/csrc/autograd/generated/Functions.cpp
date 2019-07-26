@@ -2222,6 +2222,11 @@ variable_list AcosBackward::apply(variable_list&& grads) {
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
   auto self = self_.unpack();
+  
+  //SNU-ARC
+  if (at::globalContext().ARCGlobal.isOnDemand())
+    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
+  
   if (should_compute_output({ self_ix })) {
     auto grad_result = grad * -((-self * self + 1).rsqrt());
     copy_range(grad_inputs, self_ix, grad_result);
@@ -2235,6 +2240,11 @@ variable_list AddBackward0::apply(variable_list&& grads) {
   auto other_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
+  
+  //SNU-ARC
+  if (at::globalContext().ARCGlobal.isOnDemand())
+    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
+
   if (should_compute_output({ other_ix })) {
     auto grad_result = maybe_multiply(grad, alpha);
     copy_range(grad_inputs, other_ix, grad_result);
@@ -5650,6 +5660,12 @@ variable_list TrilinearBackward::apply(variable_list&& grads) {
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
   auto i1 = i1_.unpack();
+  
+  //SNU-ARC
+  if (at::globalContext().ARCGlobal.isOnDemand())
+    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
+  
+  ARCCppEngine::preFetch(this->getOid(), this->getTNum(), Sync); 
   auto i2 = i2_.unpack();
   auto i3 = i3_.unpack();
   if (should_compute_output({ i1_ix, i2_ix, i3_ix })) {
@@ -5923,6 +5939,11 @@ variable_list ReluBackward0::apply(variable_list&& grads) {
   auto self_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
+  
+  //SNU-ARC
+  if (at::globalContext().ARCGlobal.isOnDemand())
+    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
+  
   auto self = self_.unpack();
   if (should_compute_output({ self_ix })) {
     auto grad_result = threshold_backward(grad, self, 0);
@@ -5937,6 +5958,11 @@ variable_list ReluBackward1::apply(variable_list&& grads) {
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
   auto result = result_.unpack(shared_from_this());
+  
+  //SNU-ARC
+  if (at::globalContext().ARCGlobal.isOnDemand())
+    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
+  
   if (should_compute_output({ self_ix })) {
     auto grad_result = threshold_backward(grad, result, 0);
     copy_range(grad_inputs, self_ix, grad_result);
@@ -6389,6 +6415,12 @@ variable_list AdaptiveAvgPool2DBackward::apply(variable_list&& grads) {
   auto self_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
+  
+  //SNU-ARC
+  if (at::globalContext().ARCGlobal.isOnDemand())
+    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
+  ARCCppEngine::preFetch(this->getOid(), this->getTNum(), Sync);
+  
   auto self = self_.unpack();
   if (should_compute_output({ self_ix })) {
     auto grad_result = _adaptive_avg_pool2d_backward(grad, self);
@@ -6444,6 +6476,12 @@ variable_list AvgPool2DBackward::apply(variable_list&& grads) {
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
   auto self = self_.unpack();
+  
+  //SNU-ARC
+  if (at::globalContext().ARCGlobal.isOnDemand())
+    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
+  ARCCppEngine::preFetch(this->getOid(), this->getTNum(), Sync);
+  
   if (should_compute_output({ self_ix })) {
     auto grad_result = avg_pool2d_backward(grad, self, kernel_size, stride, padding, ceil_mode, count_include_pad, divisor_override);
     copy_range(grad_inputs, self_ix, grad_result);
@@ -6498,6 +6536,12 @@ variable_list MaxPool2DWithIndicesBackward::apply(variable_list&& grads) {
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
   auto self = self_.unpack();
+  
+  //SNU-ARC
+  if (at::globalContext().ARCGlobal.isOnDemand())
+    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
+  ARCCppEngine::preFetch(this->getOid(), this->getTNum(), Sync);
+  
   auto result1 = result1_.unpack(shared_from_this());
   if (should_compute_output({ self_ix })) {
     auto grad_result = max_pool2d_with_indices_backward(grad, self, kernel_size, stride, padding, dilation, ceil_mode, result1);
@@ -7814,6 +7858,12 @@ variable_list CudnnConvolutionBackward::apply(variable_list&& grads) {
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
   auto self = self_.unpack();
+  
+  //SNU-ARC
+  if (at::globalContext().ARCGlobal.isOnDemand())
+    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
+  ARCCppEngine::preFetch(this->getOid(), this->getTNum(), Sync);
+  
   auto weight = weight_.unpack();
   if (should_compute_output({ self_ix, weight_ix, bias_ix })) {
       auto grad_input_mask = std::array<bool, 3>{
@@ -7904,6 +7954,12 @@ variable_list CudnnBatchNormBackward::apply(variable_list&& grads) {
   auto bias_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
+  
+  //SNU-ARC
+  if (at::globalContext().ARCGlobal.isOnDemand())
+    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
+  ARCCppEngine::preFetch(this->getOid(), this->getTNum(), Sync);
+  
   auto input = input_.unpack();
   auto weight = weight_.unpack();
   auto running_mean = running_mean_.unpack();
