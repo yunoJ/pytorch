@@ -2864,7 +2864,7 @@ Tensor VariableType::addmm(Tensor & self, Tensor & mat1, Tensor & mat2, Scalar b
     grad_fn = std::shared_ptr<AddmmBackward>(new AddmmBackward(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self, mat1, mat2 ));
     if (at::globalContext().ARCGlobal.isForward()){
-      ARCCppEngine::offLoad(mat1, (TracebaleFunction*)(grad_fn.get()), Async, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->mat1_));
+      ARCCppEngine::offLoad(mat1, (TraceableFunction*)(grad_fn.get()), Async, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->mat1_));
       grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
     }
     else {
@@ -3362,8 +3362,8 @@ Tensor VariableType::avg_pool2d(Tensor & self, IntArrayRef kernel_size, IntArray
     grad_fn = std::shared_ptr<AvgPool2DBackward>(new AvgPool2DBackward(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self ));
     if (at::globalContext().ARCGlobal.isForward()) {
-      ARCCppEngine::offLoad(self, (TraceableFunction* )(grad_fn.get()), Async, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self));
-      sgrad_fn->setOid(at::globalcContext().ARCGlobal.getCurOid());
+      ARCCppEngine::offLoad(self, (TraceableFunction* )(grad_fn.get()), Async, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_));
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
     }
     else {
       grad_fn->self_ = SavedVariable(self, false);
@@ -12356,7 +12356,7 @@ static auto& registerer = globalATenDispatch()
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, const Tensor &, const Tensor &)>("aten::adaptive_max_pool3d_backward(Tensor grad_output, Tensor self, Tensor indices, *, Tensor(a!) grad_input) -> Tensor(a!)", &VariableType::adaptive_max_pool3d_backward_out)
   .registerVariableOp<Tensor (const Tensor &, const Tensor &, const Tensor &, Scalar)>("aten::addcmul(Tensor self, Tensor tensor1, Tensor tensor2, *, Scalar value=1) -> Tensor", &VariableType::addcmul)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, const Tensor &, Scalar)>("aten::addcmul_(Tensor(a!) self, Tensor tensor1, Tensor tensor2, *, Scalar value=1) -> Tensor(a!)", &VariableType::addcmul_)
-  .registerVariableOp<Tensor (const Tensor &, const Tensor &, const Tensor &, Scalar, Scalar)>("aten::addmm(Tensor self, Tensor mat1, Tensor mat2, *, Scalar beta=1, Scalar alpha=1) -> Tensor", &VariableType::addmm)
+  .registerVariableOp<Tensor (Tensor &, Tensor &, Tensor &, Scalar, Scalar)>("aten::addmm(Tensor self, Tensor mat1, Tensor mat2, *, Scalar beta=1, Scalar alpha=1) -> Tensor", &VariableType::addmm)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, const Tensor &, Scalar, Scalar)>("aten::addmm_(Tensor(a!) self, Tensor mat1, Tensor mat2, *, Scalar beta=1, Scalar alpha=1) -> Tensor(a!)", &VariableType::addmm_)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, const Tensor &, const Tensor &, Scalar, Scalar)>("aten::addr(Tensor self, Tensor vec1, Tensor vec2, *, Scalar beta=1, Scalar alpha=1, Tensor(a!) out) -> Tensor(a!)", &VariableType::addr_out)
   .registerVariableOp<Tensor (const Tensor &, c10::optional<int64_t>, bool)>("aten::argmax(Tensor self, int? dim=None, bool keepdim=False) -> Tensor", &VariableType::argmax)

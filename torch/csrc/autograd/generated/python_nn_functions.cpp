@@ -57,7 +57,7 @@ static PyObject * THPVariable_adaptive_avg_pool2d(PyObject* self_, PyObject* arg
   ParsedArgs<3> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
-  auto oid = at::globalcontext().ARCGlobal.getNewOid();
+  auto oid = at::globalContext().ARCGlobal.getNewOid();
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "OPERATION ADAPTIVE AVG POOL2D, OPID: ";
     std::cout << oid << std::endl;
@@ -164,7 +164,7 @@ static PyObject * THPVariable_avg_pool2d(PyObject* self_, PyObject* args, PyObje
   ParsedArgs<8> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
-  auto oid = at::globalcontext().ARCGlobal.getNewOid();
+  auto oid = at::globalContext().ARCGlobal.getNewOid();
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "OPERATION MSE_LOSS, OPID: ";
     std::cout << oid << std::endl;
@@ -717,7 +717,7 @@ static PyObject * THPVariable_mse_loss(PyObject* self_, PyObject* args, PyObject
   ParsedArgs<4> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
-  auto oid = at::globalcontext().ARCGlobal.getNewOid();
+  auto oid = at::globalContext().ARCGlobal.getNewOid();
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "OPERATION MSE_LOSS, OPID: ";
     std::cout << oid << std::endl;
@@ -803,7 +803,7 @@ static PyObject * THPVariable_nll_loss(PyObject* self_, PyObject* args, PyObject
   ParsedArgs<6> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
-  auto oid = at::globalcontext().ARCGlobal.getNewOid();
+  auto oid = at::globalContext().ARCGlobal.getNewOid();
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "OPERATION NLL LOSS, OPID: ";
     std::cout << oid << std::endl;
