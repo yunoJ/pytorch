@@ -2111,9 +2111,9 @@ static PyObject * THPVariable_addmm(PyObject* self_, PyObject* args, PyObject* k
   Tensor input = r.tensor(1);
 
   // DEBUG: print tid of input tensor
-  std::cout << "INPUT TENSOR ID: ";
-  auto itid = at::globalContext().ARCGlobal.getTid(input);
-  std::cout << itid << std::endl;
+  // std::cout << "INPUT TENSOR ID: ";
+  // auto itid = at::globalContext().ARCGlobal.getTid(input);
+  // std::cout << itid << std::endl;
 
   // ON_DEMAND_MODE: fetch input from host if it lies in host memory
   if(at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
@@ -2144,8 +2144,8 @@ static PyObject * THPVariable_addmm(PyObject* self_, PyObject* args, PyObject* k
   at::globalContext().ARCGlobal.setNewTid(output);
 
   // DEBUG: print output tid
-  std::cout << "OUTPUT TENSOR ID: ";
-  std::cout << at::globalContext().ARCGlobal.getTid(output) << std::endl;
+  //std::cout << "OUTPUT TENSOR ID: ";
+  //std::cout << at::globalContext().ARCGlobal.getTid(output) << std::endl;
   
   // ON_DEMAND_MODE: offloads output to host memory
   if (at::globalContext().ARCGlobal.isOnDemand()) {

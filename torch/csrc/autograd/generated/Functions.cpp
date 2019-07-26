@@ -2347,6 +2347,13 @@ variable_list AddmmBackward::apply(variable_list&& grads) {
   auto mat2_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
+
+  if (at::globalContext().ARCGlobal.isOnDemand())
+    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
+  ARCCppEngine::preFetch(this->getOid(), this->getTNum(), Sync);
+  
+
+
   auto mat1 = mat1_.unpack();
   auto mat2 = mat2_.unpack();
   if (should_compute_output({ mat1_ix })) {
@@ -4135,6 +4142,12 @@ variable_list NativeBatchNormBackward::apply(variable_list&& grads) {
   auto bias_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
+
+  if (at::globalContext().ARCGlobal.isOnDemand())
+    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
+  ARCCppEngine::preFetch(this->getOid(), this->getTNum(), Sync);
+ 
+
   auto input = input_.unpack();
   auto weight = weight_.unpack();
   auto running_mean = running_mean_.unpack();
@@ -6475,14 +6488,16 @@ variable_list AvgPool2DBackward::apply(variable_list&& grads) {
   auto self_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
-  auto self = self_.unpack();
   
   //SNU-ARC
   if (at::globalContext().ARCGlobal.isOnDemand())
     at::globalContext().ARCGlobal.pushBackOid(this->getOid());
   ARCCppEngine::preFetch(this->getOid(), this->getTNum(), Sync);
   
-  if (should_compute_output({ self_ix })) {
+
+  auto self = self_.unpack();
+  
+    if (should_compute_output({ self_ix })) {
     auto grad_result = avg_pool2d_backward(grad, self, kernel_size, stride, padding, ceil_mode, count_include_pad, divisor_override);
     copy_range(grad_inputs, self_ix, grad_result);
   }
@@ -6535,13 +6550,13 @@ variable_list MaxPool2DWithIndicesBackward::apply(variable_list&& grads) {
   auto self_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
-  auto self = self_.unpack();
   
   //SNU-ARC
   if (at::globalContext().ARCGlobal.isOnDemand())
     at::globalContext().ARCGlobal.pushBackOid(this->getOid());
   ARCCppEngine::preFetch(this->getOid(), this->getTNum(), Sync);
-  
+ 
+  auto self = self_.unpack();
   auto result1 = result1_.unpack(shared_from_this());
   if (should_compute_output({ self_ix })) {
     auto grad_result = max_pool2d_with_indices_backward(grad, self, kernel_size, stride, padding, dilation, ceil_mode, result1);
@@ -6715,6 +6730,11 @@ variable_list ThnnConv2DBackward::apply(variable_list&& grads) {
   auto bias_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
+
+  if (at::globalContext().ARCGlobal.isOnDemand())
+    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
+  ARCCppEngine::preFetch(this->getOid(), this->getTNum(), Sync);
+ 
   auto self = self_.unpack();
   auto weight = weight_.unpack();
   auto finput = finput_.unpack(shared_from_this());

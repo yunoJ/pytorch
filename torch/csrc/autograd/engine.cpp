@@ -645,6 +645,14 @@ auto Engine::execute(const edge_list& roots,
                      bool keep_graph,
                      bool create_graph,
                      const edge_list& outputs) -> variable_list {
+
+  // by sam SNU-ARC
+  // backward start
+  // ends forward
+  at::globalContext().ARCGlobal.endForward();
+  // by sam end
+  
+
   std::call_once(start_threads_flag_, &Engine::start_threads, this);
 
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
@@ -717,6 +725,18 @@ auto Engine::execute(const edge_list& roots,
     final_callbacks_[i]();
     cb_lock.lock();
   }
+
+  // by sam SNU-ARC
+  // end of backward path
+  // reset global ids
+  ARCCppEngine::resetCppEngine();
+
+  // let forward start again and turn off on demand mode if it's still on.
+  at::globalContext().ARCGlobal.startForward();
+  if(at::globalContext().ARCGlobal.isOnDemand()) at::globalContext().ARCGlobal.endOnDemand();
+  // by sam end
+
+
 
   return graph_task.captured_vars_;
 }

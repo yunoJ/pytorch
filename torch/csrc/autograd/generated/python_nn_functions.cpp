@@ -64,9 +64,9 @@ static PyObject * THPVariable_adaptive_avg_pool2d(PyObject* self_, PyObject* arg
   }
   Tensor input = r.tensor(0);
 
-  std::cout << "INPUT TENSOR ID: ";
-  auto itid = at::globalContext().ARCGlobal.getTid(input);
-  std::cout << itid << std::endl;
+  //std::cout << "INPUT TENSOR ID: ";
+  //auto itid = at::globalContext().ARCGlobal.getTid(input);
+  //std::cout << itid << std::endl;
 
   if (at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
     ARCPyEngine::fetch(input);
@@ -166,14 +166,14 @@ static PyObject * THPVariable_avg_pool2d(PyObject* self_, PyObject* args, PyObje
 
   auto oid = at::globalContext().ARCGlobal.getNewOid();
   if (at::globalContext().ARCGlobal.isDebugMode()) {
-    std::cout << "OPERATION MSE_LOSS, OPID: ";
+    std::cout << "OPERATION AVG_POOL2D, OPID: ";
     std::cout << oid << std::endl;
   }
   Tensor input = r.tensor(0);
 
-  std::cout << "INPUT TENSOR ID: ";
-  auto itid = at::globalContext().ARCGlobal.getTid(input);
-  std::cout << itid << std::endl;
+  //std::cout << "INPUT TENSOR ID: ";
+  //auto itid = at::globalContext().ARCGlobal.getTid(input);
+  //std::cout << itid << std::endl;
 
   if (at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
     ARCPyEngine::fetch(input);
@@ -724,9 +724,9 @@ static PyObject * THPVariable_mse_loss(PyObject* self_, PyObject* args, PyObject
   }
   Tensor input = r.tensor(0);
 
-  std::cout << "INPUT TENSOR ID: ";
-  auto itid = at::globalContext().ARCGlobal.getTid(input);
-  std::cout << itid << std::endl;
+  //std::cout << "INPUT TENSOR ID: ";
+  //auto itid = at::globalContext().ARCGlobal.getTid(input);
+  //std::cout << itid << std::endl;
 
   if (at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
     ARCPyEngine::fetch(input);
@@ -810,9 +810,9 @@ static PyObject * THPVariable_nll_loss(PyObject* self_, PyObject* args, PyObject
   }
   Tensor input = r.tensor(0);
 
-  std::cout << "INPUT TENSOR ID: ";
-  auto itid = at::globalContext().ARCGlobal.getTid(input);
-  std::cout << itid << std::endl;
+  //std::cout << "INPUT TENSOR ID: ";
+  //auto itid = at::globalContext().ARCGlobal.getTid(input);
+  //std::cout << itid << std::endl;
 
   if (at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
     ARCPyEngine::fetch(input);

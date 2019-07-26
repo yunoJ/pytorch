@@ -154,6 +154,8 @@ void ARCCppEngine::explicitAllSync() {
 }
 
 void ARCCppEngine::preFetch(Oid curOid, int required_tensor_num, ARCSync sync) {
+  if (at::globalContext().ARCGlobal.isDebugMode())
+    std::cout <<  curOid << "prefetching" << std::endl;
   Oid target = whoWillPrefetched_(curOid);
   if (target < 0) std::cerr << "There is no more operation to need prefetch." << std::endl;
   fetchRequiredTensors_(target, required_tensor_num, sync); 
