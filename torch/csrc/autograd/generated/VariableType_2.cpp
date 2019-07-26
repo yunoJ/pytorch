@@ -3141,7 +3141,7 @@ Tensor VariableType::cudnn_affine_grid_generator(const Tensor & theta, int64_t N
   }
   return grid_return;
 }
-Tensor VariableType::cudnn_convolution(const Tensor & self, const Tensor & weight, const Tensor & bias, IntArrayRef padding, IntArrayRef stride, IntArrayRef dilation, int64_t groups, bool benchmark, bool deterministic) {
+Tensor VariableType::cudnn_convolution(Tensor & self, const Tensor & weight, const Tensor & bias, IntArrayRef padding, IntArrayRef stride, IntArrayRef dilation, int64_t groups, bool benchmark, bool deterministic) {
   RECORD_FUNCTION("cudnn_convolution", std::vector<c10::IValue>({self, weight, bias}), Node::peek_at_next_sequence_nr());
   auto& self_ = unpack(self, "self", 0);
   auto& weight_ = unpack(weight, "weight", 1);
@@ -3150,7 +3150,13 @@ Tensor VariableType::cudnn_convolution(const Tensor & self, const Tensor & weigh
   if (compute_requires_grad( self, weight, bias )) {
     grad_fn = std::shared_ptr<CudnnConvolutionBackward>(new CudnnConvolutionBackward(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self, weight, bias ));
-    grad_fn->self_ = SavedVariable(self, false);
+    if (at::globalContext().ARCGlobal.isForwward()){
+      ARCCppEngine::offLoad(self, (TraceableFunctoin *)(grad_fn.get()), Async, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self));
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else {
+      grad_fn->self_ = SavedVariable(self, false);
+    }
     grad_fn->weight_ = SavedVariable(weight, false);
     grad_fn->padding = padding.vec();
     grad_fn->stride = stride.vec();
@@ -6412,14 +6418,20 @@ Tensor VariableType::max_pool1d(const Tensor & self, IntArrayRef kernel_size, In
   }
   return result;
 }
-std::tuple<Tensor,Tensor> VariableType::max_pool2d_with_indices(const Tensor & self, IntArrayRef kernel_size, IntArrayRef stride, IntArrayRef padding, IntArrayRef dilation, bool ceil_mode) {
+std::tuple<Tensor,Tensor> VariableType::max_pool2d_with_indices(Tensor & self, IntArrayRef kernel_size, IntArrayRef stride, IntArrayRef padding, IntArrayRef dilation, bool ceil_mode) {
   RECORD_FUNCTION("max_pool2d_with_indices", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
   auto& self_ = unpack(self, "self", 0);
   std::shared_ptr<MaxPool2DWithIndicesBackward> grad_fn;
   if (compute_requires_grad( self )) {
     grad_fn = std::shared_ptr<MaxPool2DWithIndicesBackward>(new MaxPool2DWithIndicesBackward(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self ));
-    grad_fn->self_ = SavedVariable(self, false);
+    if (at::globalContext().ARCGlobal.isForward()){
+      ARCCppEngine::offLoad(self, (TraceableFunction *)(grad_fn.get()), Async, at::globalContext().ARCGlobal.getcurOid(), &(grad_fn->self));
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else {
+      grad_fn->self_ = SavedVariable(self, false);
+    }
     grad_fn->kernel_size = kernel_size.vec();
     grad_fn->stride = stride.vec();
     grad_fn->padding = padding.vec();
@@ -11985,7 +11997,7 @@ static auto& registerer = globalATenDispatch()
   .registerVariableOp<std::tuple<Tensor,Tensor,Tensor> (const Tensor &, const Tensor &, const Tensor &, const Tensor &, int64_t)>("aten::conv_tbc_backward(Tensor self, Tensor input, Tensor weight, Tensor bias, int pad) -> (Tensor, Tensor, Tensor)", &VariableType::conv_tbc_backward)
   .registerVariableOp<Tensor (const Tensor &, const Tensor &, const Tensor &, double, int64_t)>("aten::cosine_embedding_loss(Tensor input1, Tensor input2, Tensor target, float margin=0.0, int reduction=Mean) -> Tensor", &VariableType::cosine_embedding_loss)
   .registerVariableOp<Tensor (const Tensor &, int64_t, int64_t, int64_t, int64_t)>("aten::cudnn_affine_grid_generator(Tensor theta, int N, int C, int H, int W) -> Tensor grid", &VariableType::cudnn_affine_grid_generator)
-  .registerVariableOp<Tensor (const Tensor &, const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, int64_t, bool, bool)>("aten::cudnn_convolution(Tensor self, Tensor weight, Tensor? bias, int[] padding, int[] stride, int[] dilation, int groups, bool benchmark, bool deterministic) -> Tensor", &VariableType::cudnn_convolution)
+  .registerVariableOp<Tensor (Tensor &, const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, int64_t, bool, bool)>("aten::cudnn_convolution(Tensor self, Tensor weight, Tensor? bias, int[] padding, int[] stride, int[] dilation, int groups, bool benchmark, bool deterministic) -> Tensor", &VariableType::cudnn_convolution)
   .registerVariableOp<Tensor (IntArrayRef, const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, int64_t, bool, bool)>("aten::cudnn_convolution_transpose_backward_weight(int[] weight_size, Tensor grad_output, Tensor self, int[] padding, int[] stride, int[] dilation, int groups, bool benchmark, bool deterministic) -> Tensor", &VariableType::cudnn_convolution_transpose_backward_weight)
   .registerVariableOp<Tensor (const Tensor &, int64_t, c10::optional<ScalarType>)>("aten::cumprod(Tensor self, int dim, *, ScalarType? dtype=None) -> Tensor", &VariableType::cumprod)
   .registerVariableOp<Tensor (const Tensor &)>("aten::dequantize(Tensor self) -> Tensor", &VariableType::dequantize)
@@ -12054,7 +12066,7 @@ static auto& registerer = globalATenDispatch()
   .registerVariableOp<Tensor (const Tensor &, const Tensor &, const Tensor &)>("aten::masked_scatter(Tensor self, Tensor mask, Tensor source) -> Tensor", &VariableType::masked_scatter)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, const Tensor &)>("aten::masked_scatter_(Tensor(a!) self, Tensor mask, Tensor source) -> Tensor(a!)", &VariableType::masked_scatter_)
   .registerVariableOp<Tensor (const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, IntArrayRef, bool)>("aten::max_pool1d(Tensor self, int[1] kernel_size, int[1] stride=[], int[1] padding=0, int[1] dilation=1, bool ceil_mode=False) -> Tensor", &VariableType::max_pool1d)
-  .registerVariableOp<std::tuple<Tensor,Tensor> (const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, IntArrayRef, bool)>("aten::max_pool2d_with_indices(Tensor self, int[2] kernel_size, int[2] stride=[], int[2] padding=0, int[2] dilation=1, bool ceil_mode=False) -> (Tensor, Tensor)", &VariableType::max_pool2d_with_indices)
+  .registerVariableOp<std::tuple<Tensor,Tensor> (Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, IntArrayRef, bool)>("aten::max_pool2d_with_indices(Tensor self, int[2] kernel_size, int[2] stride=[], int[2] padding=0, int[2] dilation=1, bool ceil_mode=False) -> (Tensor, Tensor)", &VariableType::max_pool2d_with_indices)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, IntArrayRef, bool, const Tensor &)>("aten::max_pool2d_with_indices_backward(Tensor grad_output, Tensor self, int[2] kernel_size, int[2] stride, int[2] padding, int[2] dilation, bool ceil_mode, Tensor indices, *, Tensor(a!) grad_input) -> Tensor(a!)", &VariableType::max_pool2d_with_indices_backward_out)
   .registerVariableOp<std::tuple<Tensor &,Tensor &> (Tensor &, Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, IntArrayRef, bool)>("aten::max_pool3d_with_indices(Tensor self, int[3] kernel_size, int[3] stride=[], int[3] padding=0, int[3] dilation=1, bool ceil_mode=False, *, Tensor(a!) out, Tensor(b!) indices) -> (Tensor(a!), Tensor(b!))", &VariableType::max_pool3d_with_indices_out)
   .registerVariableOp<Tensor (const Tensor &, const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef)>("aten::max_unpool3d_backward(Tensor grad_output, Tensor self, Tensor indices, int[3] output_size, int[3] stride, int[3] padding) -> Tensor", &VariableType::max_unpool3d_backward)

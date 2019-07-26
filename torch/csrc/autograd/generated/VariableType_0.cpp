@@ -2853,16 +2853,23 @@ Tensor & VariableType::addcmul_(Tensor & self, const Tensor & tensor1, const Ten
   }
   return self;
 }
-Tensor VariableType::addmm(const Tensor & self, const Tensor & mat1, const Tensor & mat2, Scalar beta, Scalar alpha) {
+Tensor VariableType::addmm(Tensor & self, Tensor & mat1, Tensor & mat2, Scalar beta, Scalar alpha) {
   RECORD_FUNCTION("addmm", std::vector<c10::IValue>({self, mat1, mat2, beta, alpha}), Node::peek_at_next_sequence_nr());
   auto& self_ = unpack(self, "self", 0);
   auto& mat1_ = unpack(mat1, "mat1", 1);
   auto& mat2_ = unpack(mat2, "mat2", 2);
   std::shared_ptr<AddmmBackward> grad_fn;
+
   if (compute_requires_grad( self, mat1, mat2 )) {
     grad_fn = std::shared_ptr<AddmmBackward>(new AddmmBackward(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self, mat1, mat2 ));
-    grad_fn->mat1_ = SavedVariable(mat1, false);
+    if (at::globalContext().ARCGlobal.isForward()){
+      ARCCppEngine::offLoad(mat1, (TracebaleFunction*)(grad_fn.get()), Async, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->mat1_));
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else {
+      grad_fn->mat1_ = SavedVariable(mat1, false);
+    }
     grad_fn->mat2_ = SavedVariable(mat2, false);
     grad_fn->alpha = alpha;
     grad_fn->mat2_sizes = mat2.sizes().vec();
@@ -3347,14 +3354,20 @@ Tensor & VariableType::atan_(Tensor & self) {
   }
   return self;
 }
-Tensor VariableType::avg_pool2d(const Tensor & self, IntArrayRef kernel_size, IntArrayRef stride, IntArrayRef padding, bool ceil_mode, bool count_include_pad, c10::optional<int64_t> divisor_override) {
+Tensor VariableType::avg_pool2d(Tensor & self, IntArrayRef kernel_size, IntArrayRef stride, IntArrayRef padding, bool ceil_mode, bool count_include_pad, c10::optional<int64_t> divisor_override) {
   RECORD_FUNCTION("avg_pool2d", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
   auto& self_ = unpack(self, "self", 0);
   std::shared_ptr<AvgPool2DBackward> grad_fn;
   if (compute_requires_grad( self )) {
     grad_fn = std::shared_ptr<AvgPool2DBackward>(new AvgPool2DBackward(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self ));
-    grad_fn->self_ = SavedVariable(self, false);
+    if (at::globalContext().ARCGlobal.isForward()) {
+      ARCCppEngine::offLoad(self, (TraceableFunction* )(grad_fn.get()), Async, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self));
+      sgrad_fn->setOid(at::globalcContext().ARCGlobal.getCurOid());
+    }
+    else {
+      grad_fn->self_ = SavedVariable(self, false);
+    }
     grad_fn->kernel_size = kernel_size.vec();
     grad_fn->stride = stride.vec();
     grad_fn->padding = padding.vec();
@@ -9674,6 +9687,9 @@ Tensor & VariableType::relu_(Tensor & self) {
   std::shared_ptr<ReluBackward1> grad_fn;
   if (compute_requires_grad( self )) {
     grad_fn = std::shared_ptr<ReluBackward1>(new ReluBackward1(), deleteNode);
+    if (at::globalContext().ARCGlobal.isForward()) {
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
     grad_fn->set_next_edges(collect_next_edges( self ));
   }
   torch::jit::Node* node = nullptr;
@@ -12349,7 +12365,7 @@ static auto& registerer = globalATenDispatch()
   .registerVariableOp<Tensor (const Tensor &, const Tensor &)>("aten::atan2(Tensor self, Tensor other) -> Tensor", &VariableType::atan2)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &)>("aten::atan2_(Tensor(a!) self, Tensor other) -> Tensor(a!)", &VariableType::atan2_)
   .registerVariableOp<Tensor & (Tensor &)>("aten::atan_(Tensor(a!) self) -> Tensor(a!)", &VariableType::atan_)
-  .registerVariableOp<Tensor (const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, bool, bool, c10::optional<int64_t>)>("aten::avg_pool2d(Tensor self, int[2] kernel_size, int[2] stride=[], int[2] padding=0, bool ceil_mode=False, bool count_include_pad=True, int? divisor_override=None) -> Tensor", &VariableType::avg_pool2d)
+  .registerVariableOp<Tensor (Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, bool, bool, c10::optional<int64_t>)>("aten::avg_pool2d(Tensor self, int[2] kernel_size, int[2] stride=[], int[2] padding=0, bool ceil_mode=False, bool count_include_pad=True, int? divisor_override=None) -> Tensor", &VariableType::avg_pool2d)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, bool, bool, c10::optional<int64_t>)>("aten::avg_pool2d_backward(Tensor grad_output, Tensor self, int[2] kernel_size, int[2] stride, int[2] padding, bool ceil_mode, bool count_include_pad, int? divisor_override, *, Tensor(a!) grad_input) -> Tensor(a!)", &VariableType::avg_pool2d_backward_out)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, bool, bool, c10::optional<int64_t>)>("aten::avg_pool3d(Tensor self, int[3] kernel_size, int[3] stride=[], int[3] padding=0, bool ceil_mode=False, bool count_include_pad=True, int? divisor_override=None, *, Tensor(a!) out) -> Tensor(a!)", &VariableType::avg_pool3d_out)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, const Tensor &, const Tensor &, Scalar, Scalar)>("aten::baddbmm(Tensor self, Tensor batch1, Tensor batch2, *, Scalar beta=1, Scalar alpha=1, Tensor(a!) out) -> Tensor(a!)", &VariableType::baddbmm_out)
