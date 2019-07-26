@@ -8271,7 +8271,7 @@ Tensor VariableType::narrow(const Tensor & self, int64_t dim, int64_t start, int
   }
   return result;
 }
-std::tuple<Tensor,Tensor,Tensor> VariableType::native_batch_norm(const Tensor & input, const Tensor & weight, const Tensor & bias, const Tensor & running_mean, const Tensor & running_var, bool training, double momentum, double eps) {
+std::tuple<Tensor,Tensor,Tensor> VariableType::native_batch_norm(Tensor & input, const Tensor & weight, const Tensor & bias, const Tensor & running_mean, const Tensor & running_var, bool training, double momentum, double eps) {
   RECORD_FUNCTION("native_batch_norm", std::vector<c10::IValue>({input, weight, bias, running_mean, running_var}), Node::peek_at_next_sequence_nr());
   auto& input_ = unpack(input, "input", 0);
   auto weight_ = unpack_opt(weight, "weight", 1);
@@ -8284,7 +8284,15 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::native_batch_norm(const Tensor & 
   if (compute_requires_grad( input, weight, bias )) {
     grad_fn = std::shared_ptr<NativeBatchNormBackward>(new NativeBatchNormBackward(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( input, weight, bias ));
-    grad_fn->input_ = SavedVariable(input, false);
+
+    if (at::globalContext().ARCGlobal.isForward()){
+      ARCCppEngine::offLoad(input, (TraceableFunction*)(grad_fn.get()), Async, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->input_));
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else {
+      grad_fn->input_ = SavedVariable(input, false);
+    }
+
     grad_fn->weight_ = SavedVariable(weight, false);
     grad_fn->running_mean_ = SavedVariable(running_mean, false);
     grad_fn->running_var_ = SavedVariable(running_var, false);
@@ -11313,7 +11321,7 @@ Tensor & VariableType::take_out(Tensor & out, const Tensor & self, const Tensor 
   }
   return out;
 }
-std::tuple<Tensor,Tensor,Tensor> VariableType::thnn_conv2d_forward(const Tensor & self, const Tensor & weight, IntArrayRef kernel_size, const Tensor & bias, IntArrayRef stride, IntArrayRef padding) {
+std::tuple<Tensor,Tensor,Tensor> VariableType::thnn_conv2d_forward(Tensor & self, const Tensor & weight, IntArrayRef kernel_size, const Tensor & bias, IntArrayRef stride, IntArrayRef padding) {
   RECORD_FUNCTION("thnn_conv2d_forward", std::vector<c10::IValue>({self, weight, bias}), Node::peek_at_next_sequence_nr());
   auto& self_ = unpack(self, "self", 0);
   auto& weight_ = unpack(weight, "weight", 1);
@@ -11322,7 +11330,15 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::thnn_conv2d_forward(const Tensor 
   if (compute_requires_grad( self, weight, bias )) {
     grad_fn = std::shared_ptr<ThnnConv2DBackward>(new ThnnConv2DBackward(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self, weight, bias ));
-    grad_fn->self_ = SavedVariable(self, false);
+    if (at::globalContext().ARCGlobal.isForward()){
+      ARCCppEngine::offLoad(self, (TraceableFunction*)(grad_fn.get()), Async, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_));
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else {
+      grad_fn->self_ = SavedVariable(self, false);
+    }
+
+
     grad_fn->weight_ = SavedVariable(weight, false);
     grad_fn->kernel_size = kernel_size.vec();
     grad_fn->stride = stride.vec();
@@ -12458,7 +12474,7 @@ static auto& registerer = globalATenDispatch()
   .registerVariableOp<Tensor (const Tensor &, int64_t)>("aten::mvlgamma(Tensor self, int p) -> Tensor", &VariableType::mvlgamma)
   .registerVariableOp<Tensor & (Tensor &, int64_t)>("aten::mvlgamma_(Tensor(a!) self, int p) -> Tensor(a!)", &VariableType::mvlgamma_)
   .registerVariableOp<Tensor (const Tensor &, int64_t, int64_t, int64_t)>("aten::narrow(Tensor(a) self, int dim, int start, int length) -> Tensor(a)", &VariableType::narrow)
-  .registerVariableOp<std::tuple<Tensor,Tensor,Tensor> (const Tensor &, const Tensor &, const Tensor &, const Tensor &, const Tensor &, bool, double, double)>("aten::native_batch_norm(Tensor input, Tensor? weight, Tensor? bias, Tensor? running_mean, Tensor? running_var, bool training, float momentum, float eps) -> (Tensor, Tensor, Tensor)", &VariableType::native_batch_norm)
+  .registerVariableOp<std::tuple<Tensor,Tensor,Tensor> (Tensor &, const Tensor &, const Tensor &, const Tensor &, const Tensor &, bool, double, double)>("aten::native_batch_norm(Tensor input, Tensor? weight, Tensor? bias, Tensor? running_mean, Tensor? running_var, bool training, float momentum, float eps) -> (Tensor, Tensor, Tensor)", &VariableType::native_batch_norm)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, Scalar)>("aten::ne(Tensor self, Scalar other, *, Tensor(a!) out) -> Tensor(a!)", &VariableType::ne_out)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, const Tensor &)>("aten::ne(Tensor self, Tensor other, *, Tensor(a!) out) -> Tensor(a!)", &VariableType::ne_out)
   .registerVariableOp<Tensor (const Tensor &, const Tensor &, const Tensor &, int64_t, int64_t)>("aten::nll_loss(Tensor self, Tensor target, Tensor? weight=None, int reduction=Mean, int ignore_index=-100) -> Tensor", &VariableType::nll_loss)
@@ -12519,7 +12535,7 @@ static auto& registerer = globalATenDispatch()
   .registerVariableOp<Tensor & (Tensor &, Scalar, Scalar)>("aten::sub_(Tensor(a!) self, Scalar other, Scalar alpha=1) -> Tensor(a!)", &VariableType::sub_)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, IntArrayRef, bool, c10::optional<ScalarType>)>("aten::sum(Tensor self, int[1] dim, bool keepdim=False, *, ScalarType? dtype=None, Tensor(a!) out) -> Tensor(a!)", &VariableType::sum_out)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, const Tensor &)>("aten::take(Tensor self, Tensor index, *, Tensor(a!) out) -> Tensor(a!)", &VariableType::take_out)
-  .registerVariableOp<std::tuple<Tensor,Tensor,Tensor> (const Tensor &, const Tensor &, IntArrayRef, const Tensor &, IntArrayRef, IntArrayRef)>("aten::thnn_conv2d_forward(Tensor self, Tensor weight, int[2] kernel_size, Tensor? bias, int[2] stride, int[2] padding) -> (Tensor output, Tensor finput, Tensor fgrad_input)", &VariableType::thnn_conv2d_forward)
+  .registerVariableOp<std::tuple<Tensor,Tensor,Tensor> (Tensor &, const Tensor &, IntArrayRef, const Tensor &, IntArrayRef, IntArrayRef)>("aten::thnn_conv2d_forward(Tensor self, Tensor weight, int[2] kernel_size, Tensor? bias, int[2] stride, int[2] padding) -> (Tensor output, Tensor finput, Tensor fgrad_input)", &VariableType::thnn_conv2d_forward)
   .registerVariableOp<std::tuple<Tensor,Tensor,Tensor> (const Tensor &, const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, const Tensor &, const Tensor &, std::array<bool,3>)>("aten::thnn_conv3d_backward(Tensor grad_output, Tensor self, Tensor weight, int[3] kernel_size, int[3] stride, int[3] padding, Tensor finput, Tensor fgrad_input, bool[3] output_mask) -> (Tensor grad_input, Tensor grad_weight, Tensor grad_bias)", &VariableType::thnn_conv3d_backward)
   .registerVariableOp<std::tuple<Tensor &,Tensor &,Tensor &> (Tensor &, Tensor &, Tensor &, const Tensor &, const Tensor &, IntArrayRef, const Tensor &, IntArrayRef, IntArrayRef)>("aten::thnn_conv3d_forward(Tensor self, Tensor weight, int[3] kernel_size, Tensor? bias, int[3] stride, int[3] padding, *, Tensor(a!) output, Tensor(b!) finput, Tensor(c!) fgrad_input) -> (Tensor(a!), Tensor(b!), Tensor(c!))", &VariableType::thnn_conv3d_forward_out)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, const Tensor &, IntArrayRef, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef)>("aten::thnn_conv_depthwise2d(Tensor self, Tensor weight, int[2] kernel_size, Tensor? bias=None, int[2] stride=1, int[2] padding=0, int[2] dilation=1, *, Tensor(a!) out) -> Tensor(a!)", &VariableType::thnn_conv_depthwise2d_out)
