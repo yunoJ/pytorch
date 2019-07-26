@@ -46,7 +46,7 @@ static PyObject * THPVariable__parse_to(PyObject* module, PyObject* args, PyObje
   return tuple.release();
   END_HANDLE_TH_ERRORS
 }
-
+//SNU-ARC
 static PyObject * THPVariable_adaptive_avg_pool2d(PyObject* self_, PyObject* args, PyObject* kwargs)
 {
   HANDLE_TH_ERRORS
@@ -57,13 +57,37 @@ static PyObject * THPVariable_adaptive_avg_pool2d(PyObject* self_, PyObject* arg
   ParsedArgs<3> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
+  auto oid = at::globalcontext().ARCGlobal.getNewOid();
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION ADAPTIVE AVG POOL2D, OPID: ";
+    std::cout << oid << std::endl;
+  }
+  Tensor input = r.tensor(0);
+
+  std::cout << "INPUT TENSOR ID: ";
+  auto itid = at::globalContext().ARCGlobal.getTid(input);
+  std::cout << itid << std::endl;
+
+  if (at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
+    ARCPyEngine::fetch(input);
+
+  Tensor output;
   if (r.idx == 0) {
     if (r.isNone(2)) {
-      return wrap(dispatch_adaptive_avg_pool2d(r.tensor(0), r.intlist(1)));
+      output = dispatch_adaptive_avg_pool2d(input, r.intlist(1));
     } else {
-      return wrap(dispatch_adaptive_avg_pool2d(r.tensor(0), r.intlist(1), r.tensor(2)));
+      output = dispatch_adaptive_avg_pool2d(input, r.intlist(1), r.tensor(2));
     }
   }
+  
+  at::globalContext().ARCGlobal.setNewTid(output);
+
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCPyEngine::offLoad(output);
+  }
+
+  return wrap(output);
+  
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }
@@ -129,6 +153,7 @@ static PyObject * THPVariable_adaptive_max_pool3d(PyObject* self_, PyObject* arg
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }
+//SNU-ARC
 static PyObject * THPVariable_avg_pool2d(PyObject* self_, PyObject* args, PyObject* kwargs)
 {
   HANDLE_TH_ERRORS
@@ -139,13 +164,37 @@ static PyObject * THPVariable_avg_pool2d(PyObject* self_, PyObject* args, PyObje
   ParsedArgs<8> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
+  auto oid = at::globalcontext().ARCGlobal.getNewOid();
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION MSE_LOSS, OPID: ";
+    std::cout << oid << std::endl;
+  }
+  Tensor input = r.tensor(0);
+
+  std::cout << "INPUT TENSOR ID: ";
+  auto itid = at::globalContext().ARCGlobal.getTid(input);
+  std::cout << itid << std::endl;
+
+  if (at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
+    ARCPyEngine::fetch(input);
+
+  Tensor output;
   if (r.idx == 0) {
     if (r.isNone(7)) {
-      return wrap(dispatch_avg_pool2d(r.tensor(0), r.intlist(1), r.intlist(2), r.intlist(3), r.toBool(4), r.toBool(5), r.toInt64Optional(6)));
+      output = dispatch_avg_pool2d(input, r.intlist(1), r.intlist(2), r.intlist(3), r.toBool(4), r.toBool(5), r.toInt64Optional(6));
     } else {
-      return wrap(dispatch_avg_pool2d(r.tensor(0), r.intlist(1), r.intlist(2), r.intlist(3), r.toBool(4), r.toBool(5), r.toInt64Optional(6), r.tensor(7)));
+      output = dispatch_avg_pool2d(input, r.intlist(1), r.intlist(2), r.intlist(3), r.toBool(4), r.toBool(5), r.toInt64Optional(6), r.tensor(7));
     }
   }
+  
+  at::globalContext().ARCGlobal.setNewTid(output);
+
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCPyEngine::offLoad(output);
+  }
+
+  return wrap(output);
+  
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }
@@ -657,6 +706,7 @@ static PyObject * THPVariable_mkldnn_reorder_conv2d_weight(PyObject* self_, PyOb
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }
+//SNU-ARC
 static PyObject * THPVariable_mse_loss(PyObject* self_, PyObject* args, PyObject* kwargs)
 {
   HANDLE_TH_ERRORS
@@ -667,13 +717,37 @@ static PyObject * THPVariable_mse_loss(PyObject* self_, PyObject* args, PyObject
   ParsedArgs<4> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
+  auto oid = at::globalcontext().ARCGlobal.getNewOid();
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION MSE_LOSS, OPID: ";
+    std::cout << oid << std::endl;
+  }
+  Tensor input = r.tensor(0);
+
+  std::cout << "INPUT TENSOR ID: ";
+  auto itid = at::globalContext().ARCGlobal.getTid(input);
+  std::cout << itid << std::endl;
+
+  if (at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
+    ARCPyEngine::fetch(input);
+
+  Tensor output;
   if (r.idx == 0) {
     if (r.isNone(3)) {
-      return wrap(dispatch_mse_loss(r.tensor(0), r.tensor(1), r.toInt64(2)));
+      output = dispatch_mse_loss(input, r.tensor(1), r.toInt64(2));
     } else {
-      return wrap(dispatch_mse_loss(r.tensor(0), r.tensor(1), r.toInt64(2), r.tensor(3)));
+      output = dispatch_mse_loss(input, r.tensor(1), r.toInt64(2), r.tensor(3));
     }
   }
+  
+  at::globalContext().ARCGlobal.setNewTid(output);
+
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCPyEngine::offLoad(output);
+  }
+
+  return wrap(output);
+  
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }
@@ -697,6 +771,7 @@ static PyObject * THPVariable_multi_margin_loss(PyObject* self_, PyObject* args,
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }
+
 static PyObject * THPVariable_multilabel_margin_loss(PyObject* self_, PyObject* args, PyObject* kwargs)
 {
   HANDLE_TH_ERRORS
@@ -717,6 +792,7 @@ static PyObject * THPVariable_multilabel_margin_loss(PyObject* self_, PyObject* 
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }
+//SNU-ARC
 static PyObject * THPVariable_nll_loss(PyObject* self_, PyObject* args, PyObject* kwargs)
 {
   HANDLE_TH_ERRORS
@@ -727,13 +803,37 @@ static PyObject * THPVariable_nll_loss(PyObject* self_, PyObject* args, PyObject
   ParsedArgs<6> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
+  auto oid = at::globalcontext().ARCGlobal.getNewOid();
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION NLL LOSS, OPID: ";
+    std::cout << oid << std::endl;
+  }
+  Tensor input = r.tensor(0);
+
+  std::cout << "INPUT TENSOR ID: ";
+  auto itid = at::globalContext().ARCGlobal.getTid(input);
+  std::cout << itid << std::endl;
+
+  if (at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
+    ARCPyEngine::fetch(input);
+
+  Tensor output;
   if (r.idx == 0) {
     if (r.isNone(5)) {
-      return wrap(dispatch_nll_loss(r.tensor(0), r.tensor(1), r.tensor(2), r.toInt64(3), r.toInt64(4)));
+      output = dispatch_nll_loss(input, r.tensor(1), r.tensor(2), r.toInt64(3), r.toInt64(4));
     } else {
-      return wrap(dispatch_nll_loss(r.tensor(0), r.tensor(1), r.tensor(2), r.toInt64(3), r.toInt64(4), r.tensor(5)));
+      output = dispatch_nll_loss(input, r.tensor(1), r.tensor(2), r.toInt64(3), r.toInt64(4), r.tensor(5));
     }
   }
+
+  at::globalContext().ARCGlobal.setNewTid(output);
+
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCPyEngine::offLoad(output);
+  }
+
+  return wrap(output);
+
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }

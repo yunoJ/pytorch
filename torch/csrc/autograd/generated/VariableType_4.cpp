@@ -3695,7 +3695,7 @@ Tensor VariableType::cross(const Tensor & self, const Tensor & other, c10::optio
   }
   return result;
 }
-std::tuple<Tensor,Tensor,Tensor> VariableType::cudnn_batch_norm(const Tensor & input, const Tensor & weight, const Tensor & bias, const Tensor & running_mean, const Tensor & running_var, bool training, double exponential_average_factor, double epsilon) {
+std::tuple<Tensor,Tensor,Tensor> VariableType::cudnn_batch_norm(Tensor & input, const Tensor & weight, const Tensor & bias, const Tensor & running_mean, const Tensor & running_var, bool training, double exponential_average_factor, double epsilon) {
   RECORD_FUNCTION("cudnn_batch_norm", std::vector<c10::IValue>({input, weight, bias, running_mean, running_var}), Node::peek_at_next_sequence_nr());
   auto& input_ = unpack(input, "input", 0);
   auto& weight_ = unpack(weight, "weight", 1);
@@ -3708,7 +3708,13 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::cudnn_batch_norm(const Tensor & i
   if (compute_requires_grad( input, weight, bias )) {
     grad_fn = std::shared_ptr<CudnnBatchNormBackward>(new CudnnBatchNormBackward(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( input, weight, bias ));
-    grad_fn->input_ = SavedVariable(input, false);
+    if (at::globalContext().ARCGlobal.isForward()) {
+      ARCCppEngine::offLoad(input, (TraceableFunction*)(grad_fn.get()), Async, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->input_));
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else {
+      grad_fn->input_ = SavedVariable(input, false);
+    }
     grad_fn->weight_ = SavedVariable(weight, false);
     grad_fn->running_mean_ = SavedVariable(running_mean, false);
     grad_fn->running_var_ = SavedVariable(running_var, false);
@@ -11850,7 +11856,7 @@ static auto& registerer = globalATenDispatch()
   .registerVariableOp<Tensor (const Tensor &)>("aten::cosh(Tensor self) -> Tensor", &VariableType::cosh)
   .registerVariableOp<Tensor & (Tensor &)>("aten::cosh_(Tensor(a!) self) -> Tensor(a!)", &VariableType::cosh_)
   .registerVariableOp<Tensor (const Tensor &, const Tensor &, c10::optional<int64_t>)>("aten::cross(Tensor self, Tensor other, int? dim=None) -> Tensor", &VariableType::cross)
-  .registerVariableOp<std::tuple<Tensor,Tensor,Tensor> (const Tensor &, const Tensor &, const Tensor &, const Tensor &, const Tensor &, bool, double, double)>("aten::cudnn_batch_norm(Tensor input, Tensor weight, Tensor? bias, Tensor? running_mean, Tensor? running_var, bool training, float exponential_average_factor, float epsilon) -> (Tensor, Tensor, Tensor)", &VariableType::cudnn_batch_norm)
+  .registerVariableOp<std::tuple<Tensor,Tensor,Tensor> (Tensor &, const Tensor &, const Tensor &, const Tensor &, const Tensor &, bool, double, double)>("aten::cudnn_batch_norm(Tensor input, Tensor weight, Tensor? bias, Tensor? running_mean, Tensor? running_var, bool training, float exponential_average_factor, float epsilon) -> (Tensor, Tensor, Tensor)", &VariableType::cudnn_batch_norm)
   .registerVariableOp<std::tuple<Tensor,Tensor,Tensor> (const Tensor &, const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, IntArrayRef, int64_t, bool, bool, std::array<bool,3>)>("aten::cudnn_convolution_transpose_backward(Tensor self, Tensor grad_output, Tensor weight, int[] padding, int[] output_padding, int[] stride, int[] dilation, int groups, bool benchmark, bool deterministic, bool[3] output_mask) -> (Tensor, Tensor, Tensor)", &VariableType::cudnn_convolution_transpose_backward)
   .registerVariableOp<Tensor (const Tensor &)>("aten::cudnn_convolution_transpose_backward_bias(Tensor grad_output) -> Tensor", &VariableType::cudnn_convolution_transpose_backward_bias)
   .registerVariableOp<Tensor (const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, int64_t, bool, bool)>("aten::cudnn_convolution_transpose_backward_input(Tensor grad_output, Tensor weight, int[] padding, int[] stride, int[] dilation, int groups, bool benchmark, bool deterministic) -> Tensor", &VariableType::cudnn_convolution_transpose_backward_input)
