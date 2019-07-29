@@ -77,11 +77,11 @@ public:
   static void offLoad(at::Tensor& t, TraceableFunction* grad_fn, ARCSync sync, Oid curOid, SavedVariable* fetch_loc);
   static void explicitAllSync();
   // prefetching at curOid
-  static void preFetch(Oid curOid, int required_tensor_num, ARCSync sync);
+  static void preFetch(Oid curOid, ARCSync sync);
   static void preFetchSync(Oid curOid, int required_tensor_num);
 
-  static void startAndDetachPrefetchThread();
-
+  static void startPrefetchThread();
+  static void joinPrefetchThread();
   static void resetCppEngine();
 
 private:
@@ -97,9 +97,15 @@ private:
   static void insertToPFSyncDict_(Oid oid);
   static void insertToTensorDict_(at::Tensor& backup);
   static void insertToPFDict_(Oid oid, SavedVariable* loc, at::Tensor& backup);
-  
+ 
+  //prefetch workers
+  static void default_prefetch_();
+
+
+
+ 
   // internal function implementing prefetching
-  static void fetchRequiredTensors_(Oid oid, int required_tensors ,ARCSync sync); 
+  static void fetchRequiredTensors_(Oid oid,ARCSync sync); 
   static Oid whoWillPrefetched_(Oid curOid); //output is subject to change according to the prefetching policy
 
 };

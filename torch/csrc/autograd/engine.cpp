@@ -650,6 +650,9 @@ auto Engine::execute(const edge_list& roots,
   // backward start
   // ends forward
   at::globalContext().ARCGlobal.endForward();
+  
+  if (!at::globalContext().ARCGlobal.isOnDemand())
+    ARCCppEngine::startPrefetchThread();
   // by sam end
   
 
@@ -728,12 +731,16 @@ auto Engine::execute(const edge_list& roots,
 
   // by sam SNU-ARC
   // end of backward path
+  if (!at::globalContext().ARCGlobal.isOnDemand())
+    ARCCppEngine::joinPrefetchThread();
+
   // reset global ids
   ARCCppEngine::resetCppEngine();
 
   // let forward start again and turn off on demand mode if it's still on.
   at::globalContext().ARCGlobal.startForward();
-  if(at::globalContext().ARCGlobal.isOnDemand()) at::globalContext().ARCGlobal.endOnDemand();
+  if(at::globalContext().ARCGlobal.isOnDemand()) 
+    at::globalContext().ARCGlobal.endOnDemand();
   // by sam end
 
 

@@ -2242,8 +2242,11 @@ variable_list AddBackward0::apply(variable_list&& grads) {
   auto& grad = grads[0];
   
   //SNU-ARC
-  if (at::globalContext().ARCGlobal.isOnDemand())
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
     at::globalContext().ARCGlobal.pushBackOid(this->getOid());
+    ARCCppEngine::preFetch(this->getOid(), Sync);
+  }
+
 
   if (should_compute_output({ other_ix })) {
     auto grad_result = maybe_multiply(grad, alpha);
@@ -2348,9 +2351,11 @@ variable_list AddmmBackward::apply(variable_list&& grads) {
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
 
-  if (at::globalContext().ARCGlobal.isOnDemand())
-    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
-  ARCCppEngine::preFetch(this->getOid(), this->getTNum(), Sync);
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    at::globalContext().ARCGlobal.pushBackOid(this->getOid()); 
+    ARCCppEngine::preFetch(this->getOid(), Sync);
+  }
+  ARCCppEngine::preFetchSync(this->getOid(), this->getTNum());
   
 
 
@@ -4143,9 +4148,12 @@ variable_list NativeBatchNormBackward::apply(variable_list&& grads) {
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
 
-  if (at::globalContext().ARCGlobal.isOnDemand())
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
     at::globalContext().ARCGlobal.pushBackOid(this->getOid());
-  ARCCppEngine::preFetch(this->getOid(), this->getTNum(), Sync);
+    ARCCppEngine::preFetch(this->getOid(), Sync);
+  }
+
+  ARCCppEngine::preFetchSync(this->getOid(), this->getTNum());
  
 
   auto input = input_.unpack();
@@ -5675,10 +5683,12 @@ variable_list TrilinearBackward::apply(variable_list&& grads) {
   auto i1 = i1_.unpack();
   
   //SNU-ARC
-  if (at::globalContext().ARCGlobal.isOnDemand())
-    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    at::globalContext().ARCGlobal.pushBackOid(this->getOid()); 
+    ARCCppEngine::preFetch(this->getOid(), Sync);
+  }
   
-  ARCCppEngine::preFetch(this->getOid(), this->getTNum(), Sync); 
+  ARCCppEngine::preFetchSync(this->getOid(), this->getTNum()); 
   auto i2 = i2_.unpack();
   auto i3 = i3_.unpack();
   if (should_compute_output({ i1_ix, i2_ix, i3_ix })) {
@@ -5954,8 +5964,11 @@ variable_list ReluBackward0::apply(variable_list&& grads) {
   auto& grad = grads[0];
   
   //SNU-ARC
-  if (at::globalContext().ARCGlobal.isOnDemand())
-    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    at::globalContext().ARCGlobal.pushBackOid(this->getOid()); 
+    ARCCppEngine::preFetch(this->getOid(), Sync);
+  }
+
   
   auto self = self_.unpack();
   if (should_compute_output({ self_ix })) {
@@ -5973,8 +5986,10 @@ variable_list ReluBackward1::apply(variable_list&& grads) {
   auto result = result_.unpack(shared_from_this());
   
   //SNU-ARC
-  if (at::globalContext().ARCGlobal.isOnDemand())
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
     at::globalContext().ARCGlobal.pushBackOid(this->getOid());
+    ARCCppEngine::preFetch(this->getOid(), Sync);
+  }
   
   if (should_compute_output({ self_ix })) {
     auto grad_result = threshold_backward(grad, result, 0);
@@ -6430,9 +6445,11 @@ variable_list AdaptiveAvgPool2DBackward::apply(variable_list&& grads) {
   auto& grad = grads[0];
   
   //SNU-ARC
-  if (at::globalContext().ARCGlobal.isOnDemand())
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
     at::globalContext().ARCGlobal.pushBackOid(this->getOid());
-  ARCCppEngine::preFetch(this->getOid(), this->getTNum(), Sync);
+    ARCCppEngine::preFetch(this->getOid(), Sync);
+  }
+  ARCCppEngine::preFetchSync(this->getOid(), this->getTNum());
   
   auto self = self_.unpack();
   if (should_compute_output({ self_ix })) {
@@ -6490,9 +6507,11 @@ variable_list AvgPool2DBackward::apply(variable_list&& grads) {
   auto& grad = grads[0];
   
   //SNU-ARC
-  if (at::globalContext().ARCGlobal.isOnDemand())
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
     at::globalContext().ARCGlobal.pushBackOid(this->getOid());
-  ARCCppEngine::preFetch(this->getOid(), this->getTNum(), Sync);
+    ARCCppEngine::preFetch(this->getOid(), Sync);
+  }
+  ARCCppEngine::preFetchSync(this->getOid(), this->getTNum());
   
 
   auto self = self_.unpack();
@@ -6552,9 +6571,11 @@ variable_list MaxPool2DWithIndicesBackward::apply(variable_list&& grads) {
   auto& grad = grads[0];
   
   //SNU-ARC
-  if (at::globalContext().ARCGlobal.isOnDemand())
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
     at::globalContext().ARCGlobal.pushBackOid(this->getOid());
-  ARCCppEngine::preFetch(this->getOid(), this->getTNum(), Sync);
+    ARCCppEngine::preFetch(this->getOid(), Sync);
+  }
+  ARCCppEngine::preFetchSync(this->getOid(), this->getTNum());
  
   auto self = self_.unpack();
   auto result1 = result1_.unpack(shared_from_this());
@@ -6731,9 +6752,11 @@ variable_list ThnnConv2DBackward::apply(variable_list&& grads) {
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
 
-  if (at::globalContext().ARCGlobal.isOnDemand())
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
     at::globalContext().ARCGlobal.pushBackOid(this->getOid());
-  ARCCppEngine::preFetch(this->getOid(), this->getTNum(), Sync);
+    ARCCppEngine::preFetch(this->getOid(), Sync);
+  }
+  ARCCppEngine::preFetchSync(this->getOid(), this->getTNum());
  
   auto self = self_.unpack();
   auto weight = weight_.unpack();
@@ -7879,9 +7902,11 @@ variable_list CudnnConvolutionBackward::apply(variable_list&& grads) {
   auto& grad = grads[0];
   
   //SNU-ARC
-  if (at::globalContext().ARCGlobal.isOnDemand())
-    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
-  ARCCppEngine::preFetch(this->getOid(), this->getTNum(), Sync);
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    at::globalContext().ARCGlobal.pushBackOid(this->getOid()); 
+    ARCCppEngine::preFetch(this->getOid(), Sync);
+  }
+  ARCCppEngine::preFetchSync(this->getOid(), this->getTNum());
   
 
 
@@ -7978,9 +8003,11 @@ variable_list CudnnBatchNormBackward::apply(variable_list&& grads) {
   auto& grad = grads[0];
   
   //SNU-ARC
-  if (at::globalContext().ARCGlobal.isOnDemand())
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
     at::globalContext().ARCGlobal.pushBackOid(this->getOid());
-  ARCCppEngine::preFetch(this->getOid(), this->getTNum(), Sync);
+    ARCCppEngine::preFetch(this->getOid(), Sync);
+  }
+  ARCCppEngine::preFetchSync(this->getOid(), this->getTNum());
   
   auto input = input_.unpack();
   auto weight = weight_.unpack();
