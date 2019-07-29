@@ -4674,6 +4674,7 @@ static PyObject * THPVariable_fill_(PyObject* self_, PyObject* args, PyObject* k
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }
+//SNU-ARC
 static PyObject * THPVariable_flatten(PyObject* self_, PyObject* args, PyObject* kwargs)
 {
   HANDLE_TH_ERRORS
@@ -4684,9 +4685,36 @@ static PyObject * THPVariable_flatten(PyObject* self_, PyObject* args, PyObject*
   ParsedArgs<3> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
-  if (r.idx == 0) {
-    return wrap(dispatch_flatten(r.tensor(0), r.toInt64(1), r.toInt64(2)));
+  
+  // Get Oid
+  auto oid = at::globalContext().ARCGlobal.getNewOid();
+  // DEBUG: print operation type, oid
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION FLATTEN, OPID: ";
+    std::cout << oid << std::endl;
   }
+
+  Tensor input = r.tensor(0);
+
+  if(at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
+    ARCPyEngine::fetch(input);
+
+  Tensor output;
+  if (r.idx == 0) {
+    output = dispatch_flatten(input, r.toInt64(1), r.toInt64(2));
+  }
+
+  at::globalContext().ARCGlobal.setNewTid(output);
+
+  std::cout << "OUTPUT TENSOR ID: ";
+  std::cout << at::globalContext().ARCGlobal.getTid(output);
+
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCPyEngine::offLoad(output);
+  }
+
+  return wrap(output);
+
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }
