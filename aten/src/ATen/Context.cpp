@@ -151,7 +151,7 @@ void Context::ARCGlobalContext::pushBackOid(Oid oid) {
 }
 
 std::vector<Oid> Context::ARCGlobalContext::getBackPath() { 
-  std::cout << back_path_.size() << std::endl;
+  //std::cout << back_path_.size() << std::endl;
   std::vector<Oid> copy(back_path_);
   return copy; 
 }; 

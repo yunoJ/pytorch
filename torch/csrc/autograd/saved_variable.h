@@ -78,7 +78,7 @@ public:
   static void explicitAllSync();
   // prefetching at curOid
   static void preFetch(Oid curOid, ARCSync sync);
-  static void preFetchSync(Oid curOid, int required_tensor_num);
+  static void preFetchSync(Oid curOid);
 
   static void startPrefetchThread();
   static void joinPrefetchThread();
@@ -96,7 +96,7 @@ private:
 
   static void insertToPFSyncDict_(Oid oid);
   static void insertToTensorDict_(at::Tensor& backup);
-  static void insertToPFDict_(Oid oid, SavedVariable* loc, at::Tensor& backup);
+  static void insertToPFDict_(Oid oid, SavedVariable* loc, Tid tid);
  
   //prefetch workers
   static void default_prefetch_();

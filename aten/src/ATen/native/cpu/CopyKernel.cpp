@@ -53,10 +53,14 @@ static void copy_kernel(TensorIterator& iter, bool non_blocking) {
     });
   }
 }
+static void ARC_copy_cpu(void* src, void* dst) {
+  std::cout << "hello cpu" <<std::endl;
+}
+
 
 } // anonymous namespace
 
 REGISTER_DISPATCH(copy_stub, &copy_kernel);
-
+REGISTER_DISPATCH(arc_copy_stub, &ARC_copy_cpu);
 } // namespace native
 } // namespace at

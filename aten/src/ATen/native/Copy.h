@@ -48,8 +48,10 @@ template <typename T>
 using inter_copy_type_t = typename inter_copy_type<T>::type;
 
 using copy_fn = void (*)(TensorIterator&, bool non_blocking);
+using arc_copy_fn = void (*)(void*, void*);
 
 DECLARE_DISPATCH(copy_fn, copy_stub);
+DECLARE_DISPATCH(arc_copy_fn, arc_copy_stub);
 
 } // namespace native
 } // namespace at

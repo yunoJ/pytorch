@@ -184,6 +184,7 @@ static void copy_kernel_cuda(TensorIterator& iter, bool non_blocking) {
   int64_t nbytes = iter.numel() * iter.element_size(0);
   CUDAStream stream = getCurrentCUDAStream();
 
+
   AT_CUDA_CHECK(cudaMemcpyAsync(dst, src, nbytes, kind, stream));
 
   if (non_blocking) {
@@ -194,7 +195,13 @@ static void copy_kernel_cuda(TensorIterator& iter, bool non_blocking) {
   }
 }
 
-REGISTER_DISPATCH(copy_stub, &copy_kernel_cuda);
+static void ARC_copy(void* src, void* dst) {
+  //std::cout << "hello hi" <<std::endl;
+}
 
+
+
+REGISTER_DISPATCH(copy_stub, &copy_kernel_cuda);
+REGISTER_DISPATCH(arc_copy_stub, &ARC_copy);
 } // namespace native
 } // namespace at

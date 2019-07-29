@@ -2355,7 +2355,7 @@ variable_list AddmmBackward::apply(variable_list&& grads) {
     at::globalContext().ARCGlobal.pushBackOid(this->getOid()); 
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
-  ARCCppEngine::preFetchSync(this->getOid(), this->getTNum());
+  ARCCppEngine::preFetchSync(this->getOid());
   
 
 
@@ -4153,7 +4153,7 @@ variable_list NativeBatchNormBackward::apply(variable_list&& grads) {
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
 
-  ARCCppEngine::preFetchSync(this->getOid(), this->getTNum());
+  ARCCppEngine::preFetchSync(this->getOid());
  
 
   auto input = input_.unpack();
@@ -5688,7 +5688,7 @@ variable_list TrilinearBackward::apply(variable_list&& grads) {
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
   
-  ARCCppEngine::preFetchSync(this->getOid(), this->getTNum()); 
+  ARCCppEngine::preFetchSync(this->getOid()); 
   auto i2 = i2_.unpack();
   auto i3 = i3_.unpack();
   if (should_compute_output({ i1_ix, i2_ix, i3_ix })) {
@@ -5965,8 +5965,8 @@ variable_list ReluBackward0::apply(variable_list&& grads) {
   
   //SNU-ARC
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    at::globalContext().ARCGlobal.pushBackOid(this->getOid()); 
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    //at::globalContext().ARCGlobal.pushBackOid(this->getOid()); 
+  //  ARCCppEngine::preFetch(this->getOid(), Sync);
   }
 
   
@@ -5987,8 +5987,8 @@ variable_list ReluBackward1::apply(variable_list&& grads) {
   
   //SNU-ARC
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    //at::globalContext().ARCGlobal.pushBackOid(this->getOid());
+  //  ARCCppEngine::preFetch(this->getOid(), Sync);
   }
   
   if (should_compute_output({ self_ix })) {
@@ -6449,7 +6449,7 @@ variable_list AdaptiveAvgPool2DBackward::apply(variable_list&& grads) {
     at::globalContext().ARCGlobal.pushBackOid(this->getOid());
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
-  ARCCppEngine::preFetchSync(this->getOid(), this->getTNum());
+  ARCCppEngine::preFetchSync(this->getOid());
   
   auto self = self_.unpack();
   if (should_compute_output({ self_ix })) {
@@ -6511,7 +6511,7 @@ variable_list AvgPool2DBackward::apply(variable_list&& grads) {
     at::globalContext().ARCGlobal.pushBackOid(this->getOid());
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
-  ARCCppEngine::preFetchSync(this->getOid(), this->getTNum());
+  ARCCppEngine::preFetchSync(this->getOid());
   
 
   auto self = self_.unpack();
@@ -6575,7 +6575,7 @@ variable_list MaxPool2DWithIndicesBackward::apply(variable_list&& grads) {
     at::globalContext().ARCGlobal.pushBackOid(this->getOid());
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
-  ARCCppEngine::preFetchSync(this->getOid(), this->getTNum());
+  ARCCppEngine::preFetchSync(this->getOid());
  
   auto self = self_.unpack();
   auto result1 = result1_.unpack(shared_from_this());
@@ -6756,7 +6756,7 @@ variable_list ThnnConv2DBackward::apply(variable_list&& grads) {
     at::globalContext().ARCGlobal.pushBackOid(this->getOid());
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
-  ARCCppEngine::preFetchSync(this->getOid(), this->getTNum());
+  ARCCppEngine::preFetchSync(this->getOid());
  
   auto self = self_.unpack();
   auto weight = weight_.unpack();
@@ -7906,7 +7906,7 @@ variable_list CudnnConvolutionBackward::apply(variable_list&& grads) {
     at::globalContext().ARCGlobal.pushBackOid(this->getOid()); 
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
-  ARCCppEngine::preFetchSync(this->getOid(), this->getTNum());
+  ARCCppEngine::preFetchSync(this->getOid());
   
 
 
@@ -8007,7 +8007,7 @@ variable_list CudnnBatchNormBackward::apply(variable_list&& grads) {
     at::globalContext().ARCGlobal.pushBackOid(this->getOid());
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
-  ARCCppEngine::preFetchSync(this->getOid(), this->getTNum());
+  ARCCppEngine::preFetchSync(this->getOid());
   
   auto input = input_.unpack();
   auto weight = weight_.unpack();

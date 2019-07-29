@@ -495,6 +495,7 @@ static variable_list call_function(NodeTask& task) {
     // If you change the logic here, make sure it's compatible with accumulate_grad.cpp.
     auto inputs_copy = inputs;
     outputs = fn(std::move(inputs_copy));
+    //std::cout <<"one backward done" << std::endl;
   }else{
     outputs = fn(std::move(inputs));
   }

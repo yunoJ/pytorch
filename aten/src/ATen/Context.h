@@ -252,4 +252,9 @@ static inline void manual_seed(uint64_t seed) {
   }
 }
 
+
+namespace native {
+  void ARC_copy_(Tensor & self, const Tensor & src, bool non_blocking);
+}
+
 } // namespace at

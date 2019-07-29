@@ -119,6 +119,11 @@ Tensor & copy_(Tensor & self, const Tensor & src, bool non_blocking) {
     self.set_quantizer_(at::make_per_tensor_affine_quantizer(src.q_scale(), src.q_zero_point(), src.scalar_type()));
   }
 
+  // by sam ARC-SNU
+  // tid copy in to
+  self.unsafeGetIntrusivePtr()->tensor_id = src.getIntrusivePtr()->tensor_id; 
+
+
   auto builder = TensorIterator::Builder();
   builder.add_output(self);
   builder.add_input(src);
@@ -144,7 +149,12 @@ Tensor & copy_(Tensor & self, const Tensor & src, bool non_blocking) {
   return self;
 }
 
+void ARC_copy_(Tensor & self, const Tensor & src, bool non_blocking) { 
+  arc_copy_stub(c10::DeviceType::CUDA, (void*)0, (void*)0); 
+}
+
 DEFINE_DISPATCH(copy_stub);
+DEFINE_DISPATCH(arc_copy_stub);
 
 } // namespace native
 } // namespace at
