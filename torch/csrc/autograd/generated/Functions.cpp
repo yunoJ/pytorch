@@ -5680,8 +5680,7 @@ variable_list TrilinearBackward::apply(variable_list&& grads) {
   auto i3_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
-  auto i1 = i1_.unpack();
-  
+ 
   //SNU-ARC
   if (at::globalContext().ARCGlobal.isOnDemand()) {
     at::globalContext().ARCGlobal.pushBackOid(this->getOid()); 
@@ -5689,6 +5688,9 @@ variable_list TrilinearBackward::apply(variable_list&& grads) {
   }
   
   ARCCppEngine::preFetchSync(this->getOid()); 
+
+   auto i1 = i1_.unpack();
+  
   auto i2 = i2_.unpack();
   auto i3 = i3_.unpack();
   if (should_compute_output({ i1_ix, i2_ix, i3_ix })) {
@@ -6446,10 +6448,10 @@ variable_list AdaptiveAvgPool2DBackward::apply(variable_list&& grads) {
   
   //SNU-ARC
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    //at::globalContext().ARCGlobal.pushBackOid(this->getOid());
+    //ARCCppEngine::preFetch(this->getOid(), Sync);
   }
-  ARCCppEngine::preFetchSync(this->getOid());
+  //ARCCppEngine::preFetchSync(this->getOid());
   
   auto self = self_.unpack();
   if (should_compute_output({ self_ix })) {
@@ -7929,6 +7931,10 @@ variable_list CudnnConvolutionBackward::apply(variable_list&& grads) {
         copy_range(grad_inputs, bias_ix, std::get<2>(grad_result));
       }
   }
+
+  //SNU-AR;C
+  ARCCppEngine::dropTensor(this->getOid()); 
+
   return grad_inputs;
 }
 variable_list CudnnConvolutionBackwardBackward::apply(variable_list&& grads) {
@@ -8032,6 +8038,7 @@ variable_list CudnnBatchNormBackward::apply(variable_list&& grads) {
         copy_range(grad_inputs, bias_ix, std::get<2>(grad_result));
       }
   }
+  ARCCppEngine::dropTensor(this->getOid()); 
   return grad_inputs;
 }
 variable_list CudnnBatchNormBackwardBackward::apply(variable_list&& grads) {

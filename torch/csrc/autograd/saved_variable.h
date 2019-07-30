@@ -74,7 +74,7 @@ enum ARCSync {Sync, Async};
 struct ARCCppEngine{
 public:
   // basic fetch/offload operation
-  static void offLoad(at::Tensor& t, TraceableFunction* grad_fn, ARCSync sync, Oid curOid, SavedVariable* fetch_loc);
+  static void offLoad(at::Tensor t, TraceableFunction* grad_fn, ARCSync sync, Oid curOid, SavedVariable* fetch_loc);
   static void explicitAllSync();
   // prefetching at curOid
   static void preFetch(Oid curOid, ARCSync sync);
@@ -84,6 +84,7 @@ public:
   static void joinPrefetchThread();
   static void resetCppEngine();
 
+  static void dropTensor(Oid oid);
 private:
   // worker function for fetching/offloaidng
   static void htod_(at::Tensor t, Oid oid, SavedVariable* fetch_loc);
