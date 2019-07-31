@@ -74,11 +74,11 @@ enum ARCSync {Sync, Async};
 struct ARCCppEngine{
 public:
   // basic fetch/offload operation
-  static void offLoad(at::Tensor t, TraceableFunction* grad_fn, ARCSync sync, Oid curOid, SavedVariable* fetch_loc);
+  static void offLoad(at::Tensor t, TraceableFunction* grad_fn, ARCSync sync, Oid curOid, SavedVariable* fetch_loc, bool isOutput);
   static void explicitAllSync();
   // prefetching at curOid
   static void preFetch(Oid curOid, ARCSync sync);
-  static void preFetchSync(Oid curOid);
+  static void preFetchSync(Oid curOid, bool isOutput=false);
 
   static void startPrefetchThread();
   static void joinPrefetchThread();
@@ -87,16 +87,16 @@ public:
   static void dropTensor(Oid oid);
 private:
   // worker function for fetching/offloaidng
-  static void htod_(at::Tensor t, Oid oid, SavedVariable* fetch_loc);
-  static void dtoh_(at::Tensor t, Oid oid, SavedVariable* fetch_loc);
+  //static void htod_(at::Tensor t, Oid oid, SavedVariable* fetch_loc);
+  //static void dtoh_(at::Tensor t, Oid oid, SavedVariable* fetch_loc);
  
   // Sync!
-  static void offLoadSync_(Oid oid, int required_tensor_num); // Are all tensors required for oid's back prop offloaded?  
+  //static void offLoadSync_(Oid oid, int required_tensor_num); // Are all tensors required for oid's back prop offloaded?  
 
-  static void fetch_(at::Tensor& t, Oid oid, ARCSync sync, SavedVariable* fetch_loc);
+  //static void fetch_(at::Tensor& t, Oid oid, ARCSync sync, SavedVariable* fetch_loc);
 
-  static void insertToPFSyncDict_(Oid oid);
-  static void insertToTensorDict_(at::Tensor& backup);
+  //static void insertToPFSyncDict_(Oid oid);
+  //static void insertToTensorDict_(at::Tensor& backup);
   static void insertToPFDict_(Oid oid, SavedVariable* loc, Tid tid);
  
   //prefetch workers

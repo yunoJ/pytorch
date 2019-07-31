@@ -8107,7 +8107,8 @@ static PyObject * THPVariable_relu_(PyObject* self_, PyObject* args, PyObject* k
     output = dispatch_relu_(input);
   }
   
-  at::globalContext().ARCGlobal.setNewTid(output);
+  //relu_ is inplace! output tid should be the same to input
+  //at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::globalContext().ARCGlobal.isOnDemand()) {
     ARCPyEngine::offLoad(output);

@@ -207,7 +207,7 @@ Tensor VariableType::_adaptive_avg_pool2d(Tensor & self, IntArrayRef output_size
     grad_fn = std::shared_ptr<AdaptiveAvgPool2DBackward>(new AdaptiveAvgPool2DBackward(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self ));
     if (at::globalContext().ARCGlobal.isForward()){
-      ARCCppEngine::offLoad(self, (TraceableFunction *)(grad_fn.get()), Async, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_));
+      ARCCppEngine::offLoad(self, (TraceableFunction *)(grad_fn.get()), Async, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
       grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
     }
     else {

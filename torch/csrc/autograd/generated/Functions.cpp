@@ -5985,14 +5985,17 @@ variable_list ReluBackward1::apply(variable_list&& grads) {
   auto self_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
-  auto result = result_.unpack(shared_from_this());
-  
   //SNU-ARC
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    //at::globalContext().ARCGlobal.pushBackOid(this->getOid());
-  //  ARCCppEngine::preFetch(this->getOid(), Sync);
+    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
+    ARCCppEngine::preFetch(this->getOid(), Sync);
   }
+ ARCCppEngine::preFetchSync(this->getOid(), true);
+
+
+  auto result = result_.unpack(shared_from_this());
   
+ 
   if (should_compute_output({ self_ix })) {
     auto grad_result = threshold_backward(grad, result, 0);
     copy_range(grad_inputs, self_ix, grad_result);

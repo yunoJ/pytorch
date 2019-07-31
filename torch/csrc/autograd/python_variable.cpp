@@ -33,6 +33,15 @@
 #include <utility>
 #include <vector>
 
+
+//by sam SNU-ARC
+#include <c10/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAStream.h>
+
+
+
+
+
 using namespace at;
 using namespace torch;
 using namespace torch::autograd;
@@ -613,6 +622,7 @@ void ARCPyEngine::offLoad(Tensor& t) {
   int stored_id = t.unsafeGetTensorImpl()->tensor_id;
 
 
+  c10::cuda::CUDAStreamGuard csg(at::globalContext().ARCGlobal.globalOffloadStream());   
   Tensor device_t = t.to(opt);
   
   t.unsafeGetIntrusivePtr().swap(device_t.unsafeGetIntrusivePtr());
@@ -626,7 +636,8 @@ void ARCPyEngine::fetch(Tensor& t) {
   opt = opt.device(c10::Device(c10::DeviceType::CUDA));
   opt = opt.dtype(t.scalar_type());
   int stored_id = t.unsafeGetTensorImpl()->tensor_id; 
-  
+ 
+  c10::cuda::CUDAStreamGuard csg(at::globalContext().ARCGlobal.globalPrefetchStream());   
   Tensor host_t = t.to(opt);
 
   t.unsafeGetIntrusivePtr().swap(host_t.unsafeGetIntrusivePtr());

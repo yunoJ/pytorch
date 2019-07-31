@@ -16,6 +16,9 @@
 #include <mutex>
 #include <cstdint>
 
+//by sam SNU-ARC
+#include <c10/cuda/CUDAStream.h>
+
 namespace at {
 
 class Tensor;
@@ -104,6 +107,8 @@ class CAFFE2_API Context {
   void setDeterministicCuDNN(bool);
  
   struct ARCGlobalContext {
+    c10::cuda::CUDAStream globalOffloadStream();
+    c10::cuda::CUDAStream globalPrefetchStream(); 
     // tid, oid manipulation
     Tid getTid(at::Tensor& t);
     void setNewTid(at::Tensor& t);

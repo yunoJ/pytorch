@@ -126,7 +126,16 @@ static bool on_forwarding_ = 1; // 1 in forwarding phase. 0 in backprop. phase
 //Note: C++ standard containers are thread-safe.
 static std::vector<Oid> back_path_; 
 
+//offload prefetch stream
+static auto offload_stream = c10::cuda::getStreamFromPool();
+static auto prefetch_stream = c10::cuda::getStreamFromPool();
+
 // tid, oid manipulation
+
+
+c10::cuda::CUDAStream Context::ARCGlobalContext::globalOffloadStream() { return offload_stream; }
+c10::cuda::CUDAStream Context::ARCGlobalContext::globalPrefetchStream() { return prefetch_stream; }
+
 Tid Context::ARCGlobalContext::getTid(Tensor& t) { return t.unsafeGetTensorImpl()->tensor_id; }
 
 void Context::ARCGlobalContext::setNewTid(Tensor& t) { t.unsafeGetTensorImpl()->tensor_id = ++global_tensor_id_; }
