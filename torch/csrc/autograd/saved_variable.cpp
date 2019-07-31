@@ -148,8 +148,9 @@ void ARCCppEngine::offLoad(at::Tensor t, TraceableFunction* grad_fn, ARCSync syn
   c10::TensorOptions opt = c10::TensorOptions();
   opt = opt.device(c10::Device(c10::DeviceType::CPU));
   opt = opt.dtype(t.scalar_type()); 
- 
-  at::Tensor backup = at::empty(t.sizes(),opt);
+  opt = opt.pinned_memory(true); 
+  at::Tensor backup = at::empty(1,opt);
+
   //at::Tensor backup = at::empty(t.sizes(), opt).pin_memory();
   backup.unsafeGetIntrusivePtr()->tensor_id = tid;
   std::pair<at::Tensor,bool> tmp(backup, isOutput);
@@ -159,13 +160,11 @@ void ARCCppEngine::offLoad(at::Tensor t, TraceableFunction* grad_fn, ARCSync syn
 
   c10::cuda::CUDAStreamGuard csg(at::globalContext().ARCGlobal.globalOffloadStream());   
   if (sync == Async) {
-    //tref = 
-    t.to(opt, true, true); //non-blocking to 
+    tref = t.to(opt, true, true); //non-blocking to 
     //tensor_dict_.insert(std::pair<Tid, at::Tensor>(tid, t.to(opt, false))); 
   }
   else {
-    //tref = 
-    t.to(opt, false, true);
+    tref = t.to(opt, false, true);
   }
   
   //t.reset(); 
@@ -248,8 +247,8 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
       
     if (check != pf_sync_dict_.end())
       break;
-    if (at::globalContext().ARCGlobal.isDebugMode());
-      //std::cout << oid << " pf sync" << std::endl;
+    if (at::globalContext().ARCGlobal.isDebugMode())
+      std::cout << oid << " pf sync" << std::endl;
 
   }
 

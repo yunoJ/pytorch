@@ -2373,6 +2373,8 @@ variable_list AddmmBackward::apply(variable_list&& grads) {
     auto grad_result = maybe_multiply(grad, beta);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  mat1_.reset_data();
   return grad_inputs;
 }
 variable_list SparseAddmmBackward::apply(variable_list&& grads) {
@@ -5990,7 +5992,7 @@ variable_list ReluBackward1::apply(variable_list&& grads) {
     at::globalContext().ARCGlobal.pushBackOid(this->getOid());
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
- ARCCppEngine::preFetchSync(this->getOid(), true);
+  ARCCppEngine::preFetchSync(this->getOid(), true);
 
 
   auto result = result_.unpack(shared_from_this());
@@ -6000,6 +6002,9 @@ variable_list ReluBackward1::apply(variable_list&& grads) {
     auto grad_result = threshold_backward(grad, result, 0);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  result_.reset_data();
+
   return grad_inputs;
 }
 variable_list EluBackward::apply(variable_list&& grads) {
@@ -6525,6 +6530,8 @@ variable_list AvgPool2DBackward::apply(variable_list&& grads) {
     auto grad_result = avg_pool2d_backward(grad, self, kernel_size, stride, padding, ceil_mode, count_include_pad, divisor_override);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  
+  self_.reset_data();
   return grad_inputs;
 }
 variable_list AvgPool3DBackward::apply(variable_list&& grads) {
@@ -6588,6 +6595,8 @@ variable_list MaxPool2DWithIndicesBackward::apply(variable_list&& grads) {
     auto grad_result = max_pool2d_with_indices_backward(grad, self, kernel_size, stride, padding, dilation, ceil_mode, result1);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  self_.reset_data();
+
   return grad_inputs;
 }
 variable_list MaxPool3DWithIndicesBackward::apply(variable_list&& grads) {
@@ -7936,7 +7945,8 @@ variable_list CudnnConvolutionBackward::apply(variable_list&& grads) {
   }
 
   //SNU-AR;C
-  ARCCppEngine::dropTensor(this->getOid()); 
+  //ARCCppEngine::dropTensor(this->getOid()); 
+  self_.reset_data();
 
   return grad_inputs;
 }
@@ -8041,7 +8051,10 @@ variable_list CudnnBatchNormBackward::apply(variable_list&& grads) {
         copy_range(grad_inputs, bias_ix, std::get<2>(grad_result));
       }
   }
-  ARCCppEngine::dropTensor(this->getOid()); 
+  //ARCCppEngine::dropTensor(this->getOid()); 
+  input_.reset_data();
+  result1_.reset_data();
+  result2_.reset_data();
   return grad_inputs;
 }
 variable_list CudnnBatchNormBackwardBackward::apply(variable_list&& grads) {

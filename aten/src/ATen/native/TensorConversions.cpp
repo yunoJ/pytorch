@@ -20,7 +20,14 @@ static inline Device ensure_has_index(Device device) {
 }
 
 static inline Tensor to_impl(const Tensor& self, const TensorOptions& options, bool non_blocking) {
-  auto r = at::empty(self.sizes(), options);
+  Tensor r;
+  //if (options.device().type() == c10::DeviceType::CPU) {
+  //  TensorOptions new_options = options;
+  //  new_options = new_options.pinned_memory(true);
+  //  r = at::empty(self.sizes(), new_options);
+  //} else {
+  r = at::empty(self.sizes(), options);
+  //}
   r.copy_(self, non_blocking);
   return r;
 }
@@ -52,6 +59,8 @@ Tensor to(const Tensor& self, const TensorOptions& options, bool non_blocking, b
   if (dtype_opt) {
     specified_options = specified_options.dtype(dtype_opt.value());
   }
+  if (options.has_pinned_memory())
+    specified_options = specified_options.pinned_memory(options.pinned_memory());
   return to_impl(self, specified_options, non_blocking);
 }
 
