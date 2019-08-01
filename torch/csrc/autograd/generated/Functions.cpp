@@ -2225,7 +2225,6 @@ variable_list AcosBackward::apply(variable_list&& grads) {
   
   //SNU-ARC
   if (at::globalContext().ARCGlobal.isOnDemand())
-    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
   
   if (should_compute_output({ self_ix })) {
     auto grad_result = grad * -((-self * self + 1).rsqrt());
@@ -2243,7 +2242,6 @@ variable_list AddBackward0::apply(variable_list&& grads) {
   
   //SNU-ARC
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
 
@@ -2352,7 +2350,6 @@ variable_list AddmmBackward::apply(variable_list&& grads) {
   auto& grad = grads[0];
 
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    at::globalContext().ARCGlobal.pushBackOid(this->getOid()); 
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
   ARCCppEngine::preFetchSync(this->getOid());
@@ -4151,7 +4148,6 @@ variable_list NativeBatchNormBackward::apply(variable_list&& grads) {
   auto& grad = grads[0];
 
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
 
@@ -5685,7 +5681,6 @@ variable_list TrilinearBackward::apply(variable_list&& grads) {
  
   //SNU-ARC
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    at::globalContext().ARCGlobal.pushBackOid(this->getOid()); 
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
   
@@ -5969,7 +5964,6 @@ variable_list ReluBackward0::apply(variable_list&& grads) {
   
   //SNU-ARC
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    //at::globalContext().ARCGlobal.pushBackOid(this->getOid()); 
   //  ARCCppEngine::preFetch(this->getOid(), Sync);
   }
 
@@ -5989,7 +5983,6 @@ variable_list ReluBackward1::apply(variable_list&& grads) {
   auto& grad = grads[0];
   //SNU-ARC
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
   ARCCppEngine::preFetchSync(this->getOid(), true);
@@ -6457,7 +6450,6 @@ variable_list AdaptiveAvgPool2DBackward::apply(variable_list&& grads) {
   
   //SNU-ARC
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    //at::globalContext().ARCGlobal.pushBackOid(this->getOid());
     //ARCCppEngine::preFetch(this->getOid(), Sync);
   }
   //ARCCppEngine::preFetchSync(this->getOid());
@@ -6519,7 +6511,6 @@ variable_list AvgPool2DBackward::apply(variable_list&& grads) {
   
   //SNU-ARC
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
   ARCCppEngine::preFetchSync(this->getOid());
@@ -6585,7 +6576,6 @@ variable_list MaxPool2DWithIndicesBackward::apply(variable_list&& grads) {
   
   //SNU-ARC
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
   ARCCppEngine::preFetchSync(this->getOid());
@@ -6769,7 +6759,6 @@ variable_list ThnnConv2DBackward::apply(variable_list&& grads) {
   auto& grad = grads[0];
 
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
   ARCCppEngine::preFetchSync(this->getOid());
@@ -7919,7 +7908,6 @@ variable_list CudnnConvolutionBackward::apply(variable_list&& grads) {
   
   //SNU-ARC
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    at::globalContext().ARCGlobal.pushBackOid(this->getOid()); 
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
   ARCCppEngine::preFetchSync(this->getOid());
@@ -8026,7 +8014,6 @@ variable_list CudnnBatchNormBackward::apply(variable_list&& grads) {
   
   //SNU-ARC
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    at::globalContext().ARCGlobal.pushBackOid(this->getOid());
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
   ARCCppEngine::preFetchSync(this->getOid());

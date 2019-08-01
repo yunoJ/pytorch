@@ -20,7 +20,8 @@
 
 #include <c10/cuda/CUDAGuard.h>
 #include <c10/cuda/CUDAStream.h>
-
+#include <THC/THCGeneral.h>
+#include <c10/core/ScalarType.h>
 
 namespace torch { namespace autograd {
 
@@ -133,7 +134,17 @@ void ARCCppEngine::offLoad(at::Tensor t, TraceableFunction* grad_fn, ARCSync syn
   //grad_fn->incrTNum();
   //if (pf_grad_dict_.find(curOid) == pf_grad_dict_.end())
   //    pf_grad_dict_.insert(std::pair<Oid, TraceableFunction*>(curOid,grad_fn)); 
-  
+ 
+
+  // size condition!!
+  // do not offload a block which is less than 10 MB 
+  if ((t.nbytes() < 100 * 1024 * 1024 || curOid > 350) && !at::globalContext().ARCGlobal.isOnDemand()) {
+      *fetch_loc = SavedVariable(t, isOutput);
+      return;
+  }
+
+
+ 
   auto tid =  t.unsafeGetIntrusivePtr()->tensor_id;
   
   insertToPFDict_(curOid, fetch_loc, tid);  
@@ -148,7 +159,8 @@ void ARCCppEngine::offLoad(at::Tensor t, TraceableFunction* grad_fn, ARCSync syn
  
   c10::TensorOptions opt = c10::TensorOptions();
   opt = opt.device(c10::Device(c10::DeviceType::CPU));
-  opt = opt.dtype(t.scalar_type()); 
+  opt = opt.dtype(t.dtype());  
+//opt = opt.dtype(c10::ScalarType::Half); 
   opt = opt.pinned_memory(true); 
   at::Tensor backup = at::empty(1,opt);
 
@@ -231,6 +243,13 @@ void ARCCppEngine::default_prefetch_() {
 
   /* Sync set point! */
   for (auto it = back_path.begin(); it != back_path.end(); it++) {
+    size_t freeBytes;
+    size_t dummy1, dummy2;
+    THCudaMemGetInfo(at::globalContext().getTHCState(), &freeBytes, &dummy1, &dummy2);
+    while(1) {
+      if (freeBytes > 500 * 1024 * 1024) //500MB spare
+        break;
+    } 
     preFetch(*it, Sync);
   }
 }
@@ -240,7 +259,14 @@ void ARCCppEngine::joinPrefetchThread() {
 }
 
 
-void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
+void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) { 
+  //this operation has nothing to prefetch 
+  if (pf_dict_.find(oid) == pf_dict_.end()) {
+    //std::cerr << oid << " Prefetching dictionary lookup miss" << std::endl;
+    return;
+  }
+
+
   if (at::globalContext().ARCGlobal.isDebugMode())
     std::cout << oid << " pf sync start" << std::endl;
    while (1) {
@@ -252,12 +278,6 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
       std::cout << oid << " pf sync" << std::endl;
 
   }
-
-  if (pf_dict_.find(oid) == pf_dict_.end()) {
-    std::cerr << "sync Prefetching dictionary lookup miss" << std::endl;
-    return;
-  }
-
   auto fetch_vec = pf_dict_[oid]; 
   for (auto it = fetch_vec.begin(); it != fetch_vec.end(); it++) {
     auto tid = it->second;
@@ -404,7 +424,13 @@ void ARCCppEngine::offLoadSync_(Oid oid, int required_tensor_num) { // Are all t
 */
 
 //doing nothing for now
-void ARCCppEngine::dropTensor(Oid oid, SavedVariable* fetch_loc) {
+void ARCCppEngine::dropTensor(Oid oid, SavedVariable* fetch_loc) { 
+  //this operation has nothing to prefetch 
+  if (pf_dict_.find(oid) == pf_dict_.end()) {
+    //std::cerr << oid << " Prefetching dictionary lookup miss" << std::endl;
+    return;
+  }
+
   auto fetch_vec = pf_dict_[oid];
   for (auto it = fetch_vec.begin(); it != fetch_vec.end(); it++) {
     auto tid = it->second;
@@ -412,7 +438,8 @@ void ARCCppEngine::dropTensor(Oid oid, SavedVariable* fetch_loc) {
       at::Tensor& tref = tensor_dict_[tid].first; 
       c10::TensorOptions opt = c10::TensorOptions();
       opt = opt.device(c10::Device(c10::DeviceType::CPU));
-      opt = opt.dtype(tref.scalar_type()); 
+      opt = opt.dtype(tref.dtype());
+      //opt = opt.dtype(c10::ScalarType::Half); 
       opt = opt.pinned_memory(true); 
 
       tref = tref.to(opt, false, true);
@@ -435,19 +462,23 @@ void ARCCppEngine::fetchRequiredTensors_(Oid oid,  ARCSync sync) {
   //int required_tensor_num = pf_grad_dict_[oid]->getTNum();
   // check required tensors are properly offloaded.
   //offLoadSync_(oid, required_tensor_num);
-  
+ 
+  //this operation has nothing to prefetch 
   if (pf_dict_.find(oid) == pf_dict_.end()) {
-    std::cerr << oid << " Prefetching dictionary lookup miss" << std::endl;
+    //std::cerr << oid << " Prefetching dictionary lookup miss" << std::endl;
     return;
   }
 
+  if (at::globalContext().ARCGlobal.isOnDemand())
+    at::globalContext().ARCGlobal.pushBackOid(oid);
+  
   auto fetch_vec = pf_dict_[oid]; 
   for (auto it = fetch_vec.begin(); it != fetch_vec.end(); it++) {
     auto tid = it->second;
     //auto fetch_loc = it->first;
 
     if (tensor_dict_.find(tid) == tensor_dict_.end()) {
-      std::cerr << "tensor dictionary lookup miss" << std::endl;
+      //std::cerr << "tensor dictionary lookup miss" << std::endl;
       return;
     }
     
@@ -461,7 +492,8 @@ void ARCCppEngine::fetchRequiredTensors_(Oid oid,  ARCSync sync) {
 
     c10::TensorOptions opt = c10::TensorOptions();
     opt = opt.device(c10::Device(c10::DeviceType::CUDA));
-    opt = opt.dtype(tref.scalar_type());
+    opt = opt.dtype(tref.dtype());
+    //opt = opt.dtype(c10::ScalarType::Float);
         
     if (tref.device().type() == c10::DeviceType::CPU) {
       if (at::globalContext().ARCGlobal.isOnDemand()) {
