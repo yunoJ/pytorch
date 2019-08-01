@@ -124,6 +124,7 @@ static std::map<Oid,std::vector<PFInfo>> pf_dict_;
 static std::map<Oid,bool> pf_sync_dict_;
 static std::map<Oid, TraceableFunction*> pf_grad_dict_;
 static std::map<Tid,std::pair<at::Tensor, bool>> tensor_dict_;
+static std::map<Tid,Oid> last_op_dict_;
 // thread for prefetch
 static std::thread prefetch_thread_;
 
@@ -403,12 +404,24 @@ void ARCCppEngine::offLoadSync_(Oid oid, int required_tensor_num) { // Are all t
 */
 
 //doing nothing for now
-void ARCCppEngine::dropTensor(Oid oid) {
+void ARCCppEngine::dropTensor(Oid oid, SavedVariable* fetch_loc) {
   auto fetch_vec = pf_dict_[oid];
   for (auto it = fetch_vec.begin(); it != fetch_vec.end(); it++) {
     auto tid = it->second;
-    //tensor_dict_.erase(tid);   
-    
+    if (at::globalContext().ARCGlobal.isOnDemand()) {
+      at::Tensor& tref = tensor_dict_[tid].first; 
+      c10::TensorOptions opt = c10::TensorOptions();
+      opt = opt.device(c10::Device(c10::DeviceType::CPU));
+      opt = opt.dtype(tref.scalar_type()); 
+      opt = opt.pinned_memory(true); 
+
+      tref = tref.to(opt, false, true);
+    } else {
+      if (oid == last_op_dict_[tid]) {
+        tensor_dict_.erase(tid);   
+        fetch_loc->reset_data(); 
+      }
+    } 
   }
 }
 
@@ -450,7 +463,14 @@ void ARCCppEngine::fetchRequiredTensors_(Oid oid,  ARCSync sync) {
     opt = opt.device(c10::Device(c10::DeviceType::CUDA));
     opt = opt.dtype(tref.scalar_type());
         
-    if (tref.device().type() == c10::DeviceType::CPU) { 
+    if (tref.device().type() == c10::DeviceType::CPU) {
+      if (at::globalContext().ARCGlobal.isOnDemand()) {
+        if (last_op_dict_.find(tid) == last_op_dict_.end()) 
+          last_op_dict_.insert(std::pair<Tid,Oid>(tid,oid));
+        else
+          last_op_dict_[tid] = oid; 
+      }
+ 
       c10::cuda::CUDAStreamGuard csg(at::globalContext().ARCGlobal.globalPrefetchStream());   
       if (sync == Async)
         tref = tref.to(opt, true); //non-blocking to 

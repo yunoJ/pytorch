@@ -84,7 +84,7 @@ public:
   static void joinPrefetchThread();
   static void resetCppEngine();
 
-  static void dropTensor(Oid oid);
+  static void dropTensor(Oid oid, SavedVariable* fetch_loc);
 private:
   // worker function for fetching/offloaidng
   //static void htod_(at::Tensor t, Oid oid, SavedVariable* fetch_loc);
