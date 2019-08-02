@@ -2864,7 +2864,7 @@ Tensor VariableType::addmm(Tensor & self, Tensor & mat1, Tensor & mat2, Scalar b
     grad_fn = std::shared_ptr<AddmmBackward>(new AddmmBackward(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self, mat1, mat2 ));
     if (at::globalContext().ARCGlobal.isForward()){
-      ARCCppEngine::offLoad(mat1, (TraceableFunction*)(grad_fn.get()), Async, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->mat1_), false);
+      ARCCppEngine::offLoad(mat1, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->mat1_), false);
       grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
     }
     else {
@@ -3362,7 +3362,7 @@ Tensor VariableType::avg_pool2d(Tensor & self, IntArrayRef kernel_size, IntArray
     grad_fn = std::shared_ptr<AvgPool2DBackward>(new AvgPool2DBackward(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self ));
     if (at::globalContext().ARCGlobal.isForward()) {
-      ARCCppEngine::offLoad(self, (TraceableFunction* )(grad_fn.get()), Async, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
+      ARCCppEngine::offLoad(self, /* (TraceableFunction* )(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
       grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
     }
     else {
@@ -8286,7 +8286,7 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::native_batch_norm(Tensor & input,
     grad_fn->set_next_edges(collect_next_edges( input, weight, bias ));
 
     if (at::globalContext().ARCGlobal.isForward()){
-      ARCCppEngine::offLoad(input, (TraceableFunction*)(grad_fn.get()), Async, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->input_), false);
+      ARCCppEngine::offLoad(input, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->input_), false);
       grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
     }
     else {
@@ -9742,7 +9742,7 @@ Tensor & VariableType::relu_(Tensor & self) {
   }
   if (grad_fn) {
     if (at::globalContext().ARCGlobal.isForward()){
-      ARCCppEngine::offLoad(self, (TraceableFunction*)(grad_fn.get()), Async, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result_), true);
+      ARCCppEngine::offLoad(self, /* (TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result_), true);
     }
     else
       grad_fn->result_ = SavedVariable(self, true);
@@ -11335,7 +11335,7 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::thnn_conv2d_forward(Tensor & self
     grad_fn = std::shared_ptr<ThnnConv2DBackward>(new ThnnConv2DBackward(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self, weight, bias ));
     if (at::globalContext().ARCGlobal.isForward()){
-      ARCCppEngine::offLoad(self, (TraceableFunction*)(grad_fn.get()), Async, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
+      ARCCppEngine::offLoad(self, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
       grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
     }
     else {

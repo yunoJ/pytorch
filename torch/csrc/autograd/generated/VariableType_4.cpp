@@ -3709,7 +3709,7 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::cudnn_batch_norm(Tensor & input, 
     grad_fn = std::shared_ptr<CudnnBatchNormBackward>(new CudnnBatchNormBackward(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( input, weight, bias ));
     if (at::globalContext().ARCGlobal.isForward()) {
-      ARCCppEngine::offLoad(input, (TraceableFunction*)(grad_fn.get()), Async, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->input_), false);
+      ARCCppEngine::offLoad(input, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->input_), false);
       grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
     }
     else {

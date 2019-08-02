@@ -74,7 +74,7 @@ enum ARCSync {Sync, Async};
 struct ARCCppEngine{
 public:
   // basic fetch/offload operation
-  static void offLoad(at::Tensor t, TraceableFunction* grad_fn, ARCSync sync, Oid curOid, SavedVariable* fetch_loc, bool isOutput);
+  static void offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync sync,*/ Oid curOid, SavedVariable* fetch_loc, bool isOutput);
   static void explicitAllSync();
   // prefetching at curOid
   static void preFetch(Oid curOid, ARCSync sync);
@@ -106,7 +106,7 @@ private:
 
  
   // internal function implementing prefetching
-  static void fetchRequiredTensors_(Oid oid,ARCSync sync); 
+  static void fetchRequiredTensors_(Oid oid, ARCSync sync); 
   static Oid whoWillPrefetched_(Oid curOid); //output is subject to change according to the prefetching policy
 
 };

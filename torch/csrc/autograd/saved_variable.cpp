@@ -130,23 +130,20 @@ static std::map<Tid,Oid> last_op_dict_;
 static std::thread prefetch_thread_;
 
 //Note: Not referecne but copy a tensor to make it alive
-void ARCCppEngine::offLoad(at::Tensor t, TraceableFunction* grad_fn, ARCSync sync, Oid curOid, SavedVariable* fetch_loc, bool isOutput) {
-  //grad_fn->incrTNum();
-  //if (pf_grad_dict_.find(curOid) == pf_grad_dict_.end())
-  //    pf_grad_dict_.insert(std::pair<Oid, TraceableFunction*>(curOid,grad_fn)); 
- 
+void ARCCppEngine::offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync sync,*/ Oid curOid, SavedVariable* fetch_loc, bool isOutput) {
+  
 
-  // size condition!!
-  // do not offload a block which is less than 10 MB 
-  if ((t.nbytes() < 100 * 1024 * 1024 || curOid > 350) && !at::globalContext().ARCGlobal.isOnDemand()) {
+
+  // partial offloading
+  // Note: the minimum curOid bound was 200 for densenet201 with batch size 200 on 32GB GPU
+  if ((/*t.nbytes() < 100 * 1024 * 1024 ||*/ curOid > 350) && !at::globalContext().ARCGlobal.isOnDemand()) {
       *fetch_loc = SavedVariable(t, isOutput);
       return;
   }
 
-
  
-  auto tid =  t.unsafeGetIntrusivePtr()->tensor_id;
-  
+  // save the information required for prefetching
+  auto tid =  t.unsafeGetIntrusivePtr()->tensor_id;  
   insertToPFDict_(curOid, fetch_loc, tid);  
   if (tensor_dict_.find(tid) != tensor_dict_.end()) {// this tensor is alredy offloaded
     if (at::globalContext().ARCGlobal.isDebugMode())
@@ -156,15 +153,14 @@ void ARCCppEngine::offLoad(at::Tensor t, TraceableFunction* grad_fn, ARCSync syn
   }
   
 
- 
+  // non-blocking offloading 
   c10::TensorOptions opt = c10::TensorOptions();
   opt = opt.device(c10::Device(c10::DeviceType::CPU));
   opt = opt.dtype(t.dtype());  
-//opt = opt.dtype(c10::ScalarType::Half); 
+  //opt = opt.dtype(c10::ScalarType::Half); 
   opt = opt.pinned_memory(true); 
   at::Tensor backup = at::empty(1,opt);
 
-  //at::Tensor backup = at::empty(t.sizes(), opt).pin_memory();
   backup.unsafeGetIntrusivePtr()->tensor_id = tid;
   std::pair<at::Tensor,bool> tmp(backup, isOutput);
   tensor_dict_.insert(std::pair<Tid, std::pair<at::Tensor,bool>>(tid, tmp)); 
@@ -172,50 +168,18 @@ void ARCCppEngine::offLoad(at::Tensor t, TraceableFunction* grad_fn, ARCSync syn
  
 
   c10::cuda::CUDAStreamGuard csg(at::globalContext().ARCGlobal.globalOffloadStream());   
-  if (sync == Async) {
-    tref = t.to(opt, true, true); //non-blocking to 
-    //tensor_dict_.insert(std::pair<Tid, at::Tensor>(tid, t.to(opt, false))); 
-  }
-  else {
-    tref = t.to(opt, false, true);
-  }
-  
-  //t.reset(); 
-  //new_dtoh_(insertToPFDict_(oid, fetch_loc, backup), curOid, fetch_loc);
-  
-  //dtoh_(t, curOid, fetch_loc);
-  //if (sync == Async) memcpy_threads_.push_back(std::thread(dtoh_, t, curOid, fetch_loc));
- 
-  //dumbest sync policy. Need optimized.
-  //if(sync == Sync) {
-  //  std::thread worker(dtoh_, t, curOid, fetch_loc);
-  //  worker.join();
-  //
+  tref = t.to(opt, true, true); //non-blocking to 
+
 }
 
-
-
-
-
-
-//Note: Not referecne but copy a tensor to make it alive
-//void ARCCppEngine::fetch_(at::Tensor& t, Oid oid, ARCSync sync, SavedVariable* fetch_loc) { 
-//  if (sync == Async)memcpy_threads_.push_back(std::thread(htod_, t, oid, fetch_loc));
-  
-  //dumbest sync policy. Need optimized.
-//  if(sync == Sync) {
-//    std::thread worker(htod_, t, oid, fetch_loc);
-//    worker.join();
-    //explicitAllSync();
-//  }
-//}
-
+// doing nothing really
 void ARCCppEngine::explicitAllSync() {
   for (auto it = memcpy_threads_.begin(); it != memcpy_threads_.end(); ++it)
       it->join();
   memcpy_threads_.clear();
 }
 
+// prefetch all tensors required for back prop of curOid
 void ARCCppEngine::preFetch(Oid curOid, ARCSync sync) {//int required_tensor_num, ARCSync sync) {
   if (at::globalContext().ARCGlobal.isDebugMode())
     std::cout <<  curOid << "prefetching" << std::endl;
@@ -265,8 +229,6 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
     //std::cerr << oid << " Prefetching dictionary lookup miss" << std::endl;
     return;
   }
-
-
   if (at::globalContext().ARCGlobal.isDebugMode())
     std::cout << oid << " pf sync start" << std::endl;
    while (1) {
@@ -294,99 +256,11 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
       std::cerr << "sync tensor is not on gpu yet" << std::endl;
     }
     *fetch_loc = SavedVariable(tensor_dict_[tid].first, isOutput);
-    //tensor_dict_[tid].reset();
-  }
-  /*while (1) {
-    auto check = pf_sync_dict_.find(oid);
-      
-    if (at::globalContext().ARCGlobal.isDebugMode())
-      std::cout << oid << " pf sync" << std::endl;
-    if (check != pf_sync_dict_.end()) {
-      auto vec = pf_sync_dict_[oid];
-      if (vec.size() == required_tensor_num)
-        break;
-    }
-  }*/
-}
-
-//for fetching
-/*
-void ARCCppEngine::htod_(at::Tensor t, Oid oid, SavedVariable* fetch_loc) {
-  c10::TensorOptions opt = c10::TensorOptions();
-  opt = opt.device(c10::Device(c10::DeviceType::CUDA));
-  opt = opt.dtype(t.scalar_type());
-  int stored_id = t.unsafeGetTensorImpl()->tensor_id;
-
-
-  at::Tensor device_t = t.to(opt, true);
-  device_t.unsafeGetTensorImpl()->tensor_id = stored_id;
-
-  if (fetch_loc) {
-    *fetch_loc = SavedVariable(device_t, false); // need to support true case?
-    //insertToPFSyncDict_(oid);
-    //std::cout << oid <<  "fetching done" << std::endl; 
-  } else {
-    //Tensor device_t = t.to(Device(DeviceType::CUDA), t.scalar_type());
-    t.unsafeGetIntrusivePtr().swap(device_t.unsafeGetIntrusivePtr());
-    t.unsafeGetTensorImpl()->tensor_id = stored_id;
-    device_t.reset();
   }
 }
-*/
-// offload
-// fetch_loc may be null in on-demand mode
-// and will be not null in non-on-demand mode
-/*
-void ARCCppEngine::dtoh_(at::Tensor t, Oid oid, SavedVariable* fetch_loc) {
-  c10::TensorOptions opt = c10::TensorOptions();
-  opt = opt.device(c10::Device(c10::DeviceType::CPU));
-  opt = opt.dtype(t.scalar_type());
-  int stored_id = t.unsafeGetTensorImpl()->tensor_id; 
-  
-  at::Tensor host_t;
-  host_t = t.to(opt, true);
-  host_t.unsafeGetTensorImpl()->tensor_id = stored_id;
-  if (fetch_loc) {
-    insertToPFDict_(oid, fetch_loc, stored_id);
-    //t.unsafeGetIntrusivePtr().swap(host_t.unsafeGetIntrusivePtr());
-    //t.unsafeGetTensorImpl()->tensor_id = stored_id;
-    //host_t.reset();
-  } else { 
-    t.unsafeGetIntrusivePtr().swap(host_t.unsafeGetIntrusivePtr());
-    t.unsafeGetTensorImpl()->tensor_id = stored_id;
-    host_t.reset();
-  }
-}
-*/
-/*
-void ARCCppEngine::insertToPFSyncDict_(Oid oid) {
-  auto it = pf_sync_dict_.find(oid);
-  if (it == pf_sync_dict_.end()) {
-    std::vector<bool> tmp(1);
-    pf_sync_dict_.insert(std::pair<Oid, std::vector<bool>>(oid, tmp));
-  } else {
-    pf_sync_dict_[oid].push_back(0);
-  }
-}
-*/
-
-/*
-void ARCCppEngine::insertToTensorDict_(at::Tensor& backup) {
-  auto tid = at::globalContext().ARCGlobal.getTid(backup);
-  auto it = tensor_dict_.find(tid);
-  if (it == tensor_dict_.end()) {
-    tensor_dict_.insert(std::pair<Tid, at::Tensor>(tid, backup));
-  }
-}
-*/
-
 
 void ARCCppEngine::insertToPFDict_(Oid oid, SavedVariable* loc, Tid tid) {
-  //first lookup and insert tensor_dict_
-  //auto tid = at::globalContext().ARCGlobal.getTid(backup);
-  //insertToTensorDict_(backup);
-
-  //then lookup and insert pf_dict_
+  //lookup and insert pf_dict_
   auto it = pf_dict_.find(oid);
   if (it != pf_dict_.end()) {
     pf_dict_[oid].emplace_back(loc, tid);
@@ -396,34 +270,9 @@ void ARCCppEngine::insertToPFDict_(Oid oid, SavedVariable* loc, Tid tid) {
     pf_dict_.insert(std::pair<Oid, std::vector<PFInfo>>(oid, tmp));
   }
 }
-/*
-void ARCCppEngine::offLoadSync_(Oid oid, int required_tensor_num) { // Are all tensors required for oid's back prop offloaded?  
-  // 1. pf_dict_ has all tids?
-  // busy waiting
-  while (1) {
-    if (pf_dict_.find(oid) != pf_dict_.end())
-      if (pf_dict_[oid].size() == required_tensor_num) 
-        break;
-  }
-  auto ovec = pf_dict_[oid];
 
-  // 2. each tid is offloaded in tensor_dict_?
-  while (1) {
-    bool ok = 1;
-    for (auto it = ovec.begin(); it != ovec.end(); it++) {
-      auto tid = it->second;
-    
-      if (tensor_dict_.find(tid) == tensor_dict_.end()) {
-        ok = 0;
-        break;
-      }
-    }
-    if (ok) break; 
-  }
-}
-*/
-
-//doing nothing for now
+// drop tensor from gpu memory
+// this function should be called at the end of back prop of each layer
 void ARCCppEngine::dropTensor(Oid oid, SavedVariable* fetch_loc) { 
   //this operation has nothing to prefetch 
   if (pf_dict_.find(oid) == pf_dict_.end()) {
@@ -454,15 +303,6 @@ void ARCCppEngine::dropTensor(Oid oid, SavedVariable* fetch_loc) {
 
 
 void ARCCppEngine::fetchRequiredTensors_(Oid oid,  ARCSync sync) {
-  //if (pf_grad_dict_.find(oid) == pf_grad_dict_.end()) {
-    //std::cerr << "Prefetching dictionary lookup miss" << std::endl;  
-    //std::cerr << "It may need no fetching" << std::endl;
-  //  return;
-  //}
-  //int required_tensor_num = pf_grad_dict_[oid]->getTNum();
-  // check required tensors are properly offloaded.
-  //offLoadSync_(oid, required_tensor_num);
- 
   //this operation has nothing to prefetch 
   if (pf_dict_.find(oid) == pf_dict_.end()) {
     //std::cerr << oid << " Prefetching dictionary lookup miss" << std::endl;
@@ -475,21 +315,13 @@ void ARCCppEngine::fetchRequiredTensors_(Oid oid,  ARCSync sync) {
   auto fetch_vec = pf_dict_[oid]; 
   for (auto it = fetch_vec.begin(); it != fetch_vec.end(); it++) {
     auto tid = it->second;
-    //auto fetch_loc = it->first;
 
     if (tensor_dict_.find(tid) == tensor_dict_.end()) {
       //std::cerr << "tensor dictionary lookup miss" << std::endl;
       return;
     }
-    
-    //std::cout << "fetch " << tid << std::endl;
-    //std::cout << "total size: " << tensor_dict_.size() << std::endl;
- 
-    at::Tensor& tref = tensor_dict_[tid].first;
-    
-    //at::Tensor backup = at::empty(1);
-    //backup.unsafeGetIntrusivePtr()->tensor_id = tid;
 
+    at::Tensor& tref = tensor_dict_[tid].first;
     c10::TensorOptions opt = c10::TensorOptions();
     opt = opt.device(c10::Device(c10::DeviceType::CUDA));
     opt = opt.dtype(tref.dtype());
@@ -530,9 +362,5 @@ void ARCCppEngine::resetCppEngine() {
   pf_sync_dict_.clear();
   pf_grad_dict_.clear();
 }
-
-
-
-
 
 }} // namespace torch::autograd
