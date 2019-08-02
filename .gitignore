@@ -43,7 +43,6 @@ torch.egg-info/
 torch/__init__.pyi
 torch/nn/functional.pyi
 torch/nn/modules/*.pyi
-torch/csrc/autograd/generated/*
 torch/csrc/cudnn/cuDNN.cpp
 torch/csrc/generated
 torch/csrc/generic/TensorMethods.cpp
