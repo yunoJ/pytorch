@@ -132,6 +132,8 @@ static auto prefetch_stream = c10::cuda::getStreamFromPool();
 
 // tid, oid manipulation
 
+// network
+static bool cycle_gan = 1;
 
 c10::cuda::CUDAStream Context::ARCGlobalContext::globalOffloadStream() { return offload_stream; }
 c10::cuda::CUDAStream Context::ARCGlobalContext::globalPrefetchStream() { return prefetch_stream; }
@@ -140,7 +142,10 @@ Tid Context::ARCGlobalContext::getTid(Tensor& t) { return t.unsafeGetTensorImpl(
 
 void Context::ARCGlobalContext::setNewTid(Tensor& t) { t.unsafeGetTensorImpl()->tensor_id = ++global_tensor_id_; }
 void Context::ARCGlobalContext::updateTid(Tensor& t, int tid) { t.unsafeGetTensorImpl()->tensor_id = tid; }
-void Context::ARCGlobalContext::resetGlobalTid() { global_tensor_id_ = 0; }
+void Context::ARCGlobalContext::resetGlobalTid() { 
+    if (cycle_gan) global_tensor_id_ = 5;
+    else global_tensor_id_ = 0; 
+}
 Oid Context::ARCGlobalContext::getCurOid() { return global_operation_id_; }
 Oid Context::ARCGlobalContext::getNewOid() { return ++global_operation_id_; }
 void Context::ARCGlobalContext::resetGlobalOid() { global_operation_id_ = 0; }

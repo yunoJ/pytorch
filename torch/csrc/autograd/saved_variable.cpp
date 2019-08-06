@@ -136,9 +136,9 @@ void ARCCppEngine::offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync s
 
   // partial offloading
   // Note: the minimum curOid bound was 200 for densenet201 with batch size 200 on 32GB GPU
-  if ((/*t.nbytes() < 100 * 1024 * 1024 ||*/ curOid > 350) && !at::globalContext().ARCGlobal.isOnDemand()) {
-      *fetch_loc = SavedVariable(t, isOutput);
-      return;
+  if ((/*t.nbytes() < 100 * 1024 * 1024 ||*/ curOid > 700) && !at::globalContext().ARCGlobal.isOnDemand()) {
+      //*fetch_loc = SavedVariable(t, isOutput);
+      //return;
   }
 
  
@@ -165,7 +165,10 @@ void ARCCppEngine::offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync s
   std::pair<at::Tensor,bool> tmp(backup, isOutput);
   tensor_dict_.insert(std::pair<Tid, std::pair<at::Tensor,bool>>(tid, tmp)); 
   at::Tensor& tref = tensor_dict_[tid].first; 
- 
+  if (tid == 1) {
+    std::cout << "offload at " << curOid << std::endl; 
+    std::cout << "sizes " << t.sizes()[0] << t.sizes()[1] << t.sizes()[2] << t.sizes()[3] << std::endl;
+  }
 
   c10::cuda::CUDAStreamGuard csg(at::globalContext().ARCGlobal.globalOffloadStream());   
   tref = t.to(opt, true, true); //non-blocking to 
@@ -326,7 +329,15 @@ void ARCCppEngine::fetchRequiredTensors_(Oid oid,  ARCSync sync) {
     opt = opt.device(c10::Device(c10::DeviceType::CUDA));
     opt = opt.dtype(tref.dtype());
     //opt = opt.dtype(c10::ScalarType::Float);
-        
+       
+
+  if (tid == 1) {
+    std::cout << "fetch try  at " << oid << std::endl; 
+    std::cout << "sizes " << tref.sizes()[0] << tref.sizes()[1] << tref.sizes()[2] << tref.sizes()[3] << std::endl;
+  }
+
+
+
     if (tref.device().type() == c10::DeviceType::CPU) {
       if (at::globalContext().ARCGlobal.isOnDemand()) {
         if (last_op_dict_.find(tid) == last_op_dict_.end()) 
@@ -334,14 +345,14 @@ void ARCCppEngine::fetchRequiredTensors_(Oid oid,  ARCSync sync) {
         else
           last_op_dict_[tid] = oid; 
       }
- 
+
       c10::cuda::CUDAStreamGuard csg(at::globalContext().ARCGlobal.globalPrefetchStream());   
       if (sync == Async)
         tref = tref.to(opt, true); //non-blocking to 
       else 
         tref = tref.to(opt, false);
     } else {
-      if (at::globalContext().ARCGlobal.isDebugMode()) 
+      if (at::globalContext().ARCGlobal.isDebugMode())
         std::cout <<  tid << ": This tensor is already fetched" << std::endl;
     }
       //fetch_(backup, oid, sync, fetch_loc);
