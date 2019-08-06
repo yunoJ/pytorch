@@ -3241,7 +3241,7 @@ Tensor VariableType::conv_transpose2d(const Tensor & input, const Tensor & weigh
   auto result = TypeDefault::conv_transpose2d(input, weight, bias, stride, padding, output_padding, groups, dilation);
   return result;
 }
-Tensor VariableType::conv_transpose2d(const Tensor & self, const Tensor & weight, IntArrayRef kernel_size, const Tensor & bias, IntArrayRef stride, IntArrayRef padding, IntArrayRef output_padding, IntArrayRef dilation) {
+Tensor VariableType::conv_transpose2d(Tensor & self, const Tensor & weight, IntArrayRef kernel_size, const Tensor & bias, IntArrayRef stride, IntArrayRef padding, IntArrayRef output_padding, IntArrayRef dilation) {
   RECORD_FUNCTION("conv_transpose2d", std::vector<c10::IValue>({self, weight, bias}), Node::peek_at_next_sequence_nr());
   auto& self_ = unpack(self, "self", 0);
   auto& weight_ = unpack(weight, "weight", 1);
@@ -3250,7 +3250,13 @@ Tensor VariableType::conv_transpose2d(const Tensor & self, const Tensor & weight
   if (compute_requires_grad( self, weight, bias )) {
     grad_fn = std::shared_ptr<ConvTranspose2DBackward>(new ConvTranspose2DBackward(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self, weight, bias ));
-    grad_fn->self_ = SavedVariable(self, false);
+    if (at::globalContext().ARCGlobal.isForward()){
+      ARCCppEngine::offLoad(self, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else {
+      grad_fn->self_ = SavedVariable(self, false);
+    }
     grad_fn->weight_ = SavedVariable(weight, false);
     grad_fn->kernel_size = kernel_size.vec();
     grad_fn->stride = stride.vec();
@@ -6535,6 +6541,7 @@ Tensor & VariableType::leaky_relu_(Tensor & self, Scalar negative_slope) {
   c10::intrusive_ptr<TensorImpl> self__impl_saved;
   if (self_.defined()) self__impl_saved = self_.getIntrusivePtr();
   #endif
+  //auto tid ;
   {
     at::AutoNonVariableTypeMode non_var_type_mode(true);
     at::leaky_relu_(self_, negative_slope);
@@ -6553,7 +6560,13 @@ Tensor & VariableType::leaky_relu_(Tensor & self, Scalar negative_slope) {
     jit::tracer::addOutput(node, self);
   }
   if (grad_fn) {
-    grad_fn->result_ = SavedVariable(self, true);
+    if (at::globalContext().ARCGlobal.isForward()){
+      ARCCppEngine::offLoad(self, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result_), false);
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else {
+      grad_fn->result_ = SavedVariable(self, false);
+    }
   }
   return self;
 }
@@ -11849,7 +11862,7 @@ static auto& registerer = globalATenDispatch()
   .registerVariableOp<Tensor (const Tensor &, MemoryFormat)>("aten::contiguous(Tensor self, *, MemoryFormat memory_format=contiguous_format) -> Tensor", &VariableType::contiguous)
   .registerVariableOp<Tensor (const Tensor &, const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, int64_t)>("aten::conv3d(Tensor input, Tensor weight, Tensor? bias=None, int[3] stride=1, int[3] padding=0, int[3] dilation=1, int groups=1) -> Tensor", &VariableType::conv3d)
   .registerVariableOp<Tensor (const Tensor &, const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, int64_t, IntArrayRef)>("aten::conv_transpose2d(Tensor input, Tensor weight, Tensor? bias=None, int[2] stride=1, int[2] padding=0, int[2] output_padding=0, int groups=1, int[2] dilation=1) -> Tensor", &VariableType::conv_transpose2d)
-  .registerVariableOp<Tensor (const Tensor &, const Tensor &, IntArrayRef, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, IntArrayRef)>("aten::conv_transpose2d(Tensor self, Tensor weight, int[2] kernel_size, Tensor? bias=None, int[2] stride=1, int[2] padding=0, int[2] output_padding=0, int[2] dilation=1) -> Tensor", &VariableType::conv_transpose2d)
+  .registerVariableOp<Tensor (Tensor &, const Tensor &, IntArrayRef, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, IntArrayRef)>("aten::conv_transpose2d(Tensor self, Tensor weight, int[2] kernel_size, Tensor? bias=None, int[2] stride=1, int[2] padding=0, int[2] output_padding=0, int[2] dilation=1) -> Tensor", &VariableType::conv_transpose2d)
   .registerVariableOp<std::tuple<Tensor &,Tensor &,Tensor &> (Tensor &, Tensor &, Tensor &, const Tensor &, const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, IntArrayRef, IntArrayRef, const Tensor &, const Tensor &)>("aten::conv_transpose2d_backward(Tensor grad_output, Tensor self, Tensor weight, int[2] kernel_size, int[2] stride, int[2] padding, int[2] output_padding, int[2] dilation, Tensor columns, Tensor ones, *, Tensor?(a!) grad_input, Tensor?(b!) grad_weight, Tensor?(c!) grad_bias) -> (Tensor(a!), Tensor(b!), Tensor(c!))", &VariableType::conv_transpose2d_backward_out)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, const Tensor &, IntArrayRef, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, IntArrayRef)>("aten::conv_transpose3d(Tensor self, Tensor weight, int[3] kernel_size, Tensor? bias=None, int[3] stride=1, int[3] padding=0, int[3] output_padding=0, int[3] dilation=1, *, Tensor(a!) out) -> Tensor(a!)", &VariableType::conv_transpose3d_out)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &)>("aten::cos(Tensor self, *, Tensor(a!) out) -> Tensor(a!)", &VariableType::cos_out)

@@ -377,7 +377,7 @@ struct TORCH_API VariableType final {
   static std::tuple<Tensor,Tensor,Tensor> conv_tbc_backward(const Tensor & self, const Tensor & input, const Tensor & weight, const Tensor & bias, int64_t pad) ;
   static Tensor conv_transpose1d(const Tensor & input, const Tensor & weight, const Tensor & bias, IntArrayRef stride, IntArrayRef padding, IntArrayRef output_padding, int64_t groups, IntArrayRef dilation) ;
   static Tensor conv_transpose2d(const Tensor & input, const Tensor & weight, const Tensor & bias, IntArrayRef stride, IntArrayRef padding, IntArrayRef output_padding, int64_t groups, IntArrayRef dilation) ;
-  static Tensor conv_transpose2d(const Tensor & self, const Tensor & weight, IntArrayRef kernel_size, const Tensor & bias, IntArrayRef stride, IntArrayRef padding, IntArrayRef output_padding, IntArrayRef dilation) ;
+  static Tensor conv_transpose2d(Tensor & self, const Tensor & weight, IntArrayRef kernel_size, const Tensor & bias, IntArrayRef stride, IntArrayRef padding, IntArrayRef output_padding, IntArrayRef dilation) ;
   static std::tuple<Tensor,Tensor,Tensor> conv_transpose2d_backward(const Tensor & grad_output, const Tensor & self, const Tensor & weight, IntArrayRef kernel_size, IntArrayRef stride, IntArrayRef padding, IntArrayRef output_padding, IntArrayRef dilation, const Tensor & columns, const Tensor & ones, std::array<bool,3> output_mask) ;
   static std::tuple<Tensor &,Tensor &,Tensor &> conv_transpose2d_backward_out(Tensor & grad_input, Tensor & grad_weight, Tensor & grad_bias, const Tensor & grad_output, const Tensor & self, const Tensor & weight, IntArrayRef kernel_size, IntArrayRef stride, IntArrayRef padding, IntArrayRef output_padding, IntArrayRef dilation, const Tensor & columns, const Tensor & ones) ;
   static Tensor & conv_transpose2d_out(Tensor & out, const Tensor & self, const Tensor & weight, IntArrayRef kernel_size, const Tensor & bias, IntArrayRef stride, IntArrayRef padding, IntArrayRef output_padding, IntArrayRef dilation) ;
@@ -632,7 +632,7 @@ struct TORCH_API VariableType final {
   static Tensor kl_div_backward(const Tensor & grad_output, const Tensor & self, const Tensor & target, int64_t reduction) ;
   static std::tuple<Tensor,Tensor> kthvalue(const Tensor & self, int64_t k, int64_t dim, bool keepdim) ;
   static std::tuple<Tensor &,Tensor &> kthvalue_out(Tensor & values, Tensor & indices, const Tensor & self, int64_t k, int64_t dim, bool keepdim) ;
-  static Tensor l1_loss(const Tensor & self, const Tensor & target, int64_t reduction) ;
+  static Tensor l1_loss(Tensor & self, const Tensor & target, int64_t reduction) ;
   static Tensor l1_loss_backward(const Tensor & grad_output, const Tensor & self, const Tensor & target, int64_t reduction) ;
   static Tensor & l1_loss_backward_out(Tensor & grad_input, const Tensor & grad_output, const Tensor & self, const Tensor & target, int64_t reduction) ;
   static Tensor & l1_loss_out(Tensor & out, const Tensor & self, const Tensor & target, int64_t reduction) ;
@@ -947,7 +947,7 @@ struct TORCH_API VariableType final {
   static Tensor reflection_pad1d_backward(const Tensor & grad_output, const Tensor & self, IntArrayRef padding) ;
   static Tensor & reflection_pad1d_backward_out(Tensor & grad_input, const Tensor & grad_output, const Tensor & self, IntArrayRef padding) ;
   static Tensor & reflection_pad1d_out(Tensor & out, const Tensor & self, IntArrayRef padding) ;
-  static Tensor reflection_pad2d(const Tensor & self, IntArrayRef padding) ;
+  static Tensor reflection_pad2d(Tensor & self, IntArrayRef padding) ;
   static Tensor reflection_pad2d_backward(const Tensor & grad_output, const Tensor & self, IntArrayRef padding) ;
   static Tensor & reflection_pad2d_backward_out(Tensor & grad_input, const Tensor & grad_output, const Tensor & self, IntArrayRef padding) ;
   static Tensor & reflection_pad2d_out(Tensor & out, const Tensor & self, IntArrayRef padding) ;
@@ -1111,7 +1111,7 @@ struct TORCH_API VariableType final {
   static Tensor tan(const Tensor & self) ;
   static Tensor & tan_(Tensor & self) ;
   static Tensor & tan_out(Tensor & out, const Tensor & self) ;
-  static Tensor tanh(const Tensor & self) ;
+  static Tensor tanh(Tensor & self) ;
   static Tensor & tanh_(Tensor & self) ;
   static Tensor tanh_backward(const Tensor & grad_output, const Tensor & output) ;
   static Tensor & tanh_backward_out(Tensor & grad_input, const Tensor & grad_output, const Tensor & output) ;

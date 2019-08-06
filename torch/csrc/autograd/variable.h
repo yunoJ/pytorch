@@ -495,6 +495,9 @@ inline Variable make_variable_view(
     bool is_differentiable = true,
     bool allow_tensor_metadata_change = true,
     Edge gradient_edge = Edge()) {
+  
+  auto tid = data.unsafeGetTensorImpl()->tensor_id;
+
   if (data.defined()) {
     if (is_differentiable) {
       /// Differentiable view. Track history with DifferentiableViewMeta.
@@ -503,6 +506,7 @@ inline Variable make_variable_view(
         /*allow_tensor_metadata_change=*/allow_tensor_metadata_change);
       data_impl_copy->set_autograd_meta(c10::guts::make_unique<Variable::DifferentiableViewMeta>(
         data_impl_copy.get(), std::move(base), std::move(gradient_edge)));
+      data_impl_copy->tensor_id = tid;
       return Variable(data_impl_copy);
     } else {
       /// Non-differentiable view. Just share version counter.
@@ -511,6 +515,7 @@ inline Variable make_variable_view(
         /*allow_tensor_metadata_change=*/allow_tensor_metadata_change);
       data_impl_copy->set_autograd_meta(c10::guts::make_unique<Variable::AutogradMeta>(
         data_impl_copy.get(), false, std::move(gradient_edge)));
+      data_impl_copy->tensor_id = tid;
       return Variable(data_impl_copy);
     }
   }

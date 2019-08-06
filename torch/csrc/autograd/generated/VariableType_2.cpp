@@ -10644,7 +10644,7 @@ Tensor & VariableType::tan_out(Tensor & out, const Tensor & self) {
   }
   return out;
 }
-Tensor VariableType::tanh(const Tensor & self) {
+Tensor VariableType::tanh(Tensor & self) {
   RECORD_FUNCTION("tanh", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
   auto& self_ = unpack(self, "self", 0);
   std::shared_ptr<TanhBackward> grad_fn;
@@ -10676,6 +10676,9 @@ Tensor VariableType::tanh(const Tensor & self) {
     return at::tanh(self_);
   })();
   auto result = as_variable(std::move(tmp));
+  //result tid manipulation
+  at::globalContext().ARCGlobal.setNewTid(result);
+
   #ifndef NDEBUG
   if (self__storage_saved.has_value())
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));
@@ -10689,7 +10692,13 @@ Tensor VariableType::tanh(const Tensor & self) {
     jit::tracer::addOutput(node, result);
   }
   if (grad_fn) {
-    grad_fn->result_ = SavedVariable(result, true);
+    if (at::globalContext().ARCGlobal.isForward()){
+      ARCCppEngine::offLoad(result, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result_), false);
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else {
+      grad_fn->result_ = SavedVariable(result, false);
+    }
   }
   return result;
 }
@@ -12150,7 +12159,7 @@ static auto& registerer = globalATenDispatch()
   .registerVariableOp<Tensor (const Tensor &, const Tensor &, const Tensor &, Scalar, Scalar)>("aten::sspaddmm(Tensor self, Tensor mat1, Tensor mat2, *, Scalar beta=1, Scalar alpha=1) -> Tensor", &VariableType::sspaddmm)
   .registerVariableOp<std::tuple<Tensor &,Tensor &,Tensor &> (Tensor &, Tensor &, Tensor &, const Tensor &, bool, bool)>("aten::svd(Tensor self, bool some=True, bool compute_uv=True, *, Tensor(a!) U, Tensor(b!) S, Tensor(c!) V) -> (Tensor(a!) U, Tensor(b!) S, Tensor(c!) V)", &VariableType::svd_out)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &)>("aten::tan(Tensor self, *, Tensor(a!) out) -> Tensor(a!)", &VariableType::tan_out)
-  .registerVariableOp<Tensor (const Tensor &)>("aten::tanh(Tensor self) -> Tensor", &VariableType::tanh)
+  .registerVariableOp<Tensor (Tensor &)>("aten::tanh(Tensor self) -> Tensor", &VariableType::tanh)
   .registerVariableOp<Tensor & (Tensor &)>("aten::tanh_(Tensor(a!) self) -> Tensor(a!)", &VariableType::tanh_)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, const Tensor &)>("aten::tanh_backward(Tensor grad_output, Tensor output, *, Tensor(a!) grad_input) -> Tensor(a!)", &VariableType::tanh_backward_out)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, const Tensor &, IntArrayRef, const Tensor &, IntArrayRef, IntArrayRef)>("aten::thnn_conv2d(Tensor self, Tensor weight, int[2] kernel_size, Tensor? bias=None, int[2] stride=1, int[2] padding=0, *, Tensor(a!) out) -> Tensor(a!)", &VariableType::thnn_conv2d_out)

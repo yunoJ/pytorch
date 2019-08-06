@@ -6070,7 +6070,7 @@ Scalar VariableType::item(const Tensor & self) {
   auto result = TypeDefault::item(self);
   return result;
 }
-Tensor VariableType::l1_loss(const Tensor & self, const Tensor & target, int64_t reduction) {
+Tensor VariableType::l1_loss(Tensor & self, const Tensor & target, int64_t reduction) {
   RECORD_FUNCTION("l1_loss", std::vector<c10::IValue>({self, target}), Node::peek_at_next_sequence_nr());
   auto& self_ = unpack(self, "self", 0);
   auto& target_ = unpack(target, "target", 1);
@@ -6079,7 +6079,13 @@ Tensor VariableType::l1_loss(const Tensor & self, const Tensor & target, int64_t
   if (compute_requires_grad( self )) {
     grad_fn = std::shared_ptr<L1LossBackward>(new L1LossBackward(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self ));
-    grad_fn->self_ = SavedVariable(self, false);
+    if (at::globalContext().ARCGlobal.isForward()){
+      ARCCppEngine::offLoad(self, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else {
+      grad_fn->self_ = SavedVariable(self, false);
+    }
     grad_fn->target_ = SavedVariable(target, false);
     grad_fn->reduction = reduction;
   }
@@ -9890,14 +9896,21 @@ Tensor VariableType::reflection_pad1d_backward(const Tensor & grad_output, const
   }
   return result;
 }
-Tensor VariableType::reflection_pad2d(const Tensor & self, IntArrayRef padding) {
+Tensor VariableType::reflection_pad2d(Tensor & self, IntArrayRef padding) {
   RECORD_FUNCTION("reflection_pad2d", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
   auto& self_ = unpack(self, "self", 0);
   std::shared_ptr<ReflectionPad2DBackward> grad_fn;
   if (compute_requires_grad( self )) {
     grad_fn = std::shared_ptr<ReflectionPad2DBackward>(new ReflectionPad2DBackward(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self ));
-    grad_fn->self_ = SavedVariable(self, false);
+    if (at::globalContext().ARCGlobal.isForward()){
+      ARCCppEngine::offLoad(self, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else {
+      grad_fn->self_ = SavedVariable(self, false);
+    }
+
     grad_fn->padding = padding.vec();
   }
   torch::jit::Node* node = nullptr;
@@ -13293,7 +13306,7 @@ static auto& registerer = globalATenDispatch()
   .registerVariableOp<bool (const Tensor &)>("aten::is_coalesced(Tensor self) -> bool", &VariableType::is_coalesced)
   .registerVariableOp<bool (const Tensor &)>("aten::is_floating_point(Tensor self) -> bool", &VariableType::is_floating_point)
   .registerVariableOp<Scalar (const Tensor &)>("aten::item(Tensor self) -> Scalar", &VariableType::item)
-  .registerVariableOp<Tensor (const Tensor &, const Tensor &, int64_t)>("aten::l1_loss(Tensor self, Tensor target, int reduction=Mean) -> Tensor", &VariableType::l1_loss)
+  .registerVariableOp<Tensor (Tensor &, const Tensor &, int64_t)>("aten::l1_loss(Tensor self, Tensor target, int reduction=Mean) -> Tensor", &VariableType::l1_loss)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, const Tensor &, const Tensor &, int64_t)>("aten::l1_loss_backward(Tensor grad_output, Tensor self, Tensor target, int reduction, *, Tensor(a!) grad_input) -> Tensor(a!)", &VariableType::l1_loss_backward_out)
   .registerVariableOp<Tensor & (Tensor &, Scalar, Scalar, int64_t)>("aten::linspace(Scalar start, Scalar end, int steps=100, *, Tensor(a!) out) -> Tensor(a!)", &VariableType::linspace_out)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &)>("aten::log2(Tensor self, *, Tensor(a!) out) -> Tensor(a!)", &VariableType::log2_out)
@@ -13362,7 +13375,7 @@ static auto& registerer = globalATenDispatch()
   .registerVariableOp<Tensor & (Tensor &, int64_t)>("aten::randperm(int n, *, Tensor(a!) out) -> Tensor(a!)", &VariableType::randperm_out)
   .registerVariableOp<Tensor & (Tensor &, int64_t, Generator *)>("aten::randperm(int n, *, Generator? generator, Tensor(a!) out) -> Tensor(a!)", &VariableType::randperm_out)
   .registerVariableOp<Tensor (const Tensor &, const Tensor &, IntArrayRef)>("aten::reflection_pad1d_backward(Tensor grad_output, Tensor self, int[2] padding) -> Tensor", &VariableType::reflection_pad1d_backward)
-  .registerVariableOp<Tensor (const Tensor &, IntArrayRef)>("aten::reflection_pad2d(Tensor self, int[4] padding) -> Tensor", &VariableType::reflection_pad2d)
+  .registerVariableOp<Tensor (Tensor &, IntArrayRef)>("aten::reflection_pad2d(Tensor self, int[4] padding) -> Tensor", &VariableType::reflection_pad2d)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, const Tensor &, IntArrayRef)>("aten::reflection_pad2d_backward(Tensor grad_output, Tensor self, int[4] padding, *, Tensor(a!) grad_input) -> Tensor(a!)", &VariableType::reflection_pad2d_backward_out)
   .registerVariableOp<Tensor (const Tensor &, Scalar)>("aten::remainder(Tensor self, Scalar other) -> Tensor", &VariableType::remainder)
   .registerVariableOp<Tensor (const Tensor &, const Tensor &)>("aten::remainder(Tensor self, Tensor other) -> Tensor", &VariableType::remainder)

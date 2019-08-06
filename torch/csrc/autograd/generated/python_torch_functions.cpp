@@ -3425,10 +3425,47 @@ static PyObject * THPVariable_conv_transpose2d(PyObject* self_, PyObject* args, 
 
   ParsedArgs<8> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
+ 
+  // Get Oid
+  auto oid = at::globalContext().ARCGlobal.getNewOid();
+  // DEBUG: print operation type, oid
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION CONV_TRANSPOSE2D, OPID: ";
+    std::cout << oid << std::endl;
+  }
+
+  Tensor input = r.tensor(0);
+
+  // DEBUG: print tid of input tensor
+  // std::cout << "INPUT TENSOR ID: ";
+  // auto itid = at::globalContext().ARCGlobal.getTid(input);
+  // std::cout << itid << std::endl;
+
+  // ON_DEMAND_MODE: fetch input from host if it lies in host memory
+  if(at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
+    ARCPyEngine::fetch(input);
+
+  Tensor output;
 
   if (r.idx == 0) {
-    return wrap(dispatch_conv_transpose2d(r.tensor(0), r.tensor(1), r.tensor(2), r.intlist(3), r.intlist(4), r.intlist(5), r.toInt64(6), r.intlist(7)));
+    output = dispatch_conv_transpose2d(input, r.tensor(1), r.tensor(2), r.intlist(3), r.intlist(4), r.intlist(5), r.toInt64(6), r.intlist(7));
   }
+
+  // Give new tensor id to the output
+  at::globalContext().ARCGlobal.setNewTid(output);
+
+  // DEBUG: print output tid
+  //std::cout << "OUTPUT TENSOR ID: ";
+  //std::cout << at::globalContext().ARCGlobal.getTid(output) << std::endl;
+  
+  // ON_DEMAND_MODE: offloads output to host memory
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCPyEngine::offLoad(output);
+  }
+  
+  return wrap(output);
+
+
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }
@@ -5539,10 +5576,45 @@ static PyObject * THPVariable_instance_norm(PyObject* self_, PyObject* args, PyO
 
   ParsedArgs<9> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
-
-  if (r.idx == 0) {
-    return wrap(dispatch_instance_norm(r.tensor(0), r.tensor(1), r.tensor(2), r.tensor(3), r.tensor(4), r.toBool(5), r.toDouble(6), r.toDouble(7), r.toBool(8)));
+  
+  // Get Oid
+  auto oid = at::globalContext().ARCGlobal.getNewOid();
+  // DEBUG: print operation type, oid
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION INSTANCE_NORM, OPID: ";
+    std::cout << oid << std::endl;
   }
+
+  Tensor input = r.tensor(0);
+
+  // DEBUG: print tid of input tensor
+  // std::cout << "INPUT TENSOR ID: ";
+  // auto itid = at::globalContext().ARCGlobal.getTid(input);
+  // std::cout << itid << std::endl;
+
+  // ON_DEMAND_MODE: fetch input from host if it lies in host memory
+  if(at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
+    ARCPyEngine::fetch(input);
+
+  Tensor output;
+  if (r.idx == 0) {
+    output = dispatch_instance_norm(input, r.tensor(1), r.tensor(2), r.tensor(3), r.tensor(4), r.toBool(5), r.toDouble(6), r.toDouble(7), r.toBool(8));
+  }
+
+  // Give new tensor id to the output
+  at::globalContext().ARCGlobal.setNewTid(output);
+
+  // DEBUG: print output tid
+  //std::cout << "OUTPUT TENSOR ID: ";
+  //std::cout << at::globalContext().ARCGlobal.getTid(output) << std::endl;
+  
+  // ON_DEMAND_MODE: offloads output to host memory
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCPyEngine::offLoad(output);
+  }
+  
+  return wrap(output);
+
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }
@@ -9308,14 +9380,55 @@ static PyObject * THPVariable_tanh(PyObject* self_, PyObject* args, PyObject* kw
 
   ParsedArgs<2> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
+ 
+  // Get Oid
+  auto oid = at::globalContext().ARCGlobal.getNewOid();
+  // DEBUG: print operation type, oid
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION TANH, OPID: ";
+    std::cout << oid << std::endl;
+  }
 
+  Tensor input = r.tensor(0);
+
+  // DEBUG: print tid of input tensor
+  // std::cout << "INPUT TENSOR ID: ";
+  // auto itid = at::globalContext().ARCGlobal.getTid(input);
+  // std::cout << itid << std::endl;
+
+  // ON_DEMAND_MODE: fetch input from host if it lies in host memory
+  if(at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
+    ARCPyEngine::fetch(input);
+
+  Tensor output;
   if (r.idx == 0) {
     if (r.isNone(1)) {
-      return wrap(dispatch_tanh(r.tensor(0)));
+      output = dispatch_tanh(input);
     } else {
-      return wrap(dispatch_tanh(r.tensor(0), r.tensor(1)));
+      output = dispatch_tanh(input, r.tensor(1));
     }
   }
+
+  // tanh backuped result already
+  // Give new tensor id to the output
+  //at::globalContext().ARCGlobal.setNewTid(output);
+
+  // DEBUG: print output tid
+  //std::cout << "OUTPUT TENSOR ID: ";
+  //std::cout << at::globalContext().ARCGlobal.getTid(output) << std::endl;
+  
+  // ON_DEMAND_MODE: offloads output to host memory
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCPyEngine::offLoad(output);
+  }
+  
+  return wrap(output);
+
+
+
+
+
+
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }
@@ -9738,9 +9851,25 @@ static PyObject * THPVariable_unsqueeze(PyObject* self_, PyObject* args, PyObjec
   ParsedArgs<2> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
-  if (r.idx == 0) {
-    return wrap(dispatch_unsqueeze(r.tensor(0), r.toInt64(1)));
+  // Get Oid
+  auto oid = at::globalContext().ARCGlobal.getNewOid();
+  // DEBUG: print operation type, oid
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION UNSQUEEZE, OPID: ";
+    std::cout << oid << std::endl;
   }
+
+  Tensor output;
+  if (r.idx == 0) {
+    output = dispatch_unsqueeze(r.tensor(0), r.toInt64(1));
+  }
+
+  // Give new tensor id to the output
+  at::globalContext().ARCGlobal.setNewTid(output);
+
+  return wrap(output);
+
+
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }

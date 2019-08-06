@@ -68,7 +68,10 @@ static PyObject* Tensor_new(PyTypeObject *type, PyObject *args, PyObject *kwargs
   if (tensor_type.is_cuda && !torch::utils::cuda_enabled()) {
     throw unavailable_type(tensor_type);
   }
-  return THPVariable_Wrap(torch::utils::legacy_tensor_ctor(tensor_type.get_type_id(), tensor_type.get_scalar_type(), args, kwargs));
+    
+  auto output = torch::utils::legacy_tensor_ctor(tensor_type.get_type_id(), tensor_type.get_scalar_type(), args, kwargs);
+  at::globalContext().ARCGlobal.setNewTid(output);
+  return THPVariable_Wrap(output);
   END_HANDLE_TH_ERRORS
 }
 

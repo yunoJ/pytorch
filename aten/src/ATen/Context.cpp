@@ -148,7 +148,12 @@ void Context::ARCGlobalContext::resetGlobalOid() { global_operation_id_ = 0; }
 // set flags
 void Context::ARCGlobalContext::startForward() { on_forwarding_ = 1; }
 void Context::ARCGlobalContext::endForward() { on_forwarding_ = 0; }
-void Context::ARCGlobalContext::endOnDemand() { on_demand_mode_ = 0; }
+void Context::ARCGlobalContext::endOnDemand() { 
+    static int remaining_backward_in_first_iter = 3;
+    --remaining_backward_in_first_iter;
+    if (remaining_backward_in_first_iter == 0)
+        on_demand_mode_ = 0; 
+}
 // flag checks 
 bool Context::ARCGlobalContext::isForward() { return on_forwarding_; }
 bool Context::ARCGlobalContext::isOnDemand() { return on_demand_mode_; }

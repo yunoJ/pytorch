@@ -354,13 +354,19 @@ Oid ARCCppEngine::whoWillPrefetched_(Oid curOid) {
 }
 
 void ARCCppEngine::resetCppEngine() {
-  at::globalContext().ARCGlobal.resetGlobalTid();
-  at::globalContext().ARCGlobal.resetGlobalOid();
-  explicitAllSync();
-  tensor_dict_.clear();
-  pf_dict_.clear();
-  pf_sync_dict_.clear();
-  pf_grad_dict_.clear();
+  static int backward_num_in_one_iter = 3;
+  static int remaining_backward = 3;//backward_num_in_one_iter;
+  --remaining_backward;
+  if (remaining_backward == 0) {
+    at::globalContext().ARCGlobal.resetGlobalTid();
+    at::globalContext().ARCGlobal.resetGlobalOid();
+    explicitAllSync();
+    tensor_dict_.clear();
+    pf_dict_.clear();
+    pf_sync_dict_.clear();
+    pf_grad_dict_.clear();
+    remaining_backward = backward_num_in_one_iter;
+  }
 }
 
 }} // namespace torch::autograd
