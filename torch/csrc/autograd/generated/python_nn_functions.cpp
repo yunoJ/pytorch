@@ -590,19 +590,19 @@ static PyObject * THPVariable_leaky_relu_(PyObject* self_, PyObject* args, PyObj
   if (at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
     ARCPyEngine::fetch(input);
 
-  Tensor output;
+  //Tensor output;
 
   if (r.idx == 0) {
-    output = dispatch_leaky_relu_(input, r.scalar(1));
+    input = dispatch_leaky_relu_(input, r.scalar(1));
   }
 
   //at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCPyEngine::offLoad(output);
+    ARCPyEngine::offLoad(input);
   }
 
-  return wrap(output);
+  return wrap(input);
   
 
   Py_RETURN_NONE;

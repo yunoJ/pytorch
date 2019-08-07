@@ -2241,9 +2241,9 @@ variable_list AddBackward0::apply(variable_list&& grads) {
   auto& grad = grads[0];
   
   //SNU-ARC
-  if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
-  }
+  //if (at::globalContext().ARCGlobal.isOnDemand()) {
+  //  ARCCppEngine::preFetch(this->getOid(), Sync);
+  //}
 
 
   if (should_compute_output({ other_ix })) {
@@ -4177,6 +4177,9 @@ variable_list NativeBatchNormBackward::apply(variable_list&& grads) {
         copy_range(grad_inputs, bias_ix, std::get<2>(grad_result));
       }
   }
+
+  ARCCppEngine::dropTensor(this->getOid(), &input_);
+
   return grad_inputs;
 }
 variable_list NativeBatchNormBackwardBackward::apply(variable_list&& grads) {
@@ -5283,7 +5286,7 @@ variable_list TanhBackward::apply(variable_list&& grads) {
   if (at::globalContext().ARCGlobal.isOnDemand()) {
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
-  ARCCppEngine::preFetchSync(this->getOid());
+  ARCCppEngine::preFetchSync(this->getOid(), true);
   
 
   auto result = result_.unpack(shared_from_this());
@@ -6143,7 +6146,7 @@ variable_list LeakyReluBackward1::apply(variable_list&& grads) {
   if (at::globalContext().ARCGlobal.isOnDemand()) {
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
-  ARCCppEngine::preFetchSync(this->getOid());
+  ARCCppEngine::preFetchSync(this->getOid(), true);
   
 
   auto result = result_.unpack(shared_from_this());

@@ -141,9 +141,15 @@ void ARCCppEngine::offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync s
       //return;
   }
 
+
  
   // save the information required for prefetching
   auto tid =  t.unsafeGetIntrusivePtr()->tensor_id;  
+  
+  if (tid == 0)
+      std::cout << "zero tid exists!" << std::endl;
+  
+  
   insertToPFDict_(curOid, fetch_loc, tid);  
   if (tensor_dict_.find(tid) != tensor_dict_.end()) {// this tensor is alredy offloaded
     if (at::globalContext().ARCGlobal.isDebugMode())
@@ -367,15 +373,17 @@ Oid ARCCppEngine::whoWillPrefetched_(Oid curOid) {
 void ARCCppEngine::resetCppEngine() {
   static int backward_num_in_one_iter = 3;
   static int remaining_backward = 3;//backward_num_in_one_iter;
+  
+  tensor_dict_.clear();
+  pf_dict_.clear();
+  pf_sync_dict_.clear();
+
   --remaining_backward;
   if (remaining_backward == 0) {
     at::globalContext().ARCGlobal.resetGlobalTid();
     at::globalContext().ARCGlobal.resetGlobalOid();
     explicitAllSync();
-    tensor_dict_.clear();
-    pf_dict_.clear();
-    pf_sync_dict_.clear();
-    pf_grad_dict_.clear();
+        pf_grad_dict_.clear();
     remaining_backward = backward_num_in_one_iter;
   }
 }

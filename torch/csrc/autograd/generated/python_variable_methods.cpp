@@ -1020,11 +1020,26 @@ static PyObject * THPVariable_add(PyObject* self_, PyObject* args, PyObject* kwa
   ParsedArgs<3> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
+  // Get Oid
+  //auto oid = at::globalContext().ARCGlobal.getNewOid();
+  // DEBUG: print operation type, oid
+  //if (at::globalContext().ARCGlobal.isDebugMode()) {
+  //  std::cout << "OPERATION VM-ADD, OPID: ";
+  //  std::cout << oid << std::endl;
+  //}
+
+  Tensor output;
   if (r.idx == 0) {
-    return wrap(dispatch_add(self, r.scalar(0), r.tensor(1)));
+    output = dispatch_add(self, r.scalar(0), r.tensor(1));
   } else if (r.idx == 1) {
-    return wrap(dispatch_add(self, r.tensor(0), r.scalar(1)));
+    output = dispatch_add(self, r.tensor(0), r.scalar(1));
   }
+  at::globalContext().ARCGlobal.setNewTid(output);
+
+  return wrap(output);
+
+
+
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }
@@ -5387,11 +5402,11 @@ static PyObject * THPVariable_view(PyObject* self_, PyObject* args, PyObject* kw
   auto r = parser.parse(args, kwargs, parsed_args);
 
 
-  auto oid = at::globalContext().ARCGlobal.getNewOid();
-  if (at::globalContext().ARCGlobal.isDebugMode()) {
-    std::cout << "OPERATION VIEW, OPID: ";
-    std::cout << oid << std::endl;
-  }
+  //auto oid = at::globalContext().ARCGlobal.getNewOid();
+  //if (at::globalContext().ARCGlobal.isDebugMode()) {
+  //  std::cout << "OPERATION VIEW, OPID: ";
+  //  std::cout << oid << std::endl;
+  //}
   
   Tensor output;
 

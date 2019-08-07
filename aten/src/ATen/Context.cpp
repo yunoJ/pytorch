@@ -113,6 +113,14 @@ REGISTER_LEGACY_TYPE_INIT(LegacyDeviceTypeInit);
 // Implemented by SNU-ARC Function/Data Structures///
 // //////////////////////////////////////////////////
 
+#define BP_NUM_PER_ITER 3
+#define RESET_TID 4
+
+// network
+static bool cycle_gan = 1;
+
+
+
 // Data structure definitions
 // tensor, operation counts
 static int global_tensor_id_ = 0;
@@ -124,17 +132,13 @@ static bool on_demand_mode_ = 1; // default 1. Set 0 after first iteration(Profi
 static bool on_forwarding_ = 1; // 1 in forwarding phase. 0 in backprop. phase
 // vector for prefetching
 //Note: C++ standard containers are thread-safe.
-static std::vector<Oid> back_path_; 
-
+static std::vector<Oid> back_path_[BP_NUM_PER_ITER]; 
+static int cur_back_num = 0;
 //offload prefetch stream
 static auto offload_stream = c10::cuda::getStreamFromPool();
 static auto prefetch_stream = c10::cuda::getStreamFromPool();
 
 // tid, oid manipulation
-
-// network
-static bool cycle_gan = 1;
-
 c10::cuda::CUDAStream Context::ARCGlobalContext::globalOffloadStream() { return offload_stream; }
 c10::cuda::CUDAStream Context::ARCGlobalContext::globalPrefetchStream() { return prefetch_stream; }
 
@@ -143,7 +147,7 @@ Tid Context::ARCGlobalContext::getTid(Tensor& t) { return t.unsafeGetTensorImpl(
 void Context::ARCGlobalContext::setNewTid(Tensor& t) { t.unsafeGetTensorImpl()->tensor_id = ++global_tensor_id_; }
 void Context::ARCGlobalContext::updateTid(Tensor& t, int tid) { t.unsafeGetTensorImpl()->tensor_id = tid; }
 void Context::ARCGlobalContext::resetGlobalTid() { 
-    if (cycle_gan) global_tensor_id_ = 5;
+    if (cycle_gan) global_tensor_id_ = RESET_TID;
     else global_tensor_id_ = 0; 
 }
 Oid Context::ARCGlobalContext::getCurOid() { return global_operation_id_; }
@@ -151,10 +155,15 @@ Oid Context::ARCGlobalContext::getNewOid() { return ++global_operation_id_; }
 void Context::ARCGlobalContext::resetGlobalOid() { global_operation_id_ = 0; }
 
 // set flags
-void Context::ARCGlobalContext::startForward() { on_forwarding_ = 1; }
+void Context::ARCGlobalContext::startForward() { 
+    on_forwarding_ = 1; 
+    cur_back_num++;
+    if(cur_back_num == BP_NUM_PER_ITER)
+        cur_back_num = 0;
+}
 void Context::ARCGlobalContext::endForward() { on_forwarding_ = 0; }
 void Context::ARCGlobalContext::endOnDemand() { 
-    static int remaining_backward_in_first_iter = 3;
+    static int remaining_backward_in_first_iter = BP_NUM_PER_ITER;
     --remaining_backward_in_first_iter;
     if (remaining_backward_in_first_iter == 0)
         on_demand_mode_ = 0; 
@@ -166,12 +175,13 @@ bool Context::ARCGlobalContext::isDebugMode() { return on_debug_mode_; }
 
 void Context::ARCGlobalContext::pushBackOid(Oid oid) { 
   if (!on_demand_mode_) std::cerr << "Illegal call: not on-demand mode" << std::endl;
-  back_path_.push_back(oid); 
+  back_path_[cur_back_num].push_back(oid); 
 }
 
 std::vector<Oid> Context::ARCGlobalContext::getBackPath() { 
-  //std::cout << back_path_.size() << std::endl;
-  std::vector<Oid> copy(back_path_);
+    std::cout << "cur_back_num: " << cur_back_num << std::endl;
+  std::cout << back_path_[cur_back_num].size() << std::endl;
+  std::vector<Oid> copy(back_path_[cur_back_num]);
   return copy; 
 }; 
  

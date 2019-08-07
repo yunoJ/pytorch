@@ -554,12 +554,16 @@ inline Variable make_variable(
   TORCH_CHECK(
       !data.is_variable(),
       "Must not create a new variable from a variable, use its .tensor_data()");
+  
+  auto tid = data.unsafeGetTensorImpl()->tensor_id;
   if (data.defined()) {
     auto data_impl_copy = data.getIntrusivePtr()->shallow_copy_and_detach(
       /*version_counter=*/0,
       /*allow_tensor_metadata_change=*/allow_tensor_metadata_change);
-    data_impl_copy->set_autograd_meta(c10::guts::make_unique<Variable::AutogradMeta>(
+    data_impl_copy->set_autograd_meta(c10::guts::make_unique<Variable::AutogradMeta>( 
       data_impl_copy.get(), false, std::move(gradient_edge)));
+
+    data_impl_copy->tensor_id = tid;
     return Variable(data_impl_copy);
   }
   return Variable();
