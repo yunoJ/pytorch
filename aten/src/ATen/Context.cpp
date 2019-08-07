@@ -114,7 +114,7 @@ REGISTER_LEGACY_TYPE_INIT(LegacyDeviceTypeInit);
 // //////////////////////////////////////////////////
 
 #define BP_NUM_PER_ITER 3
-#define RESET_TID 4
+#define RESET_TID 0 // 4-4 = 0
 
 // network
 static bool cycle_gan = 1;

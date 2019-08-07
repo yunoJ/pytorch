@@ -192,6 +192,7 @@ void ARCCppEngine::explicitAllSync() {
 void ARCCppEngine::preFetch(Oid curOid, ARCSync sync) {//int required_tensor_num, ARCSync sync) {
   if (at::globalContext().ARCGlobal.isDebugMode())
     std::cout <<  curOid << "prefetching" << std::endl;
+
   Oid target = whoWillPrefetched_(curOid);
   //if (target < 0) std::cerr << "There is no more operation to need prefetch." << std::endl;
   fetchRequiredTensors_(target, sync); 
@@ -302,6 +303,7 @@ void ARCCppEngine::dropTensor(Oid oid, SavedVariable* fetch_loc) {
 
       tref = tref.to(opt, false, true);
     } else {
+      //std::cout <<  "oid: " << oid << "last op of tensor id " <<  tid << " : "  << last_op_dict_[tid] << std::endl;
       if (oid == last_op_dict_[tid]) {
         tensor_dict_.erase(tid);   
         fetch_loc->reset_data(); 
@@ -346,10 +348,14 @@ void ARCCppEngine::fetchRequiredTensors_(Oid oid,  ARCSync sync) {
 
     if (tref.device().type() == c10::DeviceType::CPU) {
       if (at::globalContext().ARCGlobal.isOnDemand()) {
-        if (last_op_dict_.find(tid) == last_op_dict_.end()) 
+        if (last_op_dict_.find(tid) == last_op_dict_.end()) {
           last_op_dict_.insert(std::pair<Tid,Oid>(tid,oid));
-        else
-          last_op_dict_[tid] = oid; 
+          //std::cout << "tid, oid inserted: " << tid << " " << oid << std::endl;
+        }
+        else {
+          last_op_dict_[tid] = oid;   
+          //std::cout << "tid, oid updated: " << tid << " " << oid << std::endl;
+        }
       }
 
       c10::cuda::CUDAStreamGuard csg(at::globalContext().ARCGlobal.globalPrefetchStream());   
