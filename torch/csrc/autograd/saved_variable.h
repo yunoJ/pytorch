@@ -85,7 +85,12 @@ public:
   static void resetCppEngine();
 
   static void dropTensor(Oid oid, SavedVariable* fetch_loc);
+    
+  static void startOffloadThread();
+  static void joinOffloadThread();
+
 private:
+  static void default_offload_();
   // worker function for fetching/offloaidng
   //static void htod_(at::Tensor t, Oid oid, SavedVariable* fetch_loc);
   //static void dtoh_(at::Tensor t, Oid oid, SavedVariable* fetch_loc);

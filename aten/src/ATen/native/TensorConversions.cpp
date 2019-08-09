@@ -26,9 +26,11 @@ static inline Tensor to_impl(const Tensor& self, const TensorOptions& options, b
   //  new_options = new_options.pinned_memory(true);
   //  r = at::empty(self.sizes(), new_options);
   //} else {
+  auto tid = self.getIntrusivePtr().get()->tensor_id; 
   r = at::empty(self.sizes(), options);
   //}
   r.copy_(self, non_blocking);
+  r.unsafeGetTensorImpl()->tensor_id = tid;
   return r;
 }
 

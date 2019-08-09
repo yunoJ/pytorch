@@ -135,8 +135,10 @@ static bool on_forwarding_ = 1; // 1 in forwarding phase. 0 in backprop. phase
 static std::vector<Oid> back_path_[BP_NUM_PER_ITER]; 
 static int cur_back_num = 0;
 //offload prefetch stream
-static auto offload_stream = c10::cuda::getStreamFromPool();
-static auto prefetch_stream = c10::cuda::getStreamFromPool();
+static auto offload_stream = c10::cuda::getStreamFromPool(false, 0);
+static auto prefetch_stream = offload_stream;//c10::cuda::getStreamFromPool(false, 0);
+
+int Context::ARCGlobalContext::curBackNum() { return cur_back_num; }
 
 // tid, oid manipulation
 c10::cuda::CUDAStream Context::ARCGlobalContext::globalOffloadStream() { return offload_stream; }

@@ -651,7 +651,7 @@ auto Engine::execute(const edge_list& roots,
   // backward start
   // ends forward
   at::globalContext().ARCGlobal.endForward();
-  
+  ARCCppEngine::joinOffloadThread();
   if (!at::globalContext().ARCGlobal.isOnDemand())
     ARCCppEngine::startPrefetchThread();
   // by sam end

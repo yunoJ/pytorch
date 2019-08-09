@@ -17,7 +17,7 @@
 #include <c10/core/Device.h>
 #include <c10/core/DeviceType.h>
 #include <thread>
-
+#include <queue>
 #include <c10/cuda/CUDAGuard.h>
 #include <c10/cuda/CUDAStream.h>
 #include <THC/THCGeneral.h>
@@ -122,26 +122,29 @@ static std::vector<std::thread> memcpy_threads_;
 // dictionaries for prefetching
 // Note: C++ standard containers are thread-safe.
 static std::map<Oid,std::vector<PFInfo>> pf_dict_;
-static std::map<Oid,bool> pf_sync_dict_;
+static std::map<Oid, c10::StreamId> pf_sync_dict_;
 static std::map<Oid, TraceableFunction*> pf_grad_dict_;
 static std::map<Tid,std::pair<at::Tensor, bool>> tensor_dict_;
+static std::map<Tid, bool> tensor_sync_dict_;
+static std::map<Tid, bool> tensor_pf_sync_dict_;
 static std::map<Tid,Oid> last_op_dict_;
+
 // thread for prefetch
 static std::thread prefetch_thread_;
+static std::thread offload_thread_;
 
+static std::queue<std::pair<Tid, std::pair<at::Tensor, bool>>> offload_queue_;
+
+static bool offload_thread_run = 0;
 //Note: Not referecne but copy a tensor to make it alive
 void ARCCppEngine::offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync sync,*/ Oid curOid, SavedVariable* fetch_loc, bool isOutput) {
   
-
-
   // partial offloading
   // Note: the minimum curOid bound was 200 for densenet201 with batch size 200 on 32GB GPU
   if ((/*t.nbytes() < 100 * 1024 * 1024 ||*/ curOid > 700) && !at::globalContext().ARCGlobal.isOnDemand()) {
       //*fetch_loc = SavedVariable(t, isOutput);
       //return;
   }
-
-
  
   // save the information required for prefetching
   auto tid =  t.unsafeGetIntrusivePtr()->tensor_id;  
@@ -151,7 +154,7 @@ void ARCCppEngine::offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync s
   
   
   insertToPFDict_(curOid, fetch_loc, tid);  
-  if (tensor_dict_.find(tid) != tensor_dict_.end()) {// this tensor is alredy offloaded
+  if (tensor_sync_dict_.find(tid) != tensor_sync_dict_.end()) {// this tensor is alredy offloaded
     if (at::globalContext().ARCGlobal.isDebugMode())
       std::cout << tid <<  ": this tensor is already offloaded" << std::endl;
     return;
@@ -159,27 +162,60 @@ void ARCCppEngine::offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync s
   }
   
 
-  // non-blocking offloading 
-  c10::TensorOptions opt = c10::TensorOptions();
-  opt = opt.device(c10::Device(c10::DeviceType::CPU));
-  opt = opt.dtype(t.dtype());  
-  //opt = opt.dtype(c10::ScalarType::Half); 
-  opt = opt.pinned_memory(true); 
-  at::Tensor backup = at::empty(1,opt);
-
-  backup.unsafeGetIntrusivePtr()->tensor_id = tid;
-  std::pair<at::Tensor,bool> tmp(backup, isOutput);
-  tensor_dict_.insert(std::pair<Tid, std::pair<at::Tensor,bool>>(tid, tmp)); 
-  at::Tensor& tref = tensor_dict_[tid].first; 
   if (tid == 1) {
     std::cout << "offload at " << curOid << std::endl; 
     std::cout << "sizes " << t.sizes()[0] << t.sizes()[1] << t.sizes()[2] << t.sizes()[3] << std::endl;
   }
-
-  c10::cuda::CUDAStreamGuard csg(at::globalContext().ARCGlobal.globalOffloadStream());   
-  tref = t.to(opt, true, true); //non-blocking to 
+ 
+  while(1) {
+    if (offload_queue_.size() < 30) {
+      tensor_sync_dict_.insert(std::pair<Tid, bool>(tid, 1));
+      offload_queue_.emplace(tid, std::pair<at::Tensor, bool>(t, isOutput));
+      break;
+    }
+  }
+  if (offload_thread_run == 0) {
+    //offload_thread_.join();
+    startOffloadThread();
+  }
 
 }
+
+void ARCCppEngine::startOffloadThread() {
+    if (offload_thread_run == 1) return;  
+    offload_thread_run = 1;
+    offload_thread_ = std::thread(default_offload_);
+}
+
+void ARCCppEngine::joinOffloadThread() {    
+    offload_thread_run = 0;
+    offload_thread_.join();
+}
+
+void ARCCppEngine::default_offload_() {
+    while(1) { 
+        if (!offload_queue_.empty()) {
+           auto task = offload_queue_.front(); 
+           offload_queue_.pop(); 
+           auto str = c10::cuda::getStreamFromPool(false, 0);
+           str.synchronize();
+           c10::cuda::CUDAStreamGuard csg(str);     
+           c10::TensorOptions opt = c10::TensorOptions();
+           opt = opt.device(c10::Device(c10::DeviceType::CPU));
+           opt = opt.dtype(task.second.first.dtype());  
+           opt = opt.pinned_memory(true); 
+
+           tensor_dict_.insert(std::pair<Tid, std::pair<at::Tensor,bool>>(task.first, std::pair<at::Tensor,bool>(task.second.first.to(opt, false, true), task.second.second))); 
+           csg.reset_stream(csg.original_stream());
+        } else {
+            if (offload_thread_run == 0) {
+                break;
+            }
+        }
+        //std::cout << "offload thread: " << offload_queue_.size()  << std::endl;
+    }
+}
+
 
 // doing nothing really
 void ARCCppEngine::explicitAllSync() {
@@ -193,6 +229,8 @@ void ARCCppEngine::preFetch(Oid curOid, ARCSync sync) {//int required_tensor_num
   if (at::globalContext().ARCGlobal.isDebugMode())
     std::cout <<  curOid << "prefetching" << std::endl;
 
+  at::globalContext().ARCGlobal.globalOffloadStream().synchronize();   
+  
   Oid target = whoWillPrefetched_(curOid);
   //if (target < 0) std::cerr << "There is no more operation to need prefetch." << std::endl;
   fetchRequiredTensors_(target, sync); 
@@ -202,7 +240,9 @@ void ARCCppEngine::startPrefetchThread() {
   if (at::globalContext().ARCGlobal.isDebugMode())
     std::cout <<  "start prefetch" << std::endl;
 
+  //at::globalContext().ARCGlobal.globalOffloadStream().synchronize();
   prefetch_thread_ = std::thread(default_prefetch_);  
+  
 }
 
 void ARCCppEngine::default_prefetch_() {
@@ -235,7 +275,8 @@ void ARCCppEngine::joinPrefetchThread() {
 
 void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) { 
   //this operation has nothing to prefetch 
-  if (pf_dict_.find(oid) == pf_dict_.end()) {
+  
+    if (pf_dict_.find(oid) == pf_dict_.end()) {
     //std::cerr << oid << " Prefetching dictionary lookup miss" << std::endl;
     return;
   }
@@ -250,6 +291,11 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
       std::cout << oid << " pf sync" << std::endl;
 
   }
+
+  auto sid = pf_sync_dict_[oid];
+  c10::cuda::CUDAStream str(c10::Stream(c10::Stream::UNSAFE, c10::Device(c10::DeviceType::CUDA, 0), sid)); 
+  str.synchronize();
+
   auto fetch_vec = pf_dict_[oid]; 
   for (auto it = fetch_vec.begin(); it != fetch_vec.end(); it++) {
     auto tid = it->second;
@@ -264,7 +310,12 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
         break;
       }
       std::cerr << "sync tensor is not on gpu yet" << std::endl;
+      return;
     }
+
+    //at::globalContext().ARCGlobal.globalPrefetchStream().synchronize(); 
+    //if (tensor_dict_[tid].first.dim() == 4)
+        //std::cout << "fetch oid: " << oid  << "fetch tid: " << tid << " value: " << tensor_dict_[tid].first[0][0][0][0].item().toFloat() << std::endl;
     *fetch_loc = SavedVariable(tensor_dict_[tid].first, isOutput);
   }
 }
@@ -344,31 +395,31 @@ void ARCCppEngine::fetchRequiredTensors_(Oid oid,  ARCSync sync) {
     std::cout << "sizes " << tref.sizes()[0] << tref.sizes()[1] << tref.sizes()[2] << tref.sizes()[3] << std::endl;
   }
 
+    auto str = c10::cuda::getStreamFromPool(false, 0);      
+    c10::cuda::CUDAStreamGuard csg(str);   
+        
 
+        if (tref.device().type() == c10::DeviceType::CPU ) {
+          if (at::globalContext().ARCGlobal.isOnDemand()) {
+            
+              
+            if (last_op_dict_.find(tid) == last_op_dict_.end()) {
+              last_op_dict_.insert(std::pair<Tid,Oid>(tid,oid));
+              //std::cout << "tid, oid inserted: " << tid << " " << oid << std::endl;
+            }
+            else {
+              last_op_dict_[tid] = oid;   
+              //std::cout << "tid, oid updated: " << tid << " " << oid << std::endl;
+            }
+          }
 
-    if (tref.device().type() == c10::DeviceType::CPU) {
-      if (at::globalContext().ARCGlobal.isOnDemand()) {
-        if (last_op_dict_.find(tid) == last_op_dict_.end()) {
-          last_op_dict_.insert(std::pair<Tid,Oid>(tid,oid));
-          //std::cout << "tid, oid inserted: " << tid << " " << oid << std::endl;
-        }
-        else {
-          last_op_dict_[tid] = oid;   
-          //std::cout << "tid, oid updated: " << tid << " " << oid << std::endl;
-        }
-      }
-
-      c10::cuda::CUDAStreamGuard csg(at::globalContext().ARCGlobal.globalPrefetchStream());   
-      if (sync == Async)
-        tref = tref.to(opt, true); //non-blocking to 
-      else 
-        tref = tref.to(opt, false);
-    } else {
+         tref = tref.to(opt, false, true); 
+     } else {
       if (at::globalContext().ARCGlobal.isDebugMode())
         std::cout <<  tid << ": This tensor is already fetched" << std::endl;
     }
-      //fetch_(backup, oid, sync, fetch_loc);
-    pf_sync_dict_.insert(std::pair<Oid, bool>(oid, 1)); 
+
+    pf_sync_dict_.insert(std::pair<Oid, c10::StreamId>(oid, str.id()));
   }
 }
 
@@ -381,6 +432,8 @@ void ARCCppEngine::resetCppEngine() {
   static int remaining_backward = 3;//backward_num_in_one_iter;
   
   tensor_dict_.clear();
+  tensor_sync_dict_.clear();
+  tensor_pf_sync_dict_.clear();
   pf_dict_.clear();
   pf_sync_dict_.clear();
 

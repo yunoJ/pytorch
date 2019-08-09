@@ -107,6 +107,7 @@ class CAFFE2_API Context {
   void setDeterministicCuDNN(bool);
  
   struct ARCGlobalContext {
+    int curBackNum();
     c10::cuda::CUDAStream globalOffloadStream();
     c10::cuda::CUDAStream globalPrefetchStream(); 
     // tid, oid manipulation

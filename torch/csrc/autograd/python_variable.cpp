@@ -616,32 +616,38 @@ bool THPVariable_initModule(PyObject *module)
 
 //Note: Not referecne but copy a tensor to make it alive
 void ARCPyEngine::offLoad(Tensor& t) {
+ 
   c10::TensorOptions opt = c10::TensorOptions();
   opt = opt.device(c10::Device(c10::DeviceType::CPU));
   opt = opt.dtype(t.scalar_type());
+  opt = opt.pinned_memory(true); 
+  
   int stored_id = t.unsafeGetTensorImpl()->tensor_id;
 
 
-  c10::cuda::CUDAStreamGuard csg(at::globalContext().ARCGlobal.globalOffloadStream());   
-  Tensor device_t = t.to(opt);
+  //c10::cuda::CUDAStreamGuard csg(at::globalContext().ARCGlobal.globalOffloadStream());   
+  Tensor device_t = t.to(opt, false, true);
   
   t.unsafeGetIntrusivePtr().swap(device_t.unsafeGetIntrusivePtr());
   t.unsafeGetTensorImpl()->tensor_id = stored_id;
-  device_t.reset();
+  //device_t.reset();
+
 }
 
 //Note: Not referecne but copy a tensor to make it alive
 void ARCPyEngine::fetch(Tensor& t) { 
+
   c10::TensorOptions opt = c10::TensorOptions();
   opt = opt.device(c10::Device(c10::DeviceType::CUDA));
   opt = opt.dtype(t.scalar_type());
   int stored_id = t.unsafeGetTensorImpl()->tensor_id; 
  
-  c10::cuda::CUDAStreamGuard csg(at::globalContext().ARCGlobal.globalPrefetchStream());   
-  Tensor host_t = t.to(opt);
+  //c10::cuda::CUDAStreamGuard csg(at::globalContext().ARCGlobal.globalPrefetchStream());   
+  Tensor host_t = t.to(opt, false, true);
 
   t.unsafeGetIntrusivePtr().swap(host_t.unsafeGetIntrusivePtr());
   t.unsafeGetTensorImpl()->tensor_id = stored_id;
-  host_t.reset();
+  //host_t.reset();
+
 }
 // end by sam

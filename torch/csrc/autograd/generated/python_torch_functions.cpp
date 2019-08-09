@@ -3383,6 +3383,8 @@ static PyObject * THPVariable_conv2d(PyObject* self_, PyObject* args, PyObject* 
   if(at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
     ARCPyEngine::fetch(input);
 
+  //std::cout << "conv2d in: " << input[0][0][0][0].item().toFloat() << std::endl;
+  
   Tensor output;
   if (r.idx == 0) {
     output = dispatch_conv2d(input, r.tensor(1), r.tensor(2), r.intlist(3), r.intlist(4), r.intlist(5), r.toInt64(6));
@@ -3393,7 +3395,9 @@ static PyObject * THPVariable_conv2d(PyObject* self_, PyObject* args, PyObject* 
   if (at::globalContext().ARCGlobal.isOnDemand()) {
     ARCPyEngine::offLoad(output);
   }
-  
+ 
+  //std::cout << "conv2d out: " << output[0][0][0][0].item().toFloat() << std::endl;
+
   return wrap(output);
 
   Py_RETURN_NONE;

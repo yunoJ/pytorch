@@ -6561,11 +6561,11 @@ Tensor & VariableType::leaky_relu_(Tensor & self, Scalar negative_slope) {
   }
   if (grad_fn) {
     if (at::globalContext().ARCGlobal.isForward()){
-      ARCCppEngine::offLoad(self, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result_), false);
+      ARCCppEngine::offLoad(self, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result_), true);
       grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
     }
     else {
-      grad_fn->result_ = SavedVariable(self, false);
+      grad_fn->result_ = SavedVariable(self, true);
     }
   }
   return self;

@@ -536,9 +536,9 @@ static PyObject * THPVariable_l1_loss(PyObject* self_, PyObject* args, PyObject*
 
   at::globalContext().ARCGlobal.setNewTid(output);
 
-  if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCPyEngine::offLoad(output);
-  }
+  //if (at::globalContext().ARCGlobal.isOnDemand()) {
+  //  ARCPyEngine::offLoad(output);
+  //}
 
   return wrap(output);
 
@@ -582,6 +582,7 @@ static PyObject * THPVariable_leaky_relu_(PyObject* self_, PyObject* args, PyObj
     std::cout << oid << std::endl;
   }
   Tensor input = r.tensor(0);
+  //std::cout << "leaky relu in: " << input[0][0][0][0].item().toFloat() << std::endl;
 
   //std::cout << "INPUT TENSOR ID: ";
   //auto itid = at::globalContext().ARCGlobal.getTid(input);
@@ -596,6 +597,7 @@ static PyObject * THPVariable_leaky_relu_(PyObject* self_, PyObject* args, PyObj
     input = dispatch_leaky_relu_(input, r.scalar(1));
   }
 
+  //std::cout << "leaky relu out: " << input[0][0][0][0].item().toFloat() << std::endl;
   //at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::globalContext().ARCGlobal.isOnDemand()) {
@@ -794,9 +796,9 @@ static PyObject * THPVariable_mse_loss(PyObject* self_, PyObject* args, PyObject
   
   at::globalContext().ARCGlobal.setNewTid(output);
 
-  if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCPyEngine::offLoad(output);
-  }
+  //if (at::globalContext().ARCGlobal.isOnDemand()) {
+  //  ARCPyEngine::offLoad(output);
+  //}
 
   return wrap(output);
   
