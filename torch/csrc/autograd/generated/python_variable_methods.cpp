@@ -223,8 +223,15 @@ static Tensor dispatch_copy_(Tensor & self, const Tensor & other, bool non_block
   });
   auto& self_ = reinterpret_cast<THPVariable*>(self)->cdata;
   ParsedArgs<2> parsed_args;
+  
+  //modified by sam, tid conservation
+  auto tid = self_.unsafeGetTensorImpl()->tensor_id;
+
   auto r = parser.parse(args, kwargs, parsed_args);
-  return THPVariable_Wrap(dispatch_copy_(self_, r.tensor(0), r.toBool(1)));
+
+  auto output = (dispatch_copy_(self_, r.tensor(0), r.toBool(1)));
+  output.unsafeGetTensorImpl()->tensor_id = tid;
+  return THPVariable_Wrap(output);
   END_HANDLE_TH_ERRORS
 }
 
@@ -5540,9 +5547,20 @@ static PyObject * THPVariable_unsqueeze(PyObject* self_, PyObject* args, PyObjec
   ParsedArgs<2> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
-  if (r.idx == 0) {
-    return wrap(dispatch_unsqueeze(self, r.toInt64(0)));
+  auto oid = at::globalContext().ARCGlobal.getNewOid();
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION UNSQUEEZE, OPID: ";
+    std::cout << oid << std::endl;
   }
+
+  Tensor output;
+  if (r.idx == 0) {
+    output = dispatch_unsqueeze(self, r.toInt64(0));
+  }
+
+  at::globalContext().ARCGlobal.setNewTid(output);
+  return wrap(output);
+
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }
@@ -5599,9 +5617,12 @@ static PyObject * THPVariable_view(PyObject* self_, PyObject* args, PyObject* kw
   ParsedArgs<2> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
+  Tensor output;
   if (r.idx == 0) {
-    return wrap(dispatch_view(self, r.intlist(0)));
+    output = dispatch_view(self, r.intlist(0));
   }
+
+  return wrap(output);
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }

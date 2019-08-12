@@ -4189,6 +4189,9 @@ variable_list NativeBatchNormBackward::apply(variable_list&& grads) {
         copy_range(grad_inputs, bias_ix, std::get<2>(grad_result));
       }
   }
+
+  ARCCppEngine::dropTensor(this->getOid(), &input_);
+
   return grad_inputs;
 }
 variable_list NativeBatchNormBackwardBackward::apply(variable_list&& grads) {
@@ -5298,11 +5301,20 @@ variable_list TanhBackward::apply(variable_list&& grads) {
   auto self_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
+  
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCCppEngine::preFetch(this->getOid(), Sync);
+  }
+  ARCCppEngine::preFetchSync(this->getOid(), true);
+
   auto result = result_.unpack(shared_from_this());
   if (should_compute_output({ self_ix })) {
     auto grad_result = tanh_backward(grad, result);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  ARCCppEngine::dropTensor(this->getOid(), &result_);
+
   return grad_inputs;
 }
 variable_list TopkBackward::apply(variable_list&& grads) {
@@ -5874,12 +5886,21 @@ variable_list L1LossBackward::apply(variable_list&& grads) {
   auto self_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
+  
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCCppEngine::preFetch(this->getOid(), Sync);
+  }
+  ARCCppEngine::preFetchSync(this->getOid());
+  
   auto self = self_.unpack();
   auto target = target_.unpack();
   if (should_compute_output({ self_ix })) {
     auto grad_result = l1_loss_backward(grad, self, target, reduction);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  ARCCppEngine::dropTensor(this->getOid(), &self_);
+
   return grad_inputs;
 }
 variable_list MseLossBackward::apply(variable_list&& grads) {
@@ -6147,11 +6168,20 @@ variable_list LeakyReluBackward1::apply(variable_list&& grads) {
   auto self_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
+  
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCCppEngine::preFetch(this->getOid(), Sync);
+  }
+  ARCCppEngine::preFetchSync(this->getOid()); 
+  
   auto result = result_.unpack(shared_from_this());
   if (should_compute_output({ self_ix })) {
     auto grad_result = leaky_relu_backward(grad, result, negative_slope);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  ARCCppEngine::dropTensor(this->getOid(), &result_);
+
   return grad_inputs;
 }
 variable_list LogSigmoidBackward::apply(variable_list&& grads) {
@@ -6342,11 +6372,20 @@ variable_list ReflectionPad2DBackward::apply(variable_list&& grads) {
   auto self_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
+  
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCCppEngine::preFetch(this->getOid(), Sync);
+  }
+  ARCCppEngine::preFetchSync(this->getOid()); 
+  
   auto self = self_.unpack();
   if (should_compute_output({ self_ix })) {
     auto grad_result = reflection_pad2d_backward(grad, self, padding);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  ARCCppEngine::dropTensor(this->getOid(), &self_);
+
   return grad_inputs;
 }
 variable_list ReplicationPad1DBackward::apply(variable_list&& grads) {
@@ -6673,6 +6712,12 @@ variable_list ConvTranspose2DBackward::apply(variable_list&& grads) {
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
   auto self = self_.unpack();
+  
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCCppEngine::preFetch(this->getOid(), Sync);
+  }
+  ARCCppEngine::preFetchSync(this->getOid()); 
+  
   auto weight = weight_.unpack();
   if (should_compute_output({ self_ix, weight_ix, bias_ix })) {
       auto grad_input_mask = std::array<bool, 3>{
@@ -6691,6 +6736,9 @@ variable_list ConvTranspose2DBackward::apply(variable_list&& grads) {
         copy_range(grad_inputs, bias_ix, std::get<2>(grad_result));
       }
   }
+
+  ARCCppEngine::dropTensor(this->getOid(), &self_);
+
   return grad_inputs;
 }
 variable_list ConvTranspose2DBackwardBackward::apply(variable_list&& grads) {
