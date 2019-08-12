@@ -4051,6 +4051,11 @@ static PyObject * THPVariable_dropout(PyObject* self_, PyObject* args, PyObject*
   
   at::globalContext().ARCGlobal.setNewTid(output);
 
+  auto otid = at::globalContext().ARCGlobal.getTid(output);
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "DROPOUT OUTPUT TENSOR: " << otid << std::endl;
+  }
+
   if (at::globalContext().ARCGlobal.isOnDemand()) {
     ARCPyEngine::offLoad(output);
   }
@@ -4150,9 +4155,41 @@ static PyObject * THPVariable_embedding(PyObject* self_, PyObject* args, PyObjec
   ParsedArgs<5> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
-  if (r.idx == 0) {
-    return wrap(dispatch_embedding(r.tensor(0), r.tensor(1), r.toInt64(2), r.toBool(3), r.toBool(4)));
+  auto oid = at::globalContext().ARCGlobal.getNewOid();
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION EMBEDDING, OPID: ";
+    std::cout << oid << std::endl;
   }
+  Tensor input = r.tensor(0);
+  
+  if (at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
+    ARCPyEngine::fetch(input);
+
+  //DEBUG:
+  /*auto itid = at::globalContext().ARCGlobal.getTid(input);
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "EMBEDDING INPUT TID: " << itid << std::endl;
+  }*/
+
+  Tensor output;
+  if (r.idx == 0) {
+    output = dispatch_embedding(input, r.tensor(1), r.toInt64(2), r.toBool(3), r.toBool(4));
+  }
+
+  at::globalContext().ARCGlobal.setNewTid(output);
+
+  //DEBUG
+  /*auto otid = at::globalContext().ARCGlobal.getTid(output);
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "EMBEDDING OUTPUT TID: " << otid << std::endl;
+  }*/
+
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCPyEngine::offLoad(output);
+  }
+
+  return wrap(output);
+
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }
@@ -9039,13 +9076,42 @@ static PyObject * THPVariable_sqrt(PyObject* self_, PyObject* args, PyObject* kw
   ParsedArgs<2> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
+  auto oid = at::globalContext().ARCGlobal.getNewOid();
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION SQRT, OPID: ";
+    std::cout << oid << std::endl;
+  }
+  Tensor input = r.tensor(0);
+
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "SQRT INPUT TENSOR ID: " << at::globalContext().ARCGlobal.getTid(input) << std::endl;
+  }
+
+  if (at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
+    ARCPyEngine::fetch(input);
+
+  Tensor output;
+
   if (r.idx == 0) {
     if (r.isNone(1)) {
-      return wrap(dispatch_sqrt(r.tensor(0)));
+      output = dispatch_sqrt(input);
     } else {
-      return wrap(dispatch_sqrt(r.tensor(0), r.tensor(1)));
+      output = dispatch_sqrt(input, r.tensor(1));
     }
   }
+
+  at::globalContext().ARCGlobal.setNewTid(output);
+
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "SQRT OUTPUT TENSOR ID: " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
+  }
+
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCPyEngine::offLoad(output);
+  }
+
+  return wrap(output);
+
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }

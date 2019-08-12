@@ -3651,7 +3651,7 @@ Tensor VariableType::elu_backward(const Tensor & grad_output, Scalar alpha, Scal
   }
   return result;
 }
-Tensor VariableType::embedding(const Tensor & weight, const Tensor & indices, int64_t padding_idx, bool scale_grad_by_freq, bool sparse) {
+Tensor VariableType::embedding(const Tensor & weight, Tensor & indices, int64_t padding_idx, bool scale_grad_by_freq, bool sparse) {
   RECORD_FUNCTION("embedding", std::vector<c10::IValue>({weight, indices}), Node::peek_at_next_sequence_nr());
   auto& weight_ = unpack(weight, "weight", 0);
   auto& indices_ = unpack(indices, "indices", 1);
@@ -3659,8 +3659,14 @@ Tensor VariableType::embedding(const Tensor & weight, const Tensor & indices, in
   if (compute_requires_grad( weight )) {
     grad_fn = std::shared_ptr<EmbeddingBackward>(new EmbeddingBackward(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( weight ));
+    if (at::globalContext().ARCGlobal.isForward()) {
+      ARCCppEngine::offLoad(indices, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->indices_), false);
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else {
+      grad_fn->indices_ = SavedVariable(indices, false);
+    }
     grad_fn->weight_argsize_0 = weight.size(0);
-    grad_fn->indices_ = SavedVariable(indices, false);
     grad_fn->padding_idx = padding_idx;
     grad_fn->scale_grad_by_freq = scale_grad_by_freq;
     grad_fn->sparse = sparse;
@@ -12017,7 +12023,7 @@ static auto& registerer = globalATenDispatch()
   .registerVariableOp<Tensor (const Tensor &, const Tensor &)>("aten::dot(Tensor self, Tensor tensor) -> Tensor", &VariableType::dot)
   .registerVariableOp<Tensor (std::string, TensorList)>("aten::einsum(str equation, Tensor[] tensors) -> Tensor", &VariableType::einsum)
   .registerVariableOp<Tensor (const Tensor &, Scalar, Scalar, Scalar, const Tensor &)>("aten::elu_backward(Tensor grad_output, Scalar alpha, Scalar scale, Scalar input_scale, Tensor output) -> Tensor", &VariableType::elu_backward)
-  .registerVariableOp<Tensor (const Tensor &, const Tensor &, int64_t, bool, bool)>("aten::embedding(Tensor weight, Tensor indices, int padding_idx=-1, bool scale_grad_by_freq=False, bool sparse=False) -> Tensor", &VariableType::embedding)
+  .registerVariableOp<Tensor (const Tensor &, Tensor &, int64_t, bool, bool)>("aten::embedding(Tensor weight, Tensor indices, int padding_idx=-1, bool scale_grad_by_freq=False, bool sparse=False) -> Tensor", &VariableType::embedding)
   .registerVariableOp<Tensor (const Tensor &, const Tensor &, int64_t, int64_t, bool)>("aten::embedding_sparse_backward(Tensor grad, Tensor indices, int num_weights, int padding_idx, bool scale_grad_by_freq) -> Tensor", &VariableType::embedding_sparse_backward)
   .registerVariableOp<Tensor (const Tensor &)>("aten::erf(Tensor self) -> Tensor", &VariableType::erf)
   .registerVariableOp<Tensor & (Tensor &)>("aten::erf_(Tensor(a!) self) -> Tensor(a!)", &VariableType::erf_)

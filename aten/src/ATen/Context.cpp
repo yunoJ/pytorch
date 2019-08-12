@@ -127,7 +127,7 @@ static int global_tensor_id_ = 0;
 static int global_operation_id_ = 0;
 // flags  
 // on_demand_mode is required to construct back_path_
-static bool on_debug_mode_ = 0;
+static bool on_debug_mode_ = 1;
 static bool on_demand_mode_ = 1; // default 1. Set 0 after first iteration(Profiling Stage) 
 static bool on_forwarding_ = 1; // 1 in forwarding phase. 0 in backprop. phase
 // vector for prefetching
