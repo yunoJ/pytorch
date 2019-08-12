@@ -453,7 +453,7 @@ struct TORCH_API VariableType final {
   static Tensor elu_backward(const Tensor & grad_output, Scalar alpha, Scalar scale, Scalar input_scale, const Tensor & output) ;
   static Tensor & elu_backward_out(Tensor & grad_input, const Tensor & grad_output, Scalar alpha, Scalar scale, Scalar input_scale, const Tensor & output) ;
   static Tensor & elu_out(Tensor & out, const Tensor & self, Scalar alpha, Scalar scale, Scalar input_scale) ;
-  static Tensor embedding(const Tensor & weight, Tensor & indices, int64_t padding_idx, bool scale_grad_by_freq, bool sparse) ;
+  static Tensor embedding(const Tensor & weight, const Tensor & indices, int64_t padding_idx, bool scale_grad_by_freq, bool sparse) ;
   static Tensor embedding_backward(const Tensor & grad, const Tensor & indices, int64_t num_weights, int64_t padding_idx, bool scale_grad_by_freq, bool sparse) ;
   static std::tuple<Tensor,Tensor,Tensor,Tensor> embedding_bag(const Tensor & weight, const Tensor & indices, const Tensor & offsets, bool scale_grad_by_freq, int64_t mode, bool sparse, const Tensor & per_sample_weights) ;
   static Tensor embedding_dense_backward(const Tensor & grad_output, const Tensor & indices, int64_t num_weights, int64_t padding_idx, bool scale_grad_by_freq) ;
@@ -782,7 +782,7 @@ struct TORCH_API VariableType final {
   static Tensor mse_loss_backward(const Tensor & grad_output, const Tensor & self, const Tensor & target, int64_t reduction) ;
   static Tensor & mse_loss_backward_out(Tensor & grad_input, const Tensor & grad_output, const Tensor & self, const Tensor & target, int64_t reduction) ;
   static Tensor & mse_loss_out(Tensor & out, const Tensor & self, const Tensor & target, int64_t reduction) ;
-  static Tensor mul(Tensor & self, Tensor & other) ;
+  static Tensor mul(const Tensor & self, const Tensor & other) ;
   static Tensor mul(const Tensor & self, Scalar other) ;
   static Tensor & mul_(Tensor & self, const Tensor & other) ;
   static Tensor & mul_(Tensor & self, Scalar other) ;

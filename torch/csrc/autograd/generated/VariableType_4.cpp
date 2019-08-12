@@ -7990,42 +7990,19 @@ Tensor & VariableType::mse_loss_backward_out(Tensor & grad_input, const Tensor &
   }
   return grad_input;
 }
-Tensor VariableType::mul(Tensor & self, Tensor & other) {
+Tensor VariableType::mul(const Tensor & self, const Tensor & other) {
   RECORD_FUNCTION("mul", std::vector<c10::IValue>({self, other}), Node::peek_at_next_sequence_nr());
   auto& self_ = unpack(self, "self", 0);
   auto& other_ = unpack(other, "other", 1);
   std::shared_ptr<MulBackward0> grad_fn;
-  int oid = at::globalContext().ARCGlobal.getCurOid();
-  int sfid = at::globalContext().ARCGlobal.getTid(self);
-  int ofid = at::globalContext().ARCGlobal.getTid(other);
   if (compute_requires_grad( self, other )) {
     grad_fn = std::shared_ptr<MulBackward0>(new MulBackward0(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self, other ));
     if (grad_fn->should_compute_output(1)) {
-      if (at::globalContext().ARCGlobal.isForward()) {
-        if (oid == 0 || sfid != 0) {
-          ARCCppEngine::offLoad(self, oid, &(grad_fn->self_), false);
-          grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
-        }
-        else
-          grad_fn->self_ = SavedVariable(self, false);
-      }
-      else {
-        grad_fn->self_ = SavedVariable(self, false);
-      }
+      grad_fn->self_ = SavedVariable(self, false);
     }
     if (grad_fn->should_compute_output(0)) {
-      if (at::globalContext().ARCGlobal.isForward()) {
-        if (oid == 0 || ofid != 0) {
-          ARCCppEngine::offLoad(other, oid, &(grad_fn->other_), false);
-          grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
-        }
-        else
-          grad_fn->other_ = SavedVariable(other, false);
-      }
-      else {
-        grad_fn->other_ = SavedVariable(other, false);
-      }
+      grad_fn->other_ = SavedVariable(other, false);
     }
   }
   torch::jit::Node* node = nullptr;
@@ -11980,7 +11957,7 @@ static auto& registerer = globalATenDispatch()
   .registerVariableOp<Tensor (const Tensor &, const Tensor &, const Tensor &)>("aten::mkldnn_linear(Tensor input, Tensor weight, Tensor? bias=None) -> Tensor", &VariableType::mkldnn_linear)
   .registerVariableOp<Tensor (const Tensor &, const Tensor &, int64_t)>("aten::mse_loss(Tensor self, Tensor target, int reduction=Mean) -> Tensor", &VariableType::mse_loss)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, const Tensor &, const Tensor &, int64_t)>("aten::mse_loss_backward(Tensor grad_output, Tensor self, Tensor target, int reduction, *, Tensor(a!) grad_input) -> Tensor(a!)", &VariableType::mse_loss_backward_out)
-  .registerVariableOp<Tensor (Tensor &, Tensor &)>("aten::mul(Tensor self, Tensor other) -> Tensor", &VariableType::mul)
+  .registerVariableOp<Tensor (const Tensor &, const Tensor &)>("aten::mul(Tensor self, Tensor other) -> Tensor", &VariableType::mul)
   .registerVariableOp<Tensor (const Tensor &, Scalar)>("aten::mul(Tensor self, Scalar other) -> Tensor", &VariableType::mul)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &)>("aten::mul_(Tensor(a!) self, Tensor other) -> Tensor(a!)", &VariableType::mul_)
   .registerVariableOp<Tensor & (Tensor &, Scalar)>("aten::mul_(Tensor(a!) self, Scalar other) -> Tensor(a!)", &VariableType::mul_)
