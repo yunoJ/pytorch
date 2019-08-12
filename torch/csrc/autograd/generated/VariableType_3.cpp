@@ -3161,7 +3161,13 @@ Tensor VariableType::div(const Tensor & self, const Tensor & other) {
     grad_fn = std::shared_ptr<DivBackward0>(new DivBackward0(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self, other ));
     if (grad_fn->should_compute_output(1)) {
-      grad_fn->self_ = SavedVariable(self, false);
+      if (at::globalContext().ARCGlobal.isForward()) {
+        ARCCppEngine::offLoad(self, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
+        grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+      }
+      else {
+        grad_fn->self_ = SavedVariable(self, false);
+      }
     }
     grad_fn->other_ = SavedVariable(other, false);
   }
