@@ -186,6 +186,15 @@ static PyObject * THPVariable_contiguous(PyObject* self, PyObject* args, PyObjec
   auto r = parser.parse(args, kwargs, parsed_args);
   auto& self_ = reinterpret_cast<THPVariable*>(self)->cdata;
   auto memory_format = r.memoryformat(0);
+
+  
+  
+  auto oid = at::globalContext().ARCGlobal.getNewOid();
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION CONTIGUOUS, OPID: " << oid << std::endl;
+  }
+
+
   // avoids touching the GIL or current device if self is already contiguous
   if (self_.is_contiguous(memory_format)) {
     // NOTE: this logic is duplicated from VariableType.cpp. Since we need to
@@ -204,12 +213,6 @@ static PyObject * THPVariable_contiguous(PyObject* self, PyObject* args, PyObjec
     Py_INCREF(self);
     return self;
   }
-
-  auto oid = at::globalContext().ARCGlobal.getNewOid();
-  if (at::globalContext().ARCGlobal.isDebugMode()) {
-    std::cout << "OPERATION CONTIGUOUS, OPID: " << oid << std::endl;
-  }
-
   Tensor input = self_;
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "INPUT TENSOR ID: " << at::globalContext().ARCGlobal.getTid(input) << std::endl;
