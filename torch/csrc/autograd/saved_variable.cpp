@@ -226,6 +226,9 @@ void ARCCppEngine::explicitAllSync() {
 
 // prefetch all tensors required for back prop of curOid
 void ARCCppEngine::preFetch(Oid curOid, ARCSync sync) {//int required_tensor_num, ARCSync sync) {
+  if (curOid == 0)
+      return;
+    
   if (at::globalContext().ARCGlobal.isDebugMode())
     std::cout <<  curOid << "prefetching" << std::endl;
 
@@ -275,7 +278,9 @@ void ARCCppEngine::joinPrefetchThread() {
 
 void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) { 
   //this operation has nothing to prefetch 
-  
+  if (oid == 0)
+      return;
+
     if (pf_dict_.find(oid) == pf_dict_.end()) {
     //std::cerr << oid << " Prefetching dictionary lookup miss" << std::endl;
     return;
