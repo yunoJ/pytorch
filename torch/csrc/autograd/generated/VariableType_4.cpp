@@ -8003,7 +8003,7 @@ Tensor VariableType::mul(Tensor & self, Tensor & other) {
     grad_fn->set_next_edges(collect_next_edges( self, other ));
     if (grad_fn->should_compute_output(1)) {
       if (at::globalContext().ARCGlobal.isForward()) {
-        if (oid == 0 || sfid != 0) {
+        if (sfid != 0) {
           ARCCppEngine::offLoad(self, oid, &(grad_fn->self_), false);
           grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
         }
@@ -8016,7 +8016,7 @@ Tensor VariableType::mul(Tensor & self, Tensor & other) {
     }
     if (grad_fn->should_compute_output(0)) {
       if (at::globalContext().ARCGlobal.isForward()) {
-        if (oid == 0 || ofid != 0) {
+        if (ofid != 0) {
           ARCCppEngine::offLoad(other, oid, &(grad_fn->other_), false);
           grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
         }
