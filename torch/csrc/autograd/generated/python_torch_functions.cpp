@@ -119,25 +119,28 @@ static PyObject * THPVariable_arange(PyObject* self, PyObject* args, PyObject* k
 
   auto oid = at::globalContext().ARCGlobal.getNewOid(); 
 
-
+  bool inputNone = true;
   Tensor input;
   if (r.idx == 0) {
     if (!r.isNone(1)) {
       input = r.tensor(1);
+      inputNone = false;
     }
   }
   else if (r.idx == 1) {
     if (!r.isNone(3)) {
       input = r.tensor(3);
+      inputNone = false;
     }
   }
   
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "OPERATION ARANGE, OPID: " << oid << std::endl;
-    std::cout << "ARANGE INPUT TENSOR ID: " << at::globalContext().ARCGlobal.getTid(input) << std::endl;
+    if (inputNone == false)
+      std::cout << "ARANGE INPUT TENSOR ID: " << at::globalContext().ARCGlobal.getTid(input) << std::endl;
   }
 
-  if (at::globalContext().ARCGlobal.isOnDemand()) {
+  if (at::globalContext().ARCGlobal.isOnDemand() && inputNone == false) {
     if (input.device().type() == at::DeviceType::CPU) {
       ARCPyEngine::fetch(input);
     }
@@ -10193,13 +10196,7 @@ static PyObject * THPVariable_zeros_like(PyObject* self_, PyObject* args, PyObje
   ParsedArgs<7> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
-  auto oid = at::globalContext().ARCGlobal.getNewOid();
-
   Tensor input = r.tensor(0);
-  if (at::globalContext().ARCGlobal.isDebugMode()) {
-    std::cout << "OPERATION ZEROS LIKE, OPID: " << oid << std::endl;
-    std::cout << "ZEROS LIKE INPUT TENSOR ID: " << at::globalContext().ARCGlobal.getTid(input) << std::endl;
-  }
 
   Tensor output;
   if (r.idx == 0) {
@@ -10217,14 +10214,6 @@ static PyObject * THPVariable_zeros_like(PyObject* self_, PyObject* args, PyObje
   }
 
   at::globalContext().ARCGlobal.setNewTid(output);
-
-  if (at::globalContext().ARCGlobal.isDebugMode()) {
-    std::cout << "ZEROS LIKE OUTPUT TENSOR ID: " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
-  }
-
-  if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCPyEngine::offLoad(output);
-  }
 
   return wrap(output);
   Py_RETURN_NONE;

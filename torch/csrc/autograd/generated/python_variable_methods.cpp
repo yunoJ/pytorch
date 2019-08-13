@@ -1111,19 +1111,7 @@ static PyObject * THPVariable_add_(PyObject* self_, PyObject* args, PyObject* kw
   auto& self = reinterpret_cast<THPVariable*>(self_)->cdata;
   ParsedArgs<3> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
-
-  auto oid = at::globalContext().ARCGlobal.getNewOid();
-  if (at::globalContext().ARCGlobal.isDebugMode()) {
-    std::cout << "OPERATION +=: " << oid << std::endl;
-  }
-
   Tensor s = self, t0 = r.tensor(0), t1 = r.tensor(1);
-
-  if (at::globalContext().ARCGlobal.isDebugMode()) {
-    std::cout << "SELF, R.TENSOR(0), R.TENSOR(1): " << at::globalContext().ARCGlobal.getTid(self) \
-        << " " << at::globalContext().ARCGlobal.getTid(t0) \
-        << " " << at::globalContext().ARCGlobal.getTid(t1) << std::endl;
-  }
 
   if (at::globalContext().ARCGlobal.isOnDemand()) {
     if (r.idx == 0) {
@@ -1149,11 +1137,6 @@ static PyObject * THPVariable_add_(PyObject* self_, PyObject* args, PyObject* kw
   }
 
   at::globalContext().ARCGlobal.setNewTid(output);
-
-  if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCPyEngine::offLoad(output);
-  }
-
   return wrap(output);
 
   Py_RETURN_NONE;

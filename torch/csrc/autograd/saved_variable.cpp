@@ -433,8 +433,8 @@ Oid ARCCppEngine::whoWillPrefetched_(Oid curOid) {
 }
 
 void ARCCppEngine::resetCppEngine() {
-  static int backward_num_in_one_iter = 3;
-  static int remaining_backward = 3;//backward_num_in_one_iter;
+  static int backward_num_in_one_iter = 1;
+  static int remaining_backward = 1;//backward_num_in_one_iter;
   
   tensor_dict_.clear();
   tensor_sync_dict_.clear();
