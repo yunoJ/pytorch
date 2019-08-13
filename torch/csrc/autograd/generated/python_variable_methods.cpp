@@ -3875,18 +3875,14 @@ static PyObject * THPVariable_mul(PyObject* self_, PyObject* args, PyObject* kwa
 
   Tensor output;
   if (r.idx == 0) {
-    if(oid == 1)
+    if (sid != 0  && t0id != 0 )
       output = dispatch_mul(s, t0);
-    else {
-      if (sid != 0  && t0id != 0 )
-        output = dispatch_mul(s, t0);
-      else if (sid != 0 && t0id == 0)
-        output = dispatch_mul(s, r.tensor(0));
-      else if (sid == 0 && t0id != 0)
-        output = dispatch_mul(self, t0);
-      else
-        output = dispatch_mul(self, r.tensor(0));
-    }
+    else if (sid != 0 && t0id == 0)
+      output = dispatch_mul(s, r.tensor(0));
+    else if (sid == 0 && t0id != 0)
+      output = dispatch_mul(self, t0);
+    else
+      output = dispatch_mul(self, r.tensor(0));
   }
 
   at::globalContext().ARCGlobal.setNewTid(output);

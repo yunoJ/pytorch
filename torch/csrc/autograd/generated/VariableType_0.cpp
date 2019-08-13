@@ -2860,17 +2860,36 @@ Tensor VariableType::addmm(Tensor & self, Tensor & mat1, Tensor & mat2, Scalar b
   auto& mat2_ = unpack(mat2, "mat2", 2);
   std::shared_ptr<AddmmBackward> grad_fn;
 
+  int oid = at::globalContext().ARCGlobal.getCurOid();
+  int m1id = at::globalContext().ARCGlobal.getTid(mat1);
+  int m2id = at::globalContext().ARCGlobal.getTid(mat2);
+
   if (compute_requires_grad( self, mat1, mat2 )) {
     grad_fn = std::shared_ptr<AddmmBackward>(new AddmmBackward(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self, mat1, mat2 ));
     if (at::globalContext().ARCGlobal.isForward()){
-      ARCCppEngine::offLoad(mat1, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->mat1_), false);
-      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+      if (m1id != 0) {
+        ARCCppEngine::offLoad(mat1, /*(TraceableFunction*)(grad_fn.get()), Async,*/ oid, &(grad_fn->mat1_), false);
+        grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+      }
+      else
+        grad_fn->mat1_ = SavedVariable(mat1, false);
     }
     else {
       grad_fn->mat1_ = SavedVariable(mat1, false);
     }
-    grad_fn->mat2_ = SavedVariable(mat2, false);
+    if (at::globalContext().ARCGlobal.isForward()) {
+      if (m2id != 0) {
+        ARCCppEngine::offLoad(mat2, oid, &(grad_fn->mat2_), false);
+        grad_fn->mat2_ = SavedVariable(mat2, false);
+      }
+      else
+        grad_fn->mat2_ = SavedVariable(mat2, false);
+    }
+    else {
+      grad_fn->mat2_ = SavedVariable(mat2, false);
+    }
+      
     grad_fn->alpha = alpha;
     grad_fn->mat2_sizes = mat2.sizes().vec();
     grad_fn->beta = beta;

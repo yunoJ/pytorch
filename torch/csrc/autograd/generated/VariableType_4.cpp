@@ -7995,7 +7995,7 @@ Tensor VariableType::mul(Tensor & self, Tensor & other) {
   auto& self_ = unpack(self, "self", 0);
   auto& other_ = unpack(other, "other", 1);
   std::shared_ptr<MulBackward0> grad_fn;
-  int oid = at::globalContext().ARCGlobal.getCurOid();
+  int oid = at::globalContext().ARCGlobal.getCurOid(); 
   int sfid = at::globalContext().ARCGlobal.getTid(self);
   int ofid = at::globalContext().ARCGlobal.getTid(other);
   if (compute_requires_grad( self, other )) {

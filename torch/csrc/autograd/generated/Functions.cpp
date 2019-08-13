@@ -4085,7 +4085,8 @@ variable_list MulBackward0::apply(variable_list&& grads) {
   auto other_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
-  
+ 
+   
   if (at::globalContext().ARCGlobal.isOnDemand()) {
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
@@ -5021,10 +5022,6 @@ variable_list SqrtBackward::apply(variable_list&& grads) {
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
   auto result = result_.unpack(shared_from_this());
- 
-  if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
-  }
   
   if (should_compute_output({ self_ix })) {
     auto grad_result = grad / (2 * result);
