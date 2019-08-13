@@ -117,8 +117,35 @@ static PyObject * THPVariable_arange(PyObject* self, PyObject* args, PyObject* k
   ParsedArgs<9> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
+  auto oid = at::globalContext().ARCGlobal.getNewOid(); 
+
+
+  Tensor input;
   if (r.idx == 0) {
-    if (r.isNone(1)) {
+    if (!r.isNone(1)) {
+      input = r.tensor(1);
+    }
+  }
+  else if (r.idx == 1) {
+    if (!r.isNone(3)) {
+      input = r.tensor(3);
+    }
+  }
+  
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION ARANGE, OPID: " << oid << std::endl;
+    std::cout << "ARANGE INPUT TENSOR ID: " << at::globalContext().ARCGlobal.getTid(input) << std::endl;
+  }
+
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    if (input.device().type() == at::DeviceType::CPU) {
+      ARCPyEngine::fetch(input);
+    }
+  }
+
+  Tensor output;
+  if (r.idx == 0) {
+    if (r.isNone(1)) {     
       auto end = r.scalar(0);
       // NOTE: r.scalartype(X) gives the default dtype if r.isNone(X)
       auto scalarType = r.isNone(2) && allIntegral({end}) ? at::ScalarType::Long : r.scalartype(2);
@@ -128,12 +155,12 @@ static PyObject * THPVariable_arange(PyObject* self, PyObject* args, PyObject* k
           .layout(r.layout(3).layout)
           .requires_grad(r.toBool(6))
           .pinned_memory(r.toBool(5));
-      return wrap(dispatch_arange(end, options));
+      output = dispatch_arange(end, options);
     } else {
       TORCH_CHECK(!r.toBool(5), " `pin_memory` and `out` parameters are incompatible");
-      check_out_type_matches(r.tensor(1), r.scalartype(2), r.isNone(2), r.layout(3), r.isNone(3),
+      check_out_type_matches(input, r.scalartype(2), r.isNone(2), r.layout(3), r.isNone(3),
                              r.device(4), r.isNone(4));
-      return wrap(dispatch_arange(r.scalar(0), r.tensor(1)).set_requires_grad(r.toBool(6)));
+      output = dispatch_arange(r.scalar(0), input).set_requires_grad(r.toBool(6));
     }
   } else if (r.idx == 1) {
     if (r.isNone(3)) {
@@ -148,14 +175,26 @@ static PyObject * THPVariable_arange(PyObject* self, PyObject* args, PyObject* k
           .layout(r.layout(5).layout)
           .requires_grad(r.toBool(8))
           .pinned_memory(r.toBool(7));
-      return wrap(dispatch_arange(start, end, step, options));
+      output = dispatch_arange(start, end, step, options);
     } else {
       TORCH_CHECK(!r.toBool(7), " `pin_memory` and `out` parameters are incompatible");
-      check_out_type_matches(r.tensor(3), r.scalartype(4), r.isNone(4), r.layout(5), r.isNone(5),
+      check_out_type_matches(input, r.scalartype(4), r.isNone(4), r.layout(5), r.isNone(5),
                                r.device(6), r.isNone(6));
-      return wrap(dispatch_arange(r.scalar(0), r.scalar(1), r.scalar(2), r.tensor(3)).set_requires_grad(r.toBool(8)));
+      output = dispatch_arange(r.scalar(0), r.scalar(1), r.scalar(2), input).set_requires_grad(r.toBool(8));
     }
   }
+
+  at::globalContext().ARCGlobal.setNewTid(output);
+
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "ARAANGE OUPUT TENSOR ID: " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
+  }
+
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCPyEngine::offLoad(output);
+  }
+
+  return wrap(output);
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }
@@ -4371,13 +4410,43 @@ static PyObject * THPVariable_erf(PyObject* self_, PyObject* args, PyObject* kwa
   ParsedArgs<2> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
-  if (r.idx == 0) {
-    if (r.isNone(1)) {
-      return wrap(dispatch_erf(r.tensor(0)));
-    } else {
-      return wrap(dispatch_erf(r.tensor(0), r.tensor(1)));
+  Tensor input1 = r.tensor(0), input2 = r.tensor(1);
+
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "ERF INPUT TENSOR ID: " << at::globalContext().ARCGlobal.getTid(input1) << std::endl;
+  }
+
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    if (input1.device().type() == at::DeviceType::CPU) {
+      ARCPyEngine::fetch(input1);
+    }
+    if (r.idx == 0 && !r.isNone(1)) {
+      if (input2.device().type() == at::DeviceType::CPU) {
+        ARCPyEngine::fetch(input2);
+      }
     }
   }
+
+  Tensor output;
+  if (r.idx == 0) {
+    if (r.isNone(1)) {
+      output = dispatch_erf(input1);
+    } else {
+      output = dispatch_erf(input1, input2);
+    }
+  }
+
+  at::globalContext().ARCGlobal.setNewTid(output);
+
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "ERF OUPUT TENSOR ID: " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
+  }
+
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCPyEngine::offLoad(output);
+  }
+
+  return wrap(output);
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }
@@ -7399,20 +7468,45 @@ static PyObject * THPVariable_ones_like(PyObject* self_, PyObject* args, PyObjec
   ParsedArgs<7> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
+  auto oid = at::globalContext().ARCGlobal.getNewOid();
+
+  Tensor input = r.tensor(0);
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION ONES LIKE, OPID: " << oid << std::endl;
+    std::cout << "ONES LIKE INPUT TENSOR ID: " << at::globalContext().ARCGlobal.getTid(input) << std::endl;
+  }
+  
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    if (input.device().type() == at::DeviceType::CPU) {
+      ARCPyEngine::fetch(input);
+    }
+  }
+
+  Tensor output;
   if (r.idx == 0) {
-    auto self = r.tensor(0);
-    auto dtype = r.scalartypeWithDefault(1, self.scalar_type());
-    auto device = r.deviceWithDefault(3, self.device());
+    auto dtype = r.scalartypeWithDefault(1, input.scalar_type());
+    auto device = r.deviceWithDefault(3, input.device());
     const auto options = TensorOptions()
         .dtype(dtype)
         .device(device)
-        .layout(r.layoutWithDefault(2, *torch::getLayout(self.type().backend())).layout)
+        .layout(r.layoutWithDefault(2, *torch::getLayout(input.type().backend())).layout)
         .requires_grad(r.toBool(5))
         .pinned_memory(r.toBool(4));
-    return wrap(dispatch_ones_like(self, options));
+    output = dispatch_ones_like(input, options);
   } else if (r.idx == 1) {
-    return wrap(dispatch_ones_like(r.tensor(0)).set_requires_grad(r.toBool(3)));
+    output = dispatch_ones_like(input.set_requires_grad(r.toBool(3)));
   }
+
+  at::globalContext().ARCGlobal.setNewTid(output);
+
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "ONES LIKE TENSOR ID: " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
+  }
+
+  if(at::globalContext().ARCGlobal.isOnDemand()) 
+    ARCPyEngine::offLoad(output);
+
+  return wrap(output);
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }
@@ -10099,20 +10193,40 @@ static PyObject * THPVariable_zeros_like(PyObject* self_, PyObject* args, PyObje
   ParsedArgs<7> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
+  auto oid = at::globalContext().ARCGlobal.getNewOid();
+
+  Tensor input = r.tensor(0);
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION ZEROS LIKE, OPID: " << oid << std::endl;
+    std::cout << "ZEROS LIKE INPUT TENSOR ID: " << at::globalContext().ARCGlobal.getTid(input) << std::endl;
+  }
+
+  Tensor output;
   if (r.idx == 0) {
-    auto self = r.tensor(0);
-    auto dtype = r.scalartypeWithDefault(1, self.scalar_type());
-    auto device = r.deviceWithDefault(3, self.device());
+    auto dtype = r.scalartypeWithDefault(1, input.scalar_type());
+    auto device = r.deviceWithDefault(3, input.device());
     const auto options = TensorOptions()
         .dtype(dtype)
         .device(device)
-        .layout(r.layoutWithDefault(2, *torch::getLayout(self.type().backend())).layout)
+        .layout(r.layoutWithDefault(2, *torch::getLayout(input.type().backend())).layout)
         .requires_grad(r.toBool(5))
         .pinned_memory(r.toBool(4));
-    return wrap(dispatch_zeros_like(self, options));
+    output = dispatch_zeros_like(input, options);
   } else if (r.idx == 1) {
-    return wrap(dispatch_zeros_like(r.tensor(0)).set_requires_grad(r.toBool(3)));
+    output = dispatch_zeros_like(input).set_requires_grad(r.toBool(3));
   }
+
+  at::globalContext().ARCGlobal.setNewTid(output);
+
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "ZEROS LIKE OUTPUT TENSOR ID: " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
+  }
+
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCPyEngine::offLoad(output);
+  }
+
+  return wrap(output);
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }
