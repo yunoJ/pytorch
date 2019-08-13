@@ -113,7 +113,7 @@ REGISTER_LEGACY_TYPE_INIT(LegacyDeviceTypeInit);
 // Implemented by SNU-ARC Function/Data Structures///
 // //////////////////////////////////////////////////
 
-#define BP_NUM_PER_ITER 2
+#define BP_NUM_PER_ITER 1
 #define RESET_TID 0 // 4-4 = 0
 
 // network

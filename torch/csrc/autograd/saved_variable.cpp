@@ -380,6 +380,9 @@ void ARCCppEngine::fetchRequiredTensors_(Oid oid,  ARCSync sync) {
     at::globalContext().ARCGlobal.pushBackOid(oid);
   
   auto fetch_vec = pf_dict_[oid]; 
+
+  auto str = c10::cuda::getStreamFromPool(false, 0);      
+  c10::cuda::CUDAStreamGuard csg(str);   
   for (auto it = fetch_vec.begin(); it != fetch_vec.end(); it++) {
     auto tid = it->second;
 
@@ -399,10 +402,6 @@ void ARCCppEngine::fetchRequiredTensors_(Oid oid,  ARCSync sync) {
     std::cout << "fetch try  at " << oid << std::endl; 
     std::cout << "sizes " << tref.sizes()[0] << tref.sizes()[1] << tref.sizes()[2] << tref.sizes()[3] << std::endl;
   }
-
-    auto str = c10::cuda::getStreamFromPool(false, 0);      
-    c10::cuda::CUDAStreamGuard csg(str);   
-        
 
         if (tref.device().type() == c10::DeviceType::CPU ) {
           if (at::globalContext().ARCGlobal.isOnDemand()) {
@@ -424,8 +423,9 @@ void ARCCppEngine::fetchRequiredTensors_(Oid oid,  ARCSync sync) {
         std::cout <<  tid << ": This tensor is already fetched" << std::endl;
     }
 
-    pf_sync_dict_.insert(std::pair<Oid, c10::StreamId>(oid, str.id()));
   }
+
+  pf_sync_dict_.insert(std::pair<Oid, c10::StreamId>(oid, str.id()));
 }
 
 Oid ARCCppEngine::whoWillPrefetched_(Oid curOid) {

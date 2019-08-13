@@ -4097,13 +4097,14 @@ variable_list MulBackward0::apply(variable_list&& grads) {
   if (should_compute_output({ other_ix })) {
     auto grad_result = grad * self;
     copy_range(grad_inputs, other_ix, grad_result);
+    ARCCppEngine::dropTensor(this->getOid(), &self_);
   }
   if (should_compute_output({ self_ix })) {
     auto grad_result = grad * other;
     copy_range(grad_inputs, self_ix, grad_result);
+    ARCCppEngine::dropTensor(this->getOid(), &other_);
   }
 
-  ARCCppEngine::dropTensor(this->getOid(), &self_);
 
   return grad_inputs;
 }
