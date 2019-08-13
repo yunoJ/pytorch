@@ -426,7 +426,12 @@ static PyObject * THPVariable_tensor(PyObject* self, PyObject* args, PyObject* k
 {
   HANDLE_TH_ERRORS
   jit::tracer::warn("torch.tensor", jit::tracer::WARN_CONSTRUCTOR);
-  return THPVariable_Wrap(torch::utils::tensor_ctor(torch::tensors::get_default_tensor_type_id(), torch::tensors::get_default_scalar_type(), args, kwargs));
+  
+   Tensor output;
+  output = torch::utils::tensor_ctor(torch::tensors::get_default_tensor_type_id(), torch::tensors::get_default_scalar_type(), args, kwargs);
+ 
+  at::globalContext().ARCGlobal.setNewTid(output);
+  return THPVariable_Wrap(output);
   END_HANDLE_TH_ERRORS
 }
 
@@ -4160,7 +4165,7 @@ static PyObject * THPVariable_embedding(PyObject* self_, PyObject* args, PyObjec
     std::cout << "OPERATION EMBEDDING, OPID: ";
     std::cout << oid << std::endl;
   }
-  Tensor input = r.tensor(0);
+  Tensor input = r.tensor(1);
   
   if (at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
     ARCPyEngine::fetch(input);
@@ -4173,7 +4178,7 @@ static PyObject * THPVariable_embedding(PyObject* self_, PyObject* args, PyObjec
 
   Tensor output;
   if (r.idx == 0) {
-    output = dispatch_embedding(input, r.tensor(1), r.toInt64(2), r.toBool(3), r.toBool(4));
+    output = dispatch_embedding(r.tensor(0), input, r.toInt64(2), r.toBool(3), r.toBool(4));
   }
 
   at::globalContext().ARCGlobal.setNewTid(output);
