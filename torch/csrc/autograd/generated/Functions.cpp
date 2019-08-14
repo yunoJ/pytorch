@@ -3079,6 +3079,12 @@ variable_list ErfBackward::apply(variable_list&& grads) {
   auto self_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
+  
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCCppEngine::preFetch(this->getOid(), Sync);
+  }
+  ARCCppEngine::preFetchSync(this->getOid());
+
   auto self = self_.unpack();
   if (should_compute_output({ self_ix })) {
     auto grad_result = 2.0 / sqrt(M_PI) * exp(-(self.pow(2))) * grad;
@@ -4596,11 +4602,19 @@ variable_list PowBackward0::apply(variable_list&& grads) {
   auto self_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
+  
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCCppEngine::preFetch(this->getOid(), Sync);
+  }
+  ARCCppEngine::preFetchSync(this->getOid());
+
   auto self = self_.unpack();
   if (should_compute_output({ self_ix })) {
     auto grad_result = pow_backward(grad, self, exponent);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  ARCCppEngine::dropTensor(this->getOid(), &self_);
   return grad_inputs;
 }
 variable_list PowBackward1::apply(variable_list&& grads) {

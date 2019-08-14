@@ -877,7 +877,7 @@ struct TORCH_API VariableType final {
   static Tensor polygamma(int64_t n, const Tensor & self) ;
   static Tensor & polygamma_(Tensor & self, int64_t n) ;
   static Tensor & polygamma_out(Tensor & out, int64_t n, const Tensor & self) ;
-  static Tensor pow(const Tensor & self, Scalar exponent) ;
+  static Tensor pow(Tensor & self, Scalar exponent) ;
   static Tensor pow(const Tensor & self, const Tensor & exponent) ;
   static Tensor pow(Scalar self, const Tensor & exponent) ;
   static Tensor & pow_(Tensor & self, Scalar exponent) ;

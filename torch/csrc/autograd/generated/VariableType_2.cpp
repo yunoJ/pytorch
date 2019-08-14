@@ -3753,7 +3753,12 @@ Tensor VariableType::erf(const Tensor & self) {
   if (compute_requires_grad( self )) {
     grad_fn = std::shared_ptr<ErfBackward>(new ErfBackward(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self ));
-    grad_fn->self_ = SavedVariable(self, false);
+    if (at::globalContext().ARCGlobal.isForward()) {
+      ARCCppEngine::offLoad(self, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else
+      grad_fn->self_ = SavedVariable(self, false);
   }
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
@@ -8029,14 +8034,19 @@ Tensor & VariableType::polygamma_(Tensor & self, int64_t n) {
   }
   return self;
 }
-Tensor VariableType::pow(const Tensor & self, Scalar exponent) {
+Tensor VariableType::pow(Tensor & self, Scalar exponent) {
   RECORD_FUNCTION("pow", std::vector<c10::IValue>({self, exponent}), Node::peek_at_next_sequence_nr());
   auto& self_ = unpack(self, "self", 0);
   std::shared_ptr<PowBackward0> grad_fn;
   if (compute_requires_grad( self )) {
     grad_fn = std::shared_ptr<PowBackward0>(new PowBackward0(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self ));
-    grad_fn->self_ = SavedVariable(self, false);
+    if (at::globalContext().ARCGlobal.isForward()) {
+      ARCCppEngine::offLoad(self, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else
+      grad_fn->self_ = SavedVariable(self, false);
     grad_fn->exponent = exponent;
   }
   torch::jit::Node* node = nullptr;
@@ -12106,7 +12116,7 @@ static auto& registerer = globalATenDispatch()
   .registerVariableOp<Tensor (const Tensor &)>("aten::pin_memory(Tensor self) -> Tensor", &VariableType::pin_memory)
   .registerVariableOp<Tensor (int64_t, const Tensor &)>("aten::polygamma(int n, Tensor self) -> Tensor", &VariableType::polygamma)
   .registerVariableOp<Tensor & (Tensor &, int64_t)>("aten::polygamma_(Tensor(a!) self, int n) -> Tensor(a!)", &VariableType::polygamma_)
-  .registerVariableOp<Tensor (const Tensor &, Scalar)>("aten::pow(Tensor self, Scalar exponent) -> Tensor", &VariableType::pow)
+  .registerVariableOp<Tensor (Tensor &, Scalar)>("aten::pow(Tensor self, Scalar exponent) -> Tensor", &VariableType::pow)
   .registerVariableOp<Tensor (const Tensor &, const Tensor &)>("aten::pow(Tensor self, Tensor exponent) -> Tensor", &VariableType::pow)
   .registerVariableOp<Tensor (Scalar, const Tensor &)>("aten::pow(Scalar self, Tensor exponent) -> Tensor", &VariableType::pow)
   .registerVariableOp<Tensor & (Tensor &, Scalar)>("aten::pow_(Tensor(a!) self, Scalar exponent) -> Tensor(a!)", &VariableType::pow_)
