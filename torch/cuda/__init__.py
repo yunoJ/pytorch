@@ -59,6 +59,10 @@ def find_cuda_windows_lib():
         return None
 
 
+def arc_setting(flags: int):
+    return torch._C._cuda_arc_setting(flags)
+
+
 def is_available():
     r"""Returns a bool indicating if CUDA is currently available."""
     if (not hasattr(torch._C, '_cuda_isDriverSufficient') or
