@@ -3173,7 +3173,7 @@ Tensor VariableType::div(Tensor & self, Tensor & other) {
       }
     }
     if (at::globalContext().ARCGlobal.isForward() && otid != 0) {
-      ARCCppEngine::offLoad(self, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->other_), false);
+      ARCCppEngine::offLoad(other, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->other_), false);
       grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
     }
     else
