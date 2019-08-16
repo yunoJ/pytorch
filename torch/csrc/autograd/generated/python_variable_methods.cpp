@@ -188,12 +188,12 @@ static PyObject * THPVariable_contiguous(PyObject* self, PyObject* args, PyObjec
   auto memory_format = r.memoryformat(0);
 
   
-  
-  auto oid = at::globalContext().ARCGlobal.getNewOid();
-  if (at::globalContext().ARCGlobal.isDebugMode()) {
-    std::cout << "OPERATION CONTIGUOUS, OPID: " << oid << std::endl;
+  if (at::globalContext().ARCGlobal.isBERT()) { 
+      auto oid = at::globalContext().ARCGlobal.getNewOid();
+      if (at::globalContext().ARCGlobal.isDebugMode()) {
+        std::cout << "OPERATION CONTIGUOUS, OPID: " << oid << std::endl;
+      }
   }
-
 
   // avoids touching the GIL or current device if self is already contiguous
   if (self_.is_contiguous(memory_format)) {
@@ -214,26 +214,30 @@ static PyObject * THPVariable_contiguous(PyObject* self, PyObject* args, PyObjec
     return self;
   }
   Tensor input = self_;
-  if (at::globalContext().ARCGlobal.isDebugMode()) {
-    std::cout << "INPUT TENSOR ID: " << at::globalContext().ARCGlobal.getTid(input) << std::endl;
-  }
   
-  if (at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
-    ARCPyEngine::fetch(input);
-
+  if ( at::globalContext().ARCGlobal.isBERT() ) { 
+      if (at::globalContext().ARCGlobal.isDebugMode()) {
+        std::cout << "INPUT TENSOR ID: " << at::globalContext().ARCGlobal.getTid(input) << std::endl;
+      }
+      
+      if (at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
+        ARCPyEngine::fetch(input);
+  }
 
   Tensor output;
   output = dispatch_contiguous(input, memory_format);
+  
   at::globalContext().ARCGlobal.setNewTid(output);
 
-  if (at::globalContext().ARCGlobal.isDebugMode()) {
-    std::cout << "CONTIGUOUS OUTPUT TENSOR ID: " << at:: globalContext().ARCGlobal.getTid(output) << std::endl; 
-  }
+  if ( at::globalContext().ARCGlobal.isBERT() ) {
+      if (at::globalContext().ARCGlobal.isDebugMode()) {
+        std::cout << "CONTIGUOUS OUTPUT TENSOR ID: " << at:: globalContext().ARCGlobal.getTid(output) << std::endl; 
+      }
 
-  if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCPyEngine::offLoad(output);
+      if (at::globalContext().ARCGlobal.isOnDemand()) {
+        ARCPyEngine::offLoad(output);
+      }
   }
-
   return THPVariable_Wrap(output);
 
   END_HANDLE_TH_ERRORS
@@ -2176,41 +2180,48 @@ static PyObject * THPVariable_div(PyObject* self_, PyObject* args, PyObject* kwa
   ParsedArgs<2> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
-  auto oid = at::globalContext().ARCGlobal.getNewOid();
-  if (at::globalContext().ARCGlobal.isDebugMode()) {
-    std::cout << "OPERATION /, OPID: " << oid << std::endl;
-  }
 
+  if ( at::globalContext().ARCGlobal.isBERT() ) {
+      auto oid = at::globalContext().ARCGlobal.getNewOid();
+      if (at::globalContext().ARCGlobal.isDebugMode()) {
+        std::cout << "OPERATION /, OPID: " << oid << std::endl;
+      }
+  }
   Tensor s = self, t0 = r.tensor(0);
-  if (at::globalContext().ARCGlobal.isDebugMode()) {
-    std::cout << "/ INPUT TENSOR ID(s, t0): " << at::globalContext().ARCGlobal.getTid(s) \
-    << " " << at::globalContext().ARCGlobal.getTid(t0) << std::endl;
-  }
   
-  if (at::globalContext().ARCGlobal.isOnDemand()) {
-    if (s.device().type() == at::DeviceType::CPU) {
-      ARCPyEngine::fetch(s);
-    }
-    if (t0.device().type() == at::DeviceType::CPU) {
-      ARCPyEngine::fetch(t0);
-    }
-  }   
-
+  
+  
+  if ( at::globalContext().ARCGlobal.isBERT() ) { 
+      if (at::globalContext().ARCGlobal.isDebugMode()) {
+        std::cout << "/ INPUT TENSOR ID(s, t0): " << at::globalContext().ARCGlobal.getTid(s) \
+        << " " << at::globalContext().ARCGlobal.getTid(t0) << std::endl;
+      }
+      
+      if (at::globalContext().ARCGlobal.isOnDemand()) {
+        if (s.device().type() == at::DeviceType::CPU) {
+          ARCPyEngine::fetch(s);
+        }
+        if (t0.device().type() == at::DeviceType::CPU) {
+          ARCPyEngine::fetch(t0);
+        }
+      }   
+  }
   Tensor output;
   if (r.idx == 0) {
     output = dispatch_div(s, t0);
   }
 
-  at::globalContext().ARCGlobal.setNewTid(output);
+  if ( at::globalContext().ARCGlobal.isBERT() ) {
+      at::globalContext().ARCGlobal.setNewTid(output);
 
-  if (at::globalContext().ARCGlobal.isDebugMode()) {
-    std::cout << "/ OUTPUT TENSOR ID: " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
+      if (at::globalContext().ARCGlobal.isDebugMode()) {
+        std::cout << "/ OUTPUT TENSOR ID: " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
+      }
+
+      if (at::globalContext().ARCGlobal.isOnDemand()) {
+        ARCPyEngine::offLoad(output);
+      }
   }
-
-  if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCPyEngine::offLoad(output);
-  }
-
   return wrap(output);
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS

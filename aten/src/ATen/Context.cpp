@@ -113,12 +113,15 @@ REGISTER_LEGACY_TYPE_INIT(LegacyDeviceTypeInit);
 // Implemented by SNU-ARC Function/Data Structures///
 // //////////////////////////////////////////////////
 
-#define BP_NUM_PER_ITER 1
+#define BP_NUM_PER_ITER 3
 #define RESET_TID 0 // 4-4 = 0
 
 // network
-static bool cycle_gan = 0;
+static bool cycle_gan = 1;
+static bool bert = 0;
 
+bool Context::ARCGlobalContext::isCycleGAN() {return cycle_gan;}
+bool Context::ARCGlobalContext::isBERT() {return bert;}
 
 
 // Data structure definitions
@@ -127,7 +130,7 @@ static int global_tensor_id_ = 0;
 static int global_operation_id_ = 0;
 // flags  
 // on_demand_mode is required to construct back_path_
-static bool on_debug_mode_ = 1;
+static bool on_debug_mode_ = 0;
 static bool on_demand_mode_ = 1; // default 1. Set 0 after first iteration(Profiling Stage) 
 static bool on_forwarding_ = 1; // 1 in forwarding phase. 0 in backprop. phase
 // vector for prefetching

@@ -2974,23 +2974,26 @@ variable_list DivBackward0::apply(variable_list&& grads) {
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
   
-  if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+  if ( at::globalContext().ARCGlobal.isBERT() ) {
+      if (at::globalContext().ARCGlobal.isOnDemand()) {
+        ARCCppEngine::preFetch(this->getOid(), Sync);
+      }
+      ARCCppEngine::preFetchSync(this->getOid());
   }
-  ARCCppEngine::preFetchSync(this->getOid());
-
   auto self = self_.unpack();
   auto other = other_.unpack();
   if (should_compute_output({ other_ix })) {
     auto grad_result = -grad * self / (other * other);
     copy_range(grad_inputs, other_ix, grad_result);
-    ARCCppEngine::dropTensor(this->getOid(), &self_);
+    if ( at::globalContext().ARCGlobal.isBERT() )
+        ARCCppEngine::dropTensor(this->getOid(), &self_);
   }
   if (should_compute_output({ self_ix })) {
     auto grad_result = grad / other;
     copy_range(grad_inputs, self_ix, grad_result);
   }
-  ARCCppEngine::dropTensor(this->getOid(), &other_);
+  if ( at::globalContext().ARCGlobal.isBERT() )
+    ARCCppEngine::dropTensor(this->getOid(), &other_);
   return grad_inputs;
 }
 variable_list DivBackward1::apply(variable_list&& grads) {

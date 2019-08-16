@@ -107,6 +107,8 @@ class CAFFE2_API Context {
   void setDeterministicCuDNN(bool);
  
   struct ARCGlobalContext {
+    bool isCycleGAN();
+    bool isBERT();
     int curBackNum();
     c10::cuda::CUDAStream globalOffloadStream();
     c10::cuda::CUDAStream globalPrefetchStream(); 

@@ -3164,7 +3164,7 @@ Tensor VariableType::div(Tensor & self, Tensor & other) {
     grad_fn = std::shared_ptr<DivBackward0>(new DivBackward0(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self, other ));
     if (grad_fn->should_compute_output(1)) {
-      if (at::globalContext().ARCGlobal.isForward() && sfid != 0) {
+      if (at::globalContext().ARCGlobal.isForward() && sfid != 0 && at::globalContext().ARCGlobal.isBERT()) {
           ARCCppEngine::offLoad(self, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
           grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
       }
@@ -3172,7 +3172,7 @@ Tensor VariableType::div(Tensor & self, Tensor & other) {
         grad_fn->self_ = SavedVariable(self, false);
       }
     }
-    if (at::globalContext().ARCGlobal.isForward() && otid != 0) {
+    if (at::globalContext().ARCGlobal.isForward() && otid != 0 && at::globalContext().ARCGlobal.isBERT()) {
       ARCCppEngine::offLoad(other, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->other_), false);
       grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
     }

@@ -435,8 +435,16 @@ Oid ARCCppEngine::whoWillPrefetched_(Oid curOid) {
 }
 
 void ARCCppEngine::resetCppEngine() {
-  static int backward_num_in_one_iter = 1;
-  static int remaining_backward = 1;//backward_num_in_one_iter;
+  static int backward_num_CycleGAN = 3;
+  static int backward_num_BERT = 1;
+  static int remaining_backward = -1;//backward_num_in_one_iter;
+
+  if (remaining_backward == -1) {
+    if (at::globalContext().ARCGlobal.isCycleGAN())
+        remaining_backward = backward_num_CycleGAN;
+    if (at::globalContext().ARCGlobal.isBERT())
+        remaining_backward = backward_num_BERT;
+  }
   
   tensor_dict_.clear();
   tensor_sync_dict_.clear();
@@ -448,10 +456,10 @@ void ARCCppEngine::resetCppEngine() {
   if (remaining_backward == 0) {
     at::globalContext().ARCGlobal.resetGlobalTid();
     at::globalContext().ARCGlobal.resetGlobalOid();
-    explicitAllSync();
-        pf_grad_dict_.clear();
-    remaining_backward = backward_num_in_one_iter;
-  }
+    if (at::globalContext().ARCGlobal.isCycleGAN())
+        remaining_backward = backward_num_CycleGAN;
+    if (at::globalContext().ARCGlobal.isBERT())
+        remaining_backward = backward_num_BERT;  }
 }
 
 }} // namespace torch::autograd

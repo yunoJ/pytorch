@@ -8002,7 +8002,7 @@ Tensor VariableType::mul(Tensor & self, Tensor & other) {
     grad_fn = std::shared_ptr<MulBackward0>(new MulBackward0(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self, other ));
     if (grad_fn->should_compute_output(1)) {
-      if (at::globalContext().ARCGlobal.isForward()) {
+      if (at::globalContext().ARCGlobal.isForward() && at::globalContext().ARCGlobal.isBERT()) {
         if (sfid != 0) {
           ARCCppEngine::offLoad(self, oid, &(grad_fn->self_), false);
           grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
@@ -8015,7 +8015,7 @@ Tensor VariableType::mul(Tensor & self, Tensor & other) {
       }
     }
     if (grad_fn->should_compute_output(0)) {
-      if (at::globalContext().ARCGlobal.isForward()) {
+      if (at::globalContext().ARCGlobal.isForward() && at::globalContext().ARCGlobal.isBERT()) {
         if (ofid != 0) {
           ARCCppEngine::offLoad(other, oid, &(grad_fn->other_), false);
           grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
