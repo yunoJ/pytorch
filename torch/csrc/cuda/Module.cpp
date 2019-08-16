@@ -23,6 +23,8 @@
 #include <torch/csrc/autograd/generated/variable_factories.h>
 #include <torch/csrc/Generator.h>
 
+#include <ATen/native/cuda/arc_flag.h>
+
 using namespace torch;
 
 THCState *state;
@@ -382,6 +384,16 @@ PyObject * THCPModule_getCurrentBlasHandle_wrap(PyObject *self)
   END_HANDLE_TH_ERRORS
 }
 
+PyObject * THCPModule_Arcp2pSetting(PyObject *_unused, PyObject *arg)
+{
+  HANDLE_TH_ERRORS
+  THPUtils_assert(THPUtils_checkLong(arg), "invalid argument to Arcp2pSetting");
+  int flags = (int) THPUtils_unpackLong(arg);
+  at::native::arc_vm.Arcp2pSetting(flags);
+  END_HANDLE_TH_ERRORS
+  Py_RETURN_NONE;
+}
+
 static struct PyMethodDef _THCPModule_methods[] = {
   {"_cuda_init",        (PyCFunction)THCPModule_initExtension,    METH_NOARGS,  nullptr},
   {"_cuda_setDevice",   (PyCFunction)THCPModule_setDevice_wrap,   METH_O,       nullptr},
@@ -410,6 +422,7 @@ static struct PyMethodDef _THCPModule_methods[] = {
   {"_cuda_sleep", (PyCFunction)THCPModule_cudaSleep, METH_O, nullptr},
   {"_cuda_lock_mutex",   (PyCFunction)THCPModule_cudaLockMutex,   METH_NOARGS,  nullptr},
   {"_cuda_unlock_mutex", (PyCFunction)THCPModule_cudaUnlockMutex, METH_NOARGS,  nullptr},
+  {"_cuda_arc_setting", (PyCFunction)THCPModule_Arcp2pSetting, METH_O, nullptr},
 #ifdef USE_NCCL
   {"_nccl_version", (PyCFunction)THCPModule_nccl_version, METH_NOARGS, nullptr},
   {"_nccl_unique_id", (PyCFunction)THCPModule_nccl_unique_id, METH_NOARGS, nullptr},
