@@ -436,7 +436,7 @@ struct TORCH_API VariableType final {
   static Tensor & digamma_(Tensor & self) ;
   static Tensor & digamma_out(Tensor & out, const Tensor & self) ;
   static Tensor dist(const Tensor & self, const Tensor & other, Scalar p) ;
-  static Tensor div(const Tensor & self, const Tensor & other) ;
+  static Tensor div(Tensor & self, Tensor & other) ;
   static Tensor div(const Tensor & self, Scalar other) ;
   static Tensor & div_(Tensor & self, const Tensor & other) ;
   static Tensor & div_(Tensor & self, Scalar other) ;

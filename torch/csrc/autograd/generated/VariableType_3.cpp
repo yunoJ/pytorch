@@ -3152,24 +3152,32 @@ Tensor VariableType::diagflat(const Tensor & self, int64_t offset) {
   }
   return result;
 }
-Tensor VariableType::div(const Tensor & self, const Tensor & other) {
+Tensor VariableType::div(Tensor & self, Tensor & other) {
   RECORD_FUNCTION("div", std::vector<c10::IValue>({self, other}), Node::peek_at_next_sequence_nr());
   auto& self_ = unpack(self, "self", 0);
   auto& other_ = unpack(other, "other", 1);
   std::shared_ptr<DivBackward0> grad_fn;
+  int sfid = at::globalContext().ARCGlobal.getTid(self);
+  int otid = at::globalContext().ARCGlobal.getTid(other);
+  
   if (compute_requires_grad( self, other )) {
     grad_fn = std::shared_ptr<DivBackward0>(new DivBackward0(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self, other ));
     if (grad_fn->should_compute_output(1)) {
-      if (at::globalContext().ARCGlobal.isForward()) {
-        ARCCppEngine::offLoad(self, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
-        grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+      if (at::globalContext().ARCGlobal.isForward() && sfid != 0) {
+          ARCCppEngine::offLoad(self, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
+          grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
       }
       else {
         grad_fn->self_ = SavedVariable(self, false);
       }
     }
-    grad_fn->other_ = SavedVariable(other, false);
+    if (at::globalContext().ARCGlobal.isForward() && otid != 0) {
+      ARCCppEngine::offLoad(self, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->other_), false);
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else
+      grad_fn->other_ = SavedVariable(other, false);
   }
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
@@ -11056,7 +11064,7 @@ static auto& registerer = globalATenDispatch()
   .registerVariableOp<Tensor (IntArrayRef, const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, int64_t, bool, bool)>("aten::cudnn_convolution_backward_input(int[] self_size, Tensor grad_output, Tensor weight, int[] padding, int[] stride, int[] dilation, int groups, bool benchmark, bool deterministic) -> Tensor", &VariableType::cudnn_convolution_backward_input)
   .registerVariableOp<Tensor (const Tensor &, const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, IntArrayRef, int64_t, bool, bool)>("aten::cudnn_convolution_transpose(Tensor self, Tensor weight, Tensor? bias, int[] padding, int[] output_padding, int[] stride, int[] dilation, int groups, bool benchmark, bool deterministic) -> Tensor", &VariableType::cudnn_convolution_transpose)
   .registerVariableOp<Tensor (const Tensor &, int64_t)>("aten::diagflat(Tensor self, int offset=0) -> Tensor", &VariableType::diagflat)
-  .registerVariableOp<Tensor (const Tensor &, const Tensor &)>("aten::div(Tensor self, Tensor other) -> Tensor", &VariableType::div)
+  .registerVariableOp<Tensor (Tensor &, Tensor &)>("aten::div(Tensor self, Tensor other) -> Tensor", &VariableType::div)
   .registerVariableOp<Tensor (const Tensor &, Scalar)>("aten::div(Tensor self, Scalar other) -> Tensor", &VariableType::div)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &)>("aten::div_(Tensor(a!) self, Tensor other) -> Tensor(a!)", &VariableType::div_)
   .registerVariableOp<Tensor & (Tensor &, Scalar)>("aten::div_(Tensor(a!) self, Scalar other) -> Tensor(a!)", &VariableType::div_)

@@ -4113,8 +4113,9 @@ static PyObject * THPVariable_dropout(PyObject* self_, PyObject* args, PyObject*
   if (r.idx == 0) {
     output = dispatch_dropout(input, r.toDouble(1), r.toBool(2));
   }
-  
-  at::globalContext().ARCGlobal.setNewTid(output);
+ 
+  if (at::globalContext().ARCGlobal.getTid(output) == 0) 
+    at::globalContext().ARCGlobal.setNewTid(output);
 
   auto otid = at::globalContext().ARCGlobal.getTid(output);
   if (at::globalContext().ARCGlobal.isDebugMode()) {

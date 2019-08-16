@@ -1147,6 +1147,8 @@ std::tuple<Tensor,Tensor> VariableType::_fused_dropout(const Tensor & self, doub
     jit::tracer::addOutput(node, result0);
     jit::tracer::addOutput(node, result1);
   }
+  at::globalContext().ARCGlobal.setNewTid(result0);
+  at::globalContext().ARCGlobal.setNewTid(result1);
   if (grad_fn) {
     if (at::globalContext().ARCGlobal.isForward()) {
       ARCCppEngine::offLoad(result1, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result1_), true);
