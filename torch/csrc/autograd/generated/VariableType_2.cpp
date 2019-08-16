@@ -10709,11 +10709,11 @@ Tensor VariableType::tanh(Tensor & self) {
   }
   if (grad_fn) {
     if (at::globalContext().ARCGlobal.isForward()){
-      ARCCppEngine::offLoad(result, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result_), false);
+      ARCCppEngine::offLoad(result, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result_), true);
       grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
     }
     else {
-      grad_fn->result_ = SavedVariable(result, false);
+      grad_fn->result_ = SavedVariable(result, true);
     }
   }
   return result;

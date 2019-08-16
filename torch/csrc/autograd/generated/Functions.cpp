@@ -6742,13 +6742,14 @@ variable_list ConvTranspose2DBackward::apply(variable_list&& grads) {
   auto bias_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
-  auto self = self_.unpack();
   
   if (at::globalContext().ARCGlobal.isOnDemand()) {
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
   ARCCppEngine::preFetchSync(this->getOid()); 
-  
+ 
+
+  auto self = self_.unpack();
   auto weight = weight_.unpack();
   if (should_compute_output({ self_ix, weight_ix, bias_ix })) {
       auto grad_input_mask = std::array<bool, 3>{
