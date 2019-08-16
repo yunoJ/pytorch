@@ -1148,6 +1148,10 @@ std::tuple<Tensor,Tensor> VariableType::_fused_dropout(const Tensor & self, doub
     jit::tracer::addOutput(node, result1);
   }
   if (grad_fn) {
+    if (at::globalContext().ARCGlobal.isForward()) {
+      ARCCppEngine::offLoad(result1, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result1_), true);
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
     grad_fn->result1_ = SavedVariable(result1, true);
   }
   return std::make_tuple(std::move(result0), std::move(result1));

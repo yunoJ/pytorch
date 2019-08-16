@@ -189,7 +189,8 @@ void ARCCppEngine::startOffloadThread() {
 
 void ARCCppEngine::joinOffloadThread() {    
     offload_thread_run = 0;
-    offload_thread_.join();
+    if (offload_thread_.joinable())
+      offload_thread_.join();
 }
 
 void ARCCppEngine::default_offload_() {
@@ -272,7 +273,8 @@ void ARCCppEngine::default_prefetch_() {
 }
 
 void ARCCppEngine::joinPrefetchThread() {
-  prefetch_thread_.join();
+  if (prefetch_thread_.joinable())
+    prefetch_thread_.join();
 }
 
 

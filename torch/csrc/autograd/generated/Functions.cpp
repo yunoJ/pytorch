@@ -2253,12 +2253,12 @@ variable_list AddBackward1::apply(variable_list&& grads) {
   auto self_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
-  
+  /*
   if (at::globalContext().ARCGlobal.isOnDemand()) {
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
   ARCCppEngine::preFetchSync(this->getOid());
-  
+  */
   if (should_compute_output({ self_ix })) {
     auto grad_result = grad;
     copy_range(grad_inputs, self_ix, grad_result);
@@ -2984,11 +2984,13 @@ variable_list DivBackward0::apply(variable_list&& grads) {
   if (should_compute_output({ other_ix })) {
     auto grad_result = -grad * self / (other * other);
     copy_range(grad_inputs, other_ix, grad_result);
+    ARCCppEngine::dropTensor(this->getOid(), &self_);
   }
   if (should_compute_output({ self_ix })) {
     auto grad_result = grad / other;
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  ARCCppEngine::dropTensor(this->getOid(), &other_);
   return grad_inputs;
 }
 variable_list DivBackward1::apply(variable_list&& grads) {
@@ -3028,11 +3030,18 @@ variable_list FusedDropoutBackward::apply(variable_list&& grads) {
   auto self_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
+  
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCCppEngine::preFetch(this->getOid(), Sync);
+  }
+  ARCCppEngine::preFetchSync(this->getOid());
+
   auto result1 = result1_.unpack(shared_from_this());
   if (should_compute_output({ self_ix })) {
     auto grad_result = _fused_dropout_backward(grad, result1, p);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  ARCCppEngine::dropTensor(this->getOid(), &result1_);
   return grad_inputs;
 }
 variable_list EigBackward::apply(variable_list&& grads) {
@@ -3090,6 +3099,7 @@ variable_list ErfBackward::apply(variable_list&& grads) {
     auto grad_result = 2.0 / sqrt(M_PI) * exp(-(self.pow(2))) * grad;
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  ARCCppEngine::dropTensor(this->getOid(), &self_);
   return grad_inputs;
 }
 variable_list ErfcBackward::apply(variable_list&& grads) {
@@ -4059,6 +4069,12 @@ variable_list MmBackward::apply(variable_list&& grads) {
   auto mat2_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
+   
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCCppEngine::preFetch(this->getOid(), Sync);
+  }
+  ARCCppEngine::preFetchSync(this->getOid());
+
   auto self = self_.unpack();
   auto mat2 = mat2_.unpack();
   if (should_compute_output({ mat2_ix })) {
@@ -4068,7 +4084,10 @@ variable_list MmBackward::apply(variable_list&& grads) {
   if (should_compute_output({ self_ix })) {
     auto grad_result = mm_mat1_backward(grad, mat2, self, 1);
     copy_range(grad_inputs, self_ix, grad_result);
+  
   }
+  ARCCppEngine::dropTensor(this->getOid(), &self_);
+  ARCCppEngine::dropTensor(this->getOid(), &mat2_);
   return grad_inputs;
 }
 variable_list ModeBackward::apply(variable_list&& grads) {
@@ -6875,6 +6894,7 @@ variable_list ThnnConv2DBackward::apply(variable_list&& grads) {
         copy_range(grad_inputs, bias_ix, std::get<2>(grad_result));
       }
   }
+  ARCCppEngine::dropTensor(this->getOid(), &self_);
   return grad_inputs;
 }
 variable_list ThnnConv2DBackwardBackward::apply(variable_list&& grads) {

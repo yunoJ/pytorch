@@ -6716,17 +6716,39 @@ std::tuple<Tensor,Tensor,Tensor,std::vector<Tensor>> VariableType::miopen_rnn_ba
   }
   return std::make_tuple(std::move(result0), std::move(result1), std::move(result2), std::move(result3));
 }
-Tensor VariableType::mm(const Tensor & self, const Tensor & mat2) {
+Tensor VariableType::mm(Tensor & self, Tensor & mat2) {
   RECORD_FUNCTION("mm", std::vector<c10::IValue>({self, mat2}), Node::peek_at_next_sequence_nr());
   auto& self_ = unpack(self, "self", 0);
   auto& mat2_ = unpack(mat2, "mat2", 1);
   std::shared_ptr<MmBackward> grad_fn;
+  int oid = at::globalContext().ARCGlobal.getCurOid();
+  int sfid = at::globalContext().ARCGlobal.getTid(self);
+  int m2id = at::globalContext().ARCGlobal.getTid(mat2);
   if (compute_requires_grad( self, mat2 )) {
     grad_fn = std::shared_ptr<MmBackward>(new MmBackward(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self, mat2 ));
-    grad_fn->self_ = SavedVariable(self, false);
-    grad_fn->mat2_sizes = mat2.sizes().vec();
-    grad_fn->mat2_ = SavedVariable(mat2, false);
+    if (at::globalContext().ARCGlobal.isForward()) {
+      if (sfid != 0) {
+        ARCCppEngine::offLoad(self, oid, &(grad_fn->self_), false);
+        grad_fn->setOid(oid);
+      }
+      else
+        grad_fn->self_ = SavedVariable(self, false);
+      if (m2id != 0) {
+        grad_fn->mat2_sizes = mat2.sizes().vec();
+        ARCCppEngine::offLoad(mat2, oid, &(grad_fn->mat2_), false);
+        grad_fn->setOid(oid);
+      }
+      else {
+        grad_fn->mat2_sizes = mat2.sizes().vec();
+        grad_fn->mat2_ = SavedVariable(mat2, false);
+      }
+    }
+    else {
+      grad_fn->self_ = SavedVariable(self, false);
+      grad_fn->mat2_sizes = mat2.sizes().vec();
+      grad_fn->mat2_ = SavedVariable(mat2, false);
+    }
   }
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
@@ -9328,6 +9350,10 @@ Tensor VariableType::sqrt(const Tensor & self) {
     jit::tracer::addOutput(node, result);
   }
   if (grad_fn) {
+    if (at::globalContext().ARCGlobal.isForward()) {
+      ARCCppEngine::offLoad(self, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result_), true);
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
     grad_fn->result_ = SavedVariable(result, true);
   }
   return result;
@@ -11094,7 +11120,7 @@ static auto& registerer = globalATenDispatch()
   .registerVariableOp<std::tuple<Tensor,Tensor,Tensor> (const Tensor &, const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, int64_t, bool, bool, std::array<bool,3>)>("aten::miopen_depthwise_convolution_backward(Tensor self, Tensor grad_output, Tensor weight, int[] padding, int[] stride, int[] dilation, int groups, bool benchmark, bool deterministic, bool[3] output_mask) -> (Tensor, Tensor, Tensor)", &VariableType::miopen_depthwise_convolution_backward)
   .registerVariableOp<Tensor (IntArrayRef, const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, int64_t, bool, bool)>("aten::miopen_depthwise_convolution_backward_input(int[] self_size, Tensor grad_output, Tensor weight, int[] padding, int[] stride, int[] dilation, int groups, bool benchmark, bool deterministic) -> Tensor", &VariableType::miopen_depthwise_convolution_backward_input)
   .registerVariableOp<std::tuple<Tensor,Tensor,Tensor,std::vector<Tensor>> (const Tensor &, TensorList, int64_t, const Tensor &, const Tensor &, const Tensor &, const Tensor &, const Tensor &, const Tensor &, const Tensor &, int64_t, int64_t, int64_t, bool, double, bool, bool, IntArrayRef, const Tensor &, const Tensor &, std::array<bool,4>)>("aten::miopen_rnn_backward(Tensor input, Tensor[] weight, int weight_stride0, Tensor weight_buf, Tensor hx, Tensor? cx, Tensor output, Tensor? grad_output, Tensor? grad_hy, Tensor? grad_cy, int mode, int hidden_size, int num_layers, bool batch_first, float dropout, bool train, bool bidirectional, int[] batch_sizes, Tensor? dropout_state, Tensor reserve, bool[4] output_mask) -> (Tensor, Tensor, Tensor, Tensor[])", &VariableType::miopen_rnn_backward)
-  .registerVariableOp<Tensor (const Tensor &, const Tensor &)>("aten::mm(Tensor self, Tensor mat2) -> Tensor", &VariableType::mm)
+  .registerVariableOp<Tensor (Tensor &, Tensor &)>("aten::mm(Tensor self, Tensor mat2) -> Tensor", &VariableType::mm)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, const Tensor &, int64_t)>("aten::mse_loss(Tensor self, Tensor target, int reduction=Mean, *, Tensor(a!) out) -> Tensor(a!)", &VariableType::mse_loss_out)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, const Tensor &)>("aten::mul(Tensor self, Tensor other, *, Tensor(a!) out) -> Tensor(a!)", &VariableType::mul_out)
   .registerVariableOp<Tensor (const Tensor &, const Tensor &, const Tensor &, Scalar, Scalar, const Tensor &, int64_t)>("aten::multi_margin_loss_backward(Tensor grad_output, Tensor self, Tensor target, Scalar p, Scalar margin, Tensor? weight=None, int reduction=Mean) -> Tensor", &VariableType::multi_margin_loss_backward)

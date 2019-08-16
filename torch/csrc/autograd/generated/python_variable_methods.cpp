@@ -3788,9 +3788,51 @@ static PyObject * THPVariable_mm(PyObject* self_, PyObject* args, PyObject* kwar
   ParsedArgs<2> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
-  if (r.idx == 0) {
-    return wrap(dispatch_mm(self, r.tensor(0)));
+  auto oid = at::globalContext().ARCGlobal.getNewOid();
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION MM, OPID: " <<  oid << std::endl;
   }
+
+  Tensor s = self, t0 = r.tensor(0);
+ 
+  int sid = at::globalContext().ARCGlobal.getTid(s), t0id = at::globalContext().ARCGlobal.getTid(t0);
+
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "MM INPUT TENSOR ID (self, r.tensor): " << sid << " " << t0id << std::endl;
+  }
+  
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    if (self.device().type() == at::DeviceType::CPU) {
+      ARCPyEngine::fetch(s);
+    }
+    if (r.tensor(0).device().type() == at::DeviceType::CPU) {
+      ARCPyEngine::fetch(t0);
+    }
+  }
+
+  Tensor output;
+  if (r.idx == 0) {
+    if (sid != 0  && t0id != 0 )
+      output = dispatch_mul(s, t0);
+    else if (sid != 0 && t0id == 0)
+      output = dispatch_mul(s, r.tensor(0));
+    else if (sid == 0 && t0id != 0)
+      output = dispatch_mul(self, t0);
+    else
+      output = dispatch_mul(self, r.tensor(0));
+  }
+
+  at::globalContext().ARCGlobal.setNewTid(output);
+
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "* OUTPUT TENSOR ID : " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
+  }
+
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCPyEngine::offLoad(output);
+  }
+
+  return wrap(output);
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }

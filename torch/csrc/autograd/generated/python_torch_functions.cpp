@@ -1197,9 +1197,27 @@ static PyObject * THPVariable__fused_dropout(PyObject* self_, PyObject* args, Py
   ParsedArgs<3> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
-  if (r.idx == 0) {
-    return wrap(dispatch__fused_dropout(r.tensor(0), r.toDouble(1), r.generator(2)));
+  auto oid = at::globalContext().ARCGlobal.getNewOid();
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION FUSED DROPOUT, OPID: ";
+    std::cout << oid << std::endl;
   }
+  Tensor input = r.tensor(0);
+  
+  std::tuple<Tensor, Tensor> output;
+  if (r.idx == 0) {
+    output = dispatch__fused_dropout(input, r.toDouble(1), r.generator(2));
+  }
+ 
+  at::globalContext().ARCGlobal.setNewTid(std::get<0>(output));
+  at::globalContext().ARCGlobal.setNewTid(std::get<1>(output));
+
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCPyEngine::offLoad(std::get<0>(output));
+    ARCPyEngine::offLoad(std::get<1>(output));
+  }
+  
+  return wrap(output);
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }

@@ -774,7 +774,7 @@ struct TORCH_API VariableType final {
   static Tensor mkldnn_linear(const Tensor & input, const Tensor & weight, const Tensor & bias) ;
   static Tensor mkldnn_max_pool2d(const Tensor & self, IntArrayRef kernel_size, IntArrayRef stride, IntArrayRef padding, IntArrayRef dilation, bool ceil_mode) ;
   static Tensor mkldnn_reorder_conv2d_weight(const Tensor & self, IntArrayRef padding, IntArrayRef stride, IntArrayRef dilation, int64_t groups) ;
-  static Tensor mm(const Tensor & self, const Tensor & mat2) ;
+  static Tensor mm(Tensor & self, Tensor & mat2) ;
   static Tensor & mm_out(Tensor & out, const Tensor & self, const Tensor & mat2) ;
   static std::tuple<Tensor,Tensor> mode(const Tensor & self, int64_t dim, bool keepdim) ;
   static std::tuple<Tensor &,Tensor &> mode_out(Tensor & values, Tensor & indices, const Tensor & self, int64_t dim, bool keepdim) ;
