@@ -11124,6 +11124,33 @@ Tensor VariableType::to(const Tensor & self, const TensorOptions & options, bool
   }
   return result;
 }
+Tensor VariableType::ARCto(const Tensor & self, const TensorOptions & options, bool non_blocking, bool copy, bool is_csr) {
+  RECORD_FUNCTION("ARCto", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
+  torch::jit::Node* node = nullptr;
+  std::shared_ptr<jit::tracer::TracingState> tracer_state;
+  if (jit::tracer::isTracing()) {
+    tracer_state = jit::tracer::getTracingState();
+    at::Symbol op_name;
+    op_name = jit::Symbol::fromQualString("aten::ARCto");
+    node = tracer_state->graph->create(op_name, /*num_outputs=*/0);
+    jit::tracer::recordSourceLocation(node);
+    jit::tracer::addInputs(node, "self", self);
+    jit::tracer::addInputs(node, "options", options);
+    jit::tracer::addInputs(node, "non_blocking", non_blocking);
+    jit::tracer::addInputs(node, "copy", copy);
+    jit::tracer::addInputs(node, "is_csr", is_csr);
+    tracer_state->graph->insertNode(node);
+  
+    jit::tracer::setTracingState(nullptr);
+  }
+  auto result = TypeDefault::ARCto(self, options, non_blocking, copy, is_csr);
+  if (tracer_state) {
+    jit::tracer::setTracingState(std::move(tracer_state));
+    jit::tracer::addOutput(node, result);
+  }
+  return result;
+}
+
 Tensor VariableType::to(const Tensor & self, Device device, ScalarType dtype, bool non_blocking, bool copy) {
   RECORD_FUNCTION("to", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
   torch::jit::Node* node = nullptr;
@@ -11150,6 +11177,33 @@ Tensor VariableType::to(const Tensor & self, Device device, ScalarType dtype, bo
   }
   return result;
 }
+Tensor VariableType::ARCto(const Tensor & self, Device device, ScalarType dtype, bool non_blocking, bool copy, bool is_csr) {
+        RECORD_FUNCTION("ARCto", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
+        torch::jit::Node* node = nullptr;
+        std::shared_ptr<jit::tracer::TracingState> tracer_state;
+        if (jit::tracer::isTracing()) {
+                tracer_state = jit::tracer::getTracingState();
+                at::Symbol op_name;
+                op_name = jit::Symbol::fromQualString("aten::ARCto");
+                node = tracer_state->graph->create(op_name, /*num_outputs=*/0);
+                jit::tracer::recordSourceLocation(node);
+                jit::tracer::addInputs(node, "self", self);
+                jit::tracer::addInputs(node, "device", device);
+                jit::tracer::addInputs(node, "dtype", dtype);
+                jit::tracer::addInputs(node, "non_blocking", non_blocking);
+                jit::tracer::addInputs(node, "copy", copy);
+                jit::tracer::addInputs(node, "is_csr", is_csr);
+                tracer_state->graph->insertNode(node);
+
+                jit::tracer::setTracingState(nullptr);
+        }
+        auto result = TypeDefault::ARCto(self, device, dtype, non_blocking, copy, is_csr);
+        if (tracer_state) {
+                jit::tracer::setTracingState(std::move(tracer_state));
+                jit::tracer::addOutput(node, result);
+        }
+        return result;
+}
 Tensor VariableType::to(const Tensor & self, ScalarType dtype, bool non_blocking, bool copy) {
   RECORD_FUNCTION("to", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
   torch::jit::Node* node = nullptr;
@@ -11175,6 +11229,32 @@ Tensor VariableType::to(const Tensor & self, ScalarType dtype, bool non_blocking
   }
   return result;
 }
+Tensor VariableType::ARCto(const Tensor & self, ScalarType dtype, bool non_blocking, bool copy, bool is_csr) {
+        RECORD_FUNCTION("ARCto", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
+        torch::jit::Node* node = nullptr;
+        std::shared_ptr<jit::tracer::TracingState> tracer_state;
+        if (jit::tracer::isTracing()) {
+                tracer_state = jit::tracer::getTracingState();
+                at::Symbol op_name;
+                op_name = jit::Symbol::fromQualString("aten::ARCto");
+                node = tracer_state->graph->create(op_name, /*num_outputs=*/0);
+                jit::tracer::recordSourceLocation(node);
+                jit::tracer::addInputs(node, "self", self);
+                jit::tracer::addInputs(node, "dtype", dtype);
+                jit::tracer::addInputs(node, "non_blocking", non_blocking);
+                jit::tracer::addInputs(node, "copy", copy);
+                jit::tracer::addInputs(node, "is_csr", is_csr);
+                tracer_state->graph->insertNode(node);
+
+                jit::tracer::setTracingState(nullptr);
+        }
+        auto result = TypeDefault::ARCto(self, dtype, non_blocking, copy, is_csr);
+        if (tracer_state) {
+                jit::tracer::setTracingState(std::move(tracer_state));
+                jit::tracer::addOutput(node, result);
+        }
+        return result;
+}
 Tensor VariableType::to(const Tensor & self, const Tensor & other, bool non_blocking, bool copy) {
   RECORD_FUNCTION("to", std::vector<c10::IValue>({self, other}), Node::peek_at_next_sequence_nr());
   torch::jit::Node* node = nullptr;
@@ -11199,6 +11279,32 @@ Tensor VariableType::to(const Tensor & self, const Tensor & other, bool non_bloc
     jit::tracer::addOutput(node, result);
   }
   return result;
+}
+Tensor VariableType::ARCto(const Tensor & self, const Tensor & other, bool non_blocking, bool copy, bool is_csr) {
+        RECORD_FUNCTION("ARCto", std::vector<c10::IValue>({self, other}), Node::peek_at_next_sequence_nr());
+        torch::jit::Node* node = nullptr;
+        std::shared_ptr<jit::tracer::TracingState> tracer_state;
+        if (jit::tracer::isTracing()) {
+                tracer_state = jit::tracer::getTracingState();
+                at::Symbol op_name;
+                op_name = jit::Symbol::fromQualString("aten::ARCto");
+                node = tracer_state->graph->create(op_name, /*num_outputs=*/0);
+                jit::tracer::recordSourceLocation(node);
+                jit::tracer::addInputs(node, "self", self);
+                jit::tracer::addInputs(node, "other", other);
+                jit::tracer::addInputs(node, "non_blocking", non_blocking);
+                jit::tracer::addInputs(node, "copy", copy);
+                jit::tracer::addInputs(node, "is_csr", is_csr);
+                tracer_state->graph->insertNode(node);
+
+                jit::tracer::setTracingState(nullptr);
+        }
+        auto result = TypeDefault::ARCto(self, other, non_blocking, copy, is_csr);
+        if (tracer_state) {
+                jit::tracer::setTracingState(std::move(tracer_state));
+                jit::tracer::addOutput(node, result);
+        }
+        return result;
 }
 Tensor VariableType::to_mkldnn_backward(const Tensor & grad, const Tensor & input) {
   RECORD_FUNCTION("to_mkldnn_backward", std::vector<c10::IValue>({grad, input}), Node::peek_at_next_sequence_nr());
@@ -12183,9 +12289,13 @@ static auto& registerer = globalATenDispatch()
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, const Tensor &, IntArrayRef, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef)>("aten::thnn_conv_depthwise2d_forward(Tensor self, Tensor weight, int[2] kernel_size, Tensor? bias, int[2] stride, int[2] padding, int[2] dilation, *, Tensor(a!) out) -> Tensor(a!)", &VariableType::thnn_conv_depthwise2d_forward_out)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, Scalar, Scalar)>("aten::threshold(Tensor self, Scalar threshold, Scalar value, *, Tensor(a!) out) -> Tensor(a!)", &VariableType::threshold_out)
   .registerVariableOp<Tensor (const Tensor &, const TensorOptions &, bool, bool)>("aten::to(Tensor self, *, ScalarType dtype, Layout layout, Device device, bool pin_memory=False, bool non_blocking=False, bool copy=False) -> Tensor", &VariableType::to)
+  .registerVariableOp<Tensor (const Tensor &, const TensorOptions &, bool, bool, bool)>("aten::ARCto(Tensor self, *, ScalarType dtype, Layout layout, Device device, bool pin_memory=False, bool non_blocking=False, bool copy=False, bool is_csr=False) -> Tensor", &VariableType::ARCto)
   .registerVariableOp<Tensor (const Tensor &, Device, ScalarType, bool, bool)>("aten::to(Tensor self, Device device, ScalarType dtype, bool non_blocking=False, bool copy=False) -> Tensor", &VariableType::to)
+  .registerVariableOp<Tensor (const Tensor &, Device, ScalarType, bool, bool, bool)>("aten::ARCto(Tensor self, Device device, ScalarType dtype, bool non_blocking=False, bool copy=False, bool is_csr=False) -> Tensor", &VariableType::ARCto)
   .registerVariableOp<Tensor (const Tensor &, ScalarType, bool, bool)>("aten::to(Tensor self, ScalarType dtype, bool non_blocking=False, bool copy=False) -> Tensor", &VariableType::to)
+  .registerVariableOp<Tensor (const Tensor &, ScalarType, bool, bool, bool)>("aten::ARCto(Tensor self, ScalarType dtype, bool non_blocking=False, bool copy=False, bool is_csr=False) -> Tensor", &VariableType::ARCto)
   .registerVariableOp<Tensor (const Tensor &, const Tensor &, bool, bool)>("aten::to(Tensor self, Tensor other, bool non_blocking=False, bool copy=False) -> Tensor", &VariableType::to)
+  .registerVariableOp<Tensor (const Tensor &, const Tensor &, bool, bool, bool)>("aten::ARCto(Tensor self, Tensor other, bool non_blocking=False, bool copy=False, bool is_csr=False) -> Tensor", &VariableType::ARCto)
   .registerVariableOp<Tensor (const Tensor &, const Tensor &)>("aten::to_mkldnn_backward(Tensor grad, Tensor input) -> Tensor", &VariableType::to_mkldnn_backward)
   .registerVariableOp<Tensor (const Tensor &)>("aten::trace(Tensor self) -> Tensor", &VariableType::trace)
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, int64_t)>("aten::tril(Tensor self, int diagonal=0, *, Tensor(a!) out) -> Tensor(a!)", &VariableType::tril_out)

@@ -191,10 +191,5 @@ std::vector<Oid> Context::ARCGlobalContext::getBackPath() {
   std::vector<Oid> copy(back_path_[cur_back_num]);
   return copy; 
 }; 
- 
-
-
-
-
 
 }

@@ -505,6 +505,10 @@
   variants: method
   device_guard: False
 
+- func: ARCcopy_(Tensor(a!) self, Tensor src, bool non_blocking=False, bool is_csr=False) -> Tensor(a!)
+  variants: method
+  device_guard: False
+
 - func: _copy_from(Tensor self, Tensor dst, bool non_blocking=False) -> Tensor
   dispatch: {}
 
@@ -2829,7 +2833,15 @@
   variants: method
   device_guard: False
 
+- func: ARCto(Tensor self, *, ScalarType dtype, Layout layout, Device device, bool pin_memory=False, bool non_blocking=False, bool copy=False, bool is_csr=False) -> Tensor
+  variants: method
+  device_guard: False
+
 - func: to(Tensor self, Device device, ScalarType dtype, bool non_blocking=False, bool copy=False) -> Tensor
+  variants: method
+  device_guard: False
+
+- func: ARCto(Tensor self, Device device, ScalarType dtype, bool non_blocking=False, bool copy=False, bool is_csr=False) -> Tensor
   variants: method
   device_guard: False
 
@@ -2837,7 +2849,15 @@
   variants: method
   device_guard: False
 
+- func: ARCto(Tensor self, ScalarType dtype, bool non_blocking=False, bool copy=False, bool is_csr=False) -> Tensor
+  variants: method
+  device_guard: False
+
 - func: to(Tensor self, Tensor other, bool non_blocking=False, bool copy=False) -> Tensor
+  variants: method
+  device_guard: False
+
+- func: ARCto(Tensor self, Tensor other, bool non_blocking=False, bool copy=False, bool is_csr=False) -> Tensor
   variants: method
   device_guard: False
 

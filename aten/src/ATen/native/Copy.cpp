@@ -149,12 +149,73 @@ Tensor & copy_(Tensor & self, const Tensor & src, bool non_blocking) {
   return self;
 }
 
-void ARC_copy_(Tensor & self, const Tensor & src, bool non_blocking) { 
-  arc_copy_stub(c10::DeviceType::CUDA, (void*)0, (void*)0); 
+Tensor & ARCcopy_(Tensor & self, const Tensor & src, bool non_blocking, bool is_csr) {
+  // TODO: this should be handled during dispatch, but that's missing...
+  TORCH_CHECK(self.defined(), "self is undefined");
+  TORCH_CHECK(src.defined(), "src is undefined");
+
+  if (self.is_sparse() && src.is_sparse()) {
+    return at::copy_sparse_to_sparse_(self, src, non_blocking);
+  } else if (self.is_sparse() || src.is_sparse()) {
+    AT_ERROR("ARCcopy_() between dense and sparse Tensors is not implemented! Found self type = ",
+        self.type(), " and src type = ", src.type());
+  }
+
+  if (self.is_same(src)) {
+    return self;
+  }
+
+  // Re-dispatch copies when src device not implemented here (e.g. XLA).
+  // This includes: cpu_tensor.copy_(xla_tensor) which
+  // calls xla_tensor._copy_from(cpu_tensor)
+  if (!is_supported_device(src.device())) {
+    TORCH_INTERNAL_ASSERT(is_supported_device(self.device()));
+    at::_copy_from(src, self, non_blocking);
+    return self;
+  }
+
+  if (self.is_quantized() && !src.is_quantized()) {
+    return quantized_copy_from_float_(self, src);
+  }
+
+  if (self.is_quantized() && src.is_quantized()) {
+    TORCH_CHECK(self.qscheme() == src.qscheme(),
+        "Quantized Copy only works with same qscheme");
+    TORCH_CHECK(self.scalar_type() == src.scalar_type());
+    self.set_quantizer_(at::make_per_tensor_affine_quantizer(src.q_scale(), src.q_zero_point(), src.scalar_type()));
+  }
+
+  // by sam ARC-SNU
+  // tid copy in to
+  self.unsafeGetIntrusivePtr()->tensor_id = src.getIntrusivePtr()->tensor_id;
+
+  auto builder = TensorIterator::Builder();
+  builder.add_output(self);
+  builder.add_input(src);
+  builder.dont_resize_outputs();
+  builder.dont_compute_common_dtype();
+  auto iter = builder.build();
+
+  if (iter.numel() == 0) {
+    return self;
+  }
+
+  DeviceType device_type = iter.device_type(0);
+  if (iter.device_type(1) == kCUDA) {
+    device_type = kCUDA;
+  }
+
+  if (device_type == kCPU && copy_transpose_valid(self, src)) {
+    copy_same_type_transpose_(self, src);
+    return self;
+  }
+
+  ARC_copy_stub(device_type, iter, non_blocking, self.unsafeGetIntrusivePtr()->tensor_id, is_csr);
+  return self;
 }
 
 DEFINE_DISPATCH(copy_stub);
-DEFINE_DISPATCH(arc_copy_stub);
+DEFINE_DISPATCH(ARC_copy_stub);
 
 } // namespace native
 } // namespace at

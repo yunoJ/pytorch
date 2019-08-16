@@ -73,6 +73,11 @@ enum ARCSync {Sync, Async};
 // support async prefetching, offloading operation 
 struct ARCCppEngine{
 public:
+  // Select tensors for efficient movement
+  static double checkCSR(double freeSize); // First priority
+  static double checkLarge(double remainSize); // Second priority
+  static double checkFirst(double remainSize); // Third priority
+
   // basic fetch/offload operation
   static void offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync sync,*/ Oid curOid, SavedVariable* fetch_loc, bool isOutput);
   static void explicitAllSync();

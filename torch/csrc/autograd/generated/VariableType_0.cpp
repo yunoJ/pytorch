@@ -2,6 +2,8 @@
 
 #include <ATen/TypeDefault.h>
 
+#include <ATen/native/cuda/arc_flag.h>
+
 // @generated from tools/autograd/templates/VariableType.cpp
 
 // NOTE [Sharded File]: on this file's split-into-shards state
@@ -9762,6 +9764,9 @@ Tensor & VariableType::relu_(Tensor & self) {
   if (grad_fn) {
     if (at::globalContext().ARCGlobal.isForward()){
       ARCCppEngine::offLoad(self, /* (TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result_), true);
+
+      // ARC check flag if relu is computed
+      at::native::arc_vm.relu_thru = true;
     }
     else
       grad_fn->result_ = SavedVariable(self, true);

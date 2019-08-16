@@ -53,14 +53,39 @@ static void copy_kernel(TensorIterator& iter, bool non_blocking) {
     });
   }
 }
-static void ARC_copy_cpu(void* src, void* dst) {
-  std::cout << "hello cpu" <<std::endl;
-}
 
+static void ARC_copy_kernel(TensorIterator& iter, bool non_blocking, int tid, bool is_csr) {
+  ScalarType dtype = iter.dtype(0);
+  if (dtype == iter.dtype(1)) {
+    if (dtype == ScalarType::Half) {
+      cpu_kernel(iter, [=](at::Half a) -> at::Half { return a; });
+    } else if (dtype == ScalarType::BFloat16) {
+      cpu_kernel(iter, [=](at::BFloat16 a) -> at::BFloat16 { return a; });
+    } else if (isQIntType(dtype)) {
+      AT_DISPATCH_QINT_TYPES(dtype, "copy_kernel", [&] {
+        cpu_kernel(
+            iter,
+            [=](scalar_t a) -> scalar_t {return a; });
+      });
+    } else {
+      AT_DISPATCH_ALL_TYPES_AND(
+          ScalarType::Bool, dtype, "copy_kernel", [&] {
+            cpu_kernel_vec(
+                iter,
+                [=](scalar_t a) -> scalar_t { return a; },
+                [=](Vec256<scalar_t> a) { return a; });
+          });
+    }
+  } else {
+    AT_DISPATCH_ALL_TYPES_AND3(ScalarType::Half, ScalarType::Bool, ScalarType::BFloat16, dtype, "copy_", [&] {
+      copy_kernel_cast<scalar_t>(iter);
+    });
+  }
+}
 
 } // anonymous namespace
 
 REGISTER_DISPATCH(copy_stub, &copy_kernel);
-REGISTER_DISPATCH(arc_copy_stub, &ARC_copy_cpu);
+REGISTER_DISPATCH(ARC_copy_stub, &ARC_copy_kernel);
 } // namespace native
 } // namespace at

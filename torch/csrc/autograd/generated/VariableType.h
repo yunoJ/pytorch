@@ -388,6 +388,7 @@ struct TORCH_API VariableType final {
   static Tensor & conv_transpose3d_out(Tensor & out, const Tensor & self, const Tensor & weight, IntArrayRef kernel_size, const Tensor & bias, IntArrayRef stride, IntArrayRef padding, IntArrayRef output_padding, IntArrayRef dilation) ;
   static Tensor convolution(const Tensor & input, const Tensor & weight, const Tensor & bias, IntArrayRef stride, IntArrayRef padding, IntArrayRef dilation, bool transposed, IntArrayRef output_padding, int64_t groups) ;
   static Tensor & copy_(Tensor & self, const Tensor & src, bool non_blocking) ;
+  static Tensor & ARCcopy_(Tensor & self, const Tensor & src, bool non_blocking, bool is_csr) ;
   static Tensor & copy_sparse_to_sparse_(Tensor & self, const Tensor & src, bool non_blocking) ;
   static Tensor cos(const Tensor & self) ;
   static Tensor & cos_(Tensor & self) ;
@@ -1143,6 +1144,10 @@ struct TORCH_API VariableType final {
   static Tensor to(const Tensor & self, Device device, ScalarType dtype, bool non_blocking, bool copy) ;
   static Tensor to(const Tensor & self, ScalarType dtype, bool non_blocking, bool copy) ;
   static Tensor to(const Tensor & self, const Tensor & other, bool non_blocking, bool copy) ;
+  static Tensor ARCto(const Tensor & self, const TensorOptions & options, bool non_blocking, bool copy, bool is_csr) ;
+  static Tensor ARCto(const Tensor & self, Device device, ScalarType dtype, bool non_blocking, bool copy, bool is_csr) ;
+  static Tensor ARCto(const Tensor & self, ScalarType dtype, bool non_blocking, bool copy, bool is_csr) ;
+  static Tensor ARCto(const Tensor & self, const Tensor & other, bool non_blocking, bool copy, bool is_csr) ;
   static Tensor to_dense(const Tensor & self) ;
   static Tensor to_dense_backward(const Tensor & grad, const Tensor & input) ;
   static Tensor to_mkldnn(const Tensor & self) ;

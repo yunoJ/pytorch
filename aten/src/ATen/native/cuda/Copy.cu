@@ -9,10 +9,115 @@
 #include <ATen/native/cuda/Loops.cuh>
 #include <THC/THC.h>
 
+#include <cuda_fp16.h>
+#include <thrust/device_ptr.h>
+#include <thrust/copy.h>
+
+#include <ATen/native/cuda/arc_flag.h>
+#include <c10/cuda/CUDACachingAllocator.h>
+
+#define nTPB 512
+#define per_threads 256
+#define nthreads 256
+#define nblocks 256
+
+#define find(n) (32 * (unsigned int)(n / 1024) + (n % 32))
+#define mask(n) (0x80000000 >> (unsigned int)((n % 1024) / 32))
+
 namespace at {
 namespace native {
 
 using namespace at::cuda;
+
+void* ARCfp16_ptr = NULL;
+
+__global__ void half_scale(float *din, __half *dout, int dsize) {
+        int idx = threadIdx.x + blockDim.x * blockIdx.x;
+        if (idx < dsize)  dout[idx] = __float2half(din[idx]);
+}
+
+__global__ void float_scale(__half *din, float *dout, int dsize) {
+        int idx = threadIdx.x + blockDim.x * blockIdx.x;
+        if (idx < dsize)  dout[idx] = __half2float(din[idx]);
+}
+
+__global__ void zero_mask(float *din, unsigned int *bit, unsigned int *pos, int dsize) {
+        int idx = threadIdx.x + blockDim.x * blockIdx.x;
+        if (idx < dsize) {
+                if (din[idx] != 0.0f) {
+                        atomicAdd(&bit[find(idx)], mask(idx));
+                        atomicAdd(&pos[(unsigned int)(idx / 32)], 1);
+                }
+        }
+}
+
+__global__ void pos_first(unsigned int* pos, int asize) {
+        int total_idx = nblocks * nthreads;
+
+        for (int j = 0; j < (asize / per_threads / total_idx + 1); j++) {
+                int global_idx = threadIdx.x + blockIdx.x * blockDim.x;
+
+                if ((global_idx + 1) * per_threads - 1 <= asize) {
+                        for (int i = 0; i < per_threads; i++) {
+                                int idx = global_idx * per_threads + i;
+                                if (idx % per_threads != 0) {
+                                        pos[idx] += pos[idx - 1];
+                                }
+                        }
+                }
+        }
+}
+
+__global__ void pos_second(unsigned int* pos, unsigned int* opos, int asize) {
+        int total_idx = nblocks * nthreads;
+
+        for (int j = 0; j < (asize / per_threads / total_idx + 1); j++) {
+                int global_idx = threadIdx.x + blockIdx.x * blockDim.x;
+
+                if ((global_idx + 1) * per_threads - 1 <= asize) {
+                        unsigned int temp = 0;
+
+                        for (int i = 0; i < global_idx; i++) {
+                                int idx = (i + 1) * per_threads - 1;
+                                temp += pos[idx];
+                        }
+
+                        for (int i = 0; i < per_threads; i++) {
+                                int idx = (global_idx) * per_threads + i;
+                                opos[idx] = pos[idx] + temp;
+                        }
+                }
+        }
+}
+
+__global__ void zero_insert(unsigned int *bit, unsigned int *nz_pos, float* din, float *dout, int dsize) {
+        int idx = threadIdx.x + blockDim.x * blockIdx.x;
+        if (idx < dsize) {
+                int count = -1;
+                if ((unsigned int)(bit[find(idx)] & mask(idx)) > 0) {
+                        for (int i = (int)(idx / 32) * 32; i < idx + 1; i++) {
+                                unsigned int mask = bit[find(i)] & mask(i);
+                                if (mask > 0)  count += 1;
+                        }
+                }
+
+                if (count == -1)  dout[idx] = 0.0f;
+                else {
+                        if ((unsigned int)(idx / 32) == 0) {
+                                dout[idx] = din[count + 0];
+                        } else {
+                                dout[idx] = din[count + nz_pos[(unsigned int)(idx / 32) - 1]];
+                        }
+                }
+        }
+}
+
+struct is_not_zero {
+        __host__ __device__
+                bool operator()(const float x) {
+                        return (x != 0);
+                }
+};
 
 template <typename dst_t, typename src_t>
 void copy_kernel_impl(TensorIterator& iter) {
@@ -195,13 +300,192 @@ static void copy_kernel_cuda(TensorIterator& iter, bool non_blocking) {
   }
 }
 
-static void ARC_copy(void* src, void* dst) {
-  //std::cout << "hello hi" <<std::endl;
+static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int tid, bool is_csr) {
+        AT_ASSERT(iter.ntensors() == 2);
+
+        Device dst_device = iter.device(0);
+        Device src_device = iter.device(1);
+
+        // Enable p2p access between devices. (No-op if it invovles the CPU)
+        bool p2p_enabled = maybe_enable_p2p_access(dst_device, src_device);
+
+        if (copy_requires_temporaries(iter, p2p_enabled)) {
+                // NB: this involves recursive calls to copy. Be careful that those copies
+                // don't require temporaries or you will cause an infinite recursion!
+                auto& dst = iter.tensor(0);
+                Tensor dst_contig;
+                Tensor src_contig;
+
+                // Type conversions are performed on the CPU for CPU-GPU copies and on
+                // the src device for GPU-GPU copies.
+                if (iter.device_type(0) == kCUDA) {
+                        dst_contig = dst.is_contiguous() ? dst : at::empty_like(dst);
+                        src_contig = iter.tensor(1).to(iter.dtype(0)).expand_as(dst).contiguous();
+                } else {
+                        bool same_type = iter.dtype(0) == iter.dtype(1);
+                        dst_contig = (dst.is_contiguous() && same_type) ? dst : at::empty_like(dst, iter.dtype(1));
+                        src_contig = iter.tensor(1).expand_as(dst).contiguous();
+                }
+
+                // perform a same-dtype copy on contiguous tensors
+                TORCH_INTERNAL_ASSERT(dst_contig.sizes().equals(src_contig.sizes()));
+                TORCH_INTERNAL_ASSERT(dst_contig.scalar_type() == src_contig.scalar_type());
+                dst_contig.copy_(src_contig, non_blocking);
+
+                // if necessary, copy back into dst
+                if (!dst_contig.is_same(dst)) {
+                        TORCH_INTERNAL_ASSERT(dst_contig.device() == dst.device());
+                        dst.copy_(dst_contig, non_blocking);
+                }
+                return;
+        }
+
+        // Copy on GPU (or between GPUs)
+        if (dst_device.is_cuda() && src_device.is_cuda()) {
+                copy_device_to_device(iter, non_blocking);
+                return;
+        }
+
+        // Copy between CPU and GPU
+        cuda::OptionalCUDAGuard device_guard;
+        cudaMemcpyKind kind;
+        if (dst_device.is_cuda() && src_device.is_cpu()) {
+                device_guard.set_device(dst_device);
+                kind = cudaMemcpyHostToDevice;
+        } else if (dst_device.is_cpu() && src_device.is_cuda()) {
+                device_guard.set_device(src_device);
+                kind = cudaMemcpyDeviceToHost;
+        } else {
+                TORCH_INTERNAL_ASSERT(false, "unsupported devices in GPU copy_()");
+        }
+
+        void* dst = iter.data_ptr(0);
+        void* src = iter.data_ptr(1);
+        int64_t nbytes = iter.numel() * iter.element_size(0);
+        CUDAStream stream = getCurrentCUDAStream();
+#ifdef ARC_FP16
+        if (ARCfp16_ptr == NULL)  {
+                cudaMalloc(&ARCfp16_ptr, (size_t)(1 << 30));
+        }
+#endif
+
+#ifdef ARC_CSR
+        size_t bit_elements = (size_t)((iter.numel() + 1024 - 1) / 1024) * 32;
+        size_t pos_elements_before = (size_t)((iter.numel() + 32 - 1) / 32);
+        int count = 0;
+        while (pos_elements_before != 0) {
+                pos_elements_before = pos_elements_before >> 1;  count++;
+        }
+        size_t pos_elements = 1 << count;
+#endif
+
+        if (kind == cudaMemcpyDeviceToHost) {
+#ifdef ARC_FP16
+#ifdef ARC_CSR
+                if (is_csr) {
+                        void *bit, *pos;
+                        cudaMalloc((void **)&bit, sizeof(unsigned int) * bit_elements);
+                        cudaMalloc((void **)&pos, sizeof(unsigned int) * pos_elements);
+
+                        arc_vm.set_bit_addr(tid, (uint64_t)bit);
+                        arc_vm.set_pos_addr(tid, (uint64_t)pos);
+
+                        unsigned int *nz_pos;
+                        cudaMalloc((void **)&nz_pos, pos_elements * sizeof(unsigned int));
+
+                        float *nz_src;
+                        cudaMalloc((void **)&nz_src, iter.numel() * sizeof(float));
+
+                        cudaMemsetAsync((void *)bit, 0, sizeof(unsigned int) * bit_elements, stream);
+                        cudaMemsetAsync((void *)pos, 0, sizeof(unsigned int) * pos_elements, stream);
+                        cudaMemsetAsync((void *)nz_pos, 0, sizeof(unsigned int) * pos_elements, stream);
+
+                        thrust::device_ptr<float> dA_V((float *)src);
+                        thrust::device_ptr<float> dA_R((float *)nz_src);
+                        thrust::copy_if(dA_V, dA_V + iter.numel(), dA_R, is_not_zero());
+
+                        zero_mask<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((float *)src, (unsigned int *)bit, nz_pos, iter.numel());
+
+                        pos_first<<<nblocks, nthreads, 0, stream>>>(nz_pos, pos_elements);
+                        pos_second<<<nblocks, nthreads, 0, stream>>>(nz_pos, (unsigned int*)pos, pos_elements);
+
+                        unsigned int resize = 0;
+                        cudaMemcpyAsync((void *)&resize, (void *)((size_t)pos + sizeof(unsigned int) * (pos_elements - 1)),
+                                        sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
+
+                        cudaStreamSynchronize(stream);
+                        arc_vm.set_resize(tid, resize);
+
+                        half_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((float *)nz_src, (__half *)ARCfp16_ptr, resize);
+                        AT_CUDA_CHECK(cudaMemcpyAsync(dst, ARCfp16_ptr, resize * sizeof(__half), kind, stream));
+
+                        std::cout << "CSR in d2h, resize: " << resize << ", original: " << iter.numel() << ", bit: " << bit << ", pos: " << pos << ", dst: " << dst << ", src: " << src << ", tid: " << tid << std::endl;
+                        cudaFree((void *)nz_pos);
+                        cudaFree((void *)nz_src);
+                } else {
+                        std::cout << "No CSR in d2h, dst: " << dst << ", src: " << src << ", tid: " << tid << std::endl;
+                        half_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((float *)src, (__half *)ARCfp16_ptr, iter.numel());
+                        AT_CUDA_CHECK(cudaMemcpyAsync(dst, ARCfp16_ptr, nbytes / 2, kind, stream));
+                }
+#else
+                std::cout << "FP16 in d2h, dst: " << dst << ", src: " << src << ", tid: " << tid << std::endl;
+                half_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((float *)src, (__half *)ARCfp16_ptr, iter.numel());
+                AT_CUDA_CHECK(cudaMemcpyAsync(dst, ARCfp16_ptr, nbytes / 2, kind, stream));
+#endif // ARC_CSR
+#else
+                std::cout << "Nothing in d2h, tid: " << tid << std::endl;
+                AT_CUDA_CHECK(cudaMemcpyAsync(dst, src, nbytes, kind, stream));
+#endif // ARC_FP16
+        }
+
+        if (kind == cudaMemcpyHostToDevice) {
+#ifdef ARC_FP16
+#ifdef ARC_CSR
+                if (is_csr) {
+                        void* bit = arc_vm.get_bit_addr(tid);
+                        void* pos = arc_vm.get_pos_addr(tid);
+
+                        unsigned int resize = arc_vm.get_resize(tid);
+
+                        std::cout << "CSR in h2d, resize: " << resize << ", original: " << iter.numel() << ", bit: " << bit << ", pos: " << pos << ", dst: " << dst << ", src: " << src << ", tid: " << tid << std::endl;
+
+                        float *nz_dst;
+                        cudaMalloc((void **)&nz_dst, resize * sizeof(float));
+                        cudaMemsetAsync((void *)nz_dst, 0, resize * sizeof(float), stream);
+
+                        AT_CUDA_CHECK(cudaMemcpyAsync(ARCfp16_ptr, src, resize * sizeof(__half), kind, stream));
+
+                        float_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half *)ARCfp16_ptr, nz_dst, resize);
+                        zero_insert<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((unsigned int*)bit, (unsigned int*)pos, nz_dst, (float *)dst, iter.numel());
+
+                        cudaFree((void *)nz_dst);
+                        cudaFree((void *)bit);
+                        cudaFree((void *)pos);
+                } else {
+                        std::cout << "No CSR in h2d, dst: " << dst << ", src: " << src << ", tid: " << tid << std::endl;
+                        AT_CUDA_CHECK(cudaMemcpyAsync(ARCfp16_ptr, src, nbytes / 2, kind, stream));
+                        float_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half* )ARCfp16_ptr, (float* )dst, iter.numel());
+                }
+#else
+                std::cout << "FP16 in h2d, dst: " << dst << ", src: " << src << ", tid: " << tid << std::endl;
+                AT_CUDA_CHECK(cudaMemcpyAsync(ARCfp16_ptr, src, nbytes / 2, kind, stream));
+                float_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half* )ARCfp16_ptr, (float* )dst, iter.numel());
+#endif
+#else
+                std::cout << "Nothing in h2d, tid: " << tid << std::endl;
+                AT_CUDA_CHECK(cudaMemcpyAsync(dst, src, nbytes, kind, stream));
+#endif
+        }
+
+        if (non_blocking) {
+                void* ptr = (dst_device == kCPU ? dst : src);
+                AT_CUDA_CHECK(THCCachingHostAllocator_recordEvent(ptr, stream));
+        } else {
+                AT_CUDA_CHECK(cudaStreamSynchronize(stream));
+        }
 }
 
-
-
 REGISTER_DISPATCH(copy_stub, &copy_kernel_cuda);
-REGISTER_DISPATCH(arc_copy_stub, &ARC_copy);
+REGISTER_DISPATCH(ARC_copy_stub, &ARC_copy_kernel_cuda);
 } // namespace native
 } // namespace at

@@ -249,6 +249,12 @@ static Tensor dispatch_copy_(Tensor & self, const Tensor & other, bool non_block
   return self.copy_(other, non_blocking);
 }
 
+static Tensor dispatch_ARCcopy_(Tensor & self, const Tensor & other, bool non_blocking, bool is_csr) {
+        AutoNoGIL no_gil;
+        OptionalDeviceGuard device_guard(device_of(self));
+        return self.ARCcopy_(other, non_blocking, is_csr);
+}
+
  static PyObject * THPVariable_copy_(PyObject* self, PyObject* args, PyObject* kwargs)
 {
   HANDLE_TH_ERRORS
@@ -268,6 +274,27 @@ static Tensor dispatch_copy_(Tensor & self, const Tensor & other, bool non_block
   output.unsafeGetTensorImpl()->tensor_id = tid;
   return THPVariable_Wrap(output);
   END_HANDLE_TH_ERRORS
+}
+
+static PyObject * THPVariable_ARCcopy_(PyObject* self, PyObject* args, PyObject* kwargs)
+{
+        HANDLE_TH_ERRORS
+                static PythonArgParser parser({
+                                "ARCcopy_(Tensor other, bool non_blocking=False, bool is_csr=False)",
+                                "ARCcopy_(Tensor other, bool async=False)|deprecated"
+                                });
+        auto& self_ = reinterpret_cast<THPVariable*>(self)->cdata;
+        ParsedArgs<3> parsed_args;
+
+        //modified by sam, tid conservation
+        auto tid = self_.unsafeGetTensorImpl()->tensor_id;
+
+        auto r = parser.parse(args, kwargs, parsed_args);
+
+        auto output = (dispatch_ARCcopy_(self_, r.tensor(0), r.toBool(1), r.toBool(2)));
+        output.unsafeGetTensorImpl()->tensor_id = tid;
+        return THPVariable_Wrap(output);
+        END_HANDLE_TH_ERRORS
 }
 
 static double dispatch_to_CDouble(const Tensor & self) {
@@ -369,14 +396,34 @@ static Tensor dispatch_to(const Tensor & self, Device device, bool non_blocking,
   return self.to(self.options().device(device), non_blocking, copy);
 }
 
+static Tensor dispatch_ARCto(const Tensor & self, Device device, bool non_blocking, bool copy, bool is_csr) {
+        AutoNoGIL no_gil;
+        // NOTE: this is where we record aten::to in the graph during tracing. However, the behavior of aten::to
+        // is different with respect to TensorOptions fields that are not present: aten::to inherits fields that
+        // are missing from the self argument while the tracer assumes that they should be populated with the
+        // default values (eg. float for scalar type). By explicitly copying over the tensor options here we fully
+        // specify all tensor options and thus record the proper trace
+        return self.ARCto(self.options().device(device), non_blocking, copy, is_csr);
+}
+
 static Tensor dispatch_to(const Tensor & self, ScalarType dtype, bool non_blocking, bool copy) {
   AutoNoGIL no_gil;
   return self.to(dtype, non_blocking, copy);
 }
 
+static Tensor dispatch_ARCto(const Tensor & self, ScalarType dtype, bool non_blocking, bool copy, bool is_csr) {
+        AutoNoGIL no_gil;
+        return self.ARCto(dtype, non_blocking, copy, is_csr);
+}
+
 static Tensor dispatch_to(const Tensor & self, Device device, ScalarType dtype, bool non_blocking, bool copy) {
   AutoNoGIL no_gil;
   return self.to(device, dtype, non_blocking, copy);
+}
+
+static Tensor dispatch_ARCto(const Tensor & self, Device device, ScalarType dtype, bool non_blocking, bool copy, bool is_csr) {
+        AutoNoGIL no_gil;
+        return self.ARCto(device, dtype, non_blocking, copy, is_csr);
 }
 
 static PyObject * THPVariable_cpu(PyObject* self, PyObject* args)
@@ -705,6 +752,31 @@ static PyObject * THPVariable_to(PyObject* self, PyObject* args, PyObject* kwarg
   }
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
+}
+
+static PyObject * THPVariable_ARCto(PyObject* self, PyObject* args, PyObject* kwargs)
+{
+        HANDLE_TH_ERRORS
+                static PythonArgParser parser({
+                                "ARCto(Device device, ScalarType dtype, bool non_blocking=False, bool copy=False, bool is_csr=False)",
+                                "ARCto(ScalarType dtype, bool non_blocking=False, bool copy=False, bool is_csr=False)",
+                                "ARCto(Tensor other, bool non_blocking=False, bool copy=False, bool is_csr=False)",
+                                }, /*traceable=*/true);
+
+        auto& self_ = reinterpret_cast<THPVariable*>(self)->cdata;
+        ParsedArgs<5> parsed_args;
+        auto r = parser.parse(args, kwargs, parsed_args);
+
+        if (r.idx == 0) {
+                return THPVariable_Wrap(dispatch_ARCto(self_, r.device(0), r.scalartype(1), r.toBool(2), r.toBool(3), r.toBool(4)));
+        } else if (r.idx == 1) {
+                return THPVariable_Wrap(dispatch_ARCto(self_, r.scalartype(0), r.toBool(1), r.toBool(2), r.toBool(3)));
+        } else {
+                return THPVariable_Wrap(dispatch_ARCto(self_, r.device(0), r.toBool(1), r.toBool(2), r.toBool(3)));
+        }
+
+        Py_RETURN_NONE;
+        END_HANDLE_TH_ERRORS
 }
 
 static PyObject * THPVariable_tolist(PyObject* self, PyObject* args)
@@ -5941,6 +6013,7 @@ PyMethodDef variable_methods[] = {
   {"char", (PyCFunction)THPVariable_char, METH_NOARGS, NULL},
   {"contiguous", (PyCFunction)THPVariable_contiguous, METH_VARARGS | METH_KEYWORDS, NULL},
   {"copy_", (PyCFunction)THPVariable_copy_, METH_VARARGS | METH_KEYWORDS, NULL},
+  {"ARCcopy_", (PyCFunction)THPVariable_ARCcopy_, METH_VARARGS | METH_KEYWORDS, NULL},
   {"cpu", (PyCFunction)THPVariable_cpu, METH_NOARGS, NULL},
   {"cuda", (PyCFunction)THPVariable_cuda, METH_VARARGS | METH_KEYWORDS, NULL},
   {"data_ptr", (PyCFunction)THPVariable_data_ptr, METH_NOARGS, NULL},
@@ -5976,6 +6049,7 @@ PyMethodDef variable_methods[] = {
   {"storage_type", (PyCFunction)THPVariable_storage_type, METH_NOARGS, NULL},
   {"stride", (PyCFunction)THPVariable_stride, METH_VARARGS | METH_KEYWORDS, NULL},
   {"to", (PyCFunction)THPVariable_to, METH_VARARGS | METH_KEYWORDS, NULL},
+  {"ARCto", (PyCFunction)THPVariable_to, METH_VARARGS | METH_KEYWORDS, NULL},
   {"tolist", (PyCFunction)THPVariable_tolist, METH_NOARGS, NULL},
   {"type", (PyCFunction)THPVariable_type, METH_VARARGS | METH_KEYWORDS, NULL},
   {"__and__", (PyCFunction)THPVariable___and__, METH_VARARGS | METH_KEYWORDS, NULL},

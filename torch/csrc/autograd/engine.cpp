@@ -28,6 +28,8 @@
 #include <queue>
 #include <TH/TH.h>
 
+#include <THC/THCGeneral.h>
+
 namespace torch { namespace autograd {
 
 // NB: -1 indicates the CPU worker!
@@ -656,6 +658,11 @@ auto Engine::execute(const edge_list& roots,
     ARCCppEngine::startPrefetchThread();
   // by sam end
   
+  size_t freeBytes, dummy1, dummy2;
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    THCudaMemGetInfo(at::globalContext().getTHCState(), &freeBytes, &dummy1, &dummy2);
+    std::cout << "Free size: " << freeBytes << std::endl;
+  }
 
   std::call_once(start_threads_flag_, &Engine::start_threads, this);
 
@@ -735,6 +742,19 @@ auto Engine::execute(const edge_list& roots,
   if (!at::globalContext().ARCGlobal.isOnDemand())
     ARCCppEngine::joinPrefetchThread();
 
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    double remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 - 1024);
+
+    if (remainSize > 0)  remainSize = ARCCppEngine::checkLarge(remainSize);
+
+    if (remainSize > 0)  remainSize = ARCCppEngine::checkFirst(remainSize);
+
+    if (remainSize > 0) {
+      std::cout << "We cannot operate this model because it is too large" << std::endl;
+      exit(1);
+    }
+  }
+
   // reset global ids
   ARCCppEngine::resetCppEngine();
 
@@ -743,8 +763,6 @@ auto Engine::execute(const edge_list& roots,
   if(at::globalContext().ARCGlobal.isOnDemand()) 
     at::globalContext().ARCGlobal.endOnDemand();
   // by sam end
-
-
 
   return graph_task.captured_vars_;
 }

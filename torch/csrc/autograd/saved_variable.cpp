@@ -23,6 +23,8 @@
 #include <THC/THCGeneral.h>
 #include <c10/core/ScalarType.h>
 
+#include <ATen/native/cuda/arc_flag.h>
+
 namespace torch { namespace autograd {
 
 SavedVariable::SavedVariable(const Variable& variable, bool is_output) {
@@ -123,11 +125,13 @@ static std::vector<std::thread> memcpy_threads_;
 // Note: C++ standard containers are thread-safe.
 static std::map<Oid,std::vector<PFInfo>> pf_dict_;
 static std::map<Oid, c10::StreamId> pf_sync_dict_;
-static std::map<Oid, TraceableFunction*> pf_grad_dict_;
 static std::map<Tid,std::pair<at::Tensor, bool>> tensor_dict_;
 static std::map<Tid, bool> tensor_sync_dict_;
 static std::map<Tid, bool> tensor_pf_sync_dict_;
 static std::map<Tid,Oid> last_op_dict_;
+
+static std::map<Tid, std::pair<double, bool>> liveness_temp;
+static std::map<Tid, bool> liveness_result;
 
 // thread for prefetch
 static std::thread prefetch_thread_;
@@ -136,23 +140,74 @@ static std::thread offload_thread_;
 static std::queue<std::pair<Tid, std::pair<at::Tensor, bool>>> offload_queue_;
 
 static bool offload_thread_run = 0;
+static double accumSize = 0;
+
+double ARCCppEngine::checkCSR(double freeSize) {
+        double remainSize = accumSize - freeSize;
+        std::cout << "checkCSR" << std::endl;
+
+        if (remainSize <= 0) {
+                std::cout << "checkCSR no remain" << std::endl;
+                return 0;
+        }
+
+        for (auto it = liveness_temp.begin(); it != liveness_temp.end(); ++it) {
+                if ((it->second).second) {
+                        std::cout << "\tcheckCSR tid: " << it->first << ", size: " << (it->second).first << std::endl;
+                        remainSize -= (it->second).first;
+                        liveness_result.insert(std::pair<Tid, bool>(it->first, (it->second).second));
+                }
+
+                if (remainSize <= 0)  break;
+        }
+
+        return remainSize;
+}
+
+double ARCCppEngine::checkLarge(double remainSize) {
+        std::cout << "checkLarge" << std::endl;
+
+        for (auto it = liveness_temp.begin(); it != liveness_temp.end(); ++it) {
+                if (liveness_result.find(it->first) == liveness_result.end()) {
+                        if ((it->second).first > 12) {
+                                std::cout << "\tcheckLarge tid: " << it->first << ", size: " << (it->second).first << std::endl;
+                                remainSize -= (it->second).first;
+                                liveness_result.insert(std::pair<Tid, bool>(it->first, (it->second).second));
+                        }
+                }
+
+                if (remainSize <= 0)  break;
+        }
+
+        return remainSize;
+}
+
+double ARCCppEngine::checkFirst(double remainSize) {
+        std::cout << "checkFirst" << std::endl;
+
+        for (auto it = liveness_temp.begin(); it != liveness_temp.end(); ++it) {
+                if (liveness_result.find(it->first) == liveness_result.end()) {
+                        std::cout << "\tcheckFirst tid: " << it->first << ", size: " << (it->second).first << std::endl;
+                        remainSize -= (it->second).first;
+                        liveness_result.insert(std::pair<Tid, bool>(it->first, (it->second).second));
+                }
+
+                if (remainSize <= 0)  break;
+        }
+        return remainSize;
+}
+
 //Note: Not referecne but copy a tensor to make it alive
 void ARCCppEngine::offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync sync,*/ Oid curOid, SavedVariable* fetch_loc, bool isOutput) {
   
   // partial offloading
-  // Note: the minimum curOid bound was 200 for densenet201 with batch size 200 on 32GB GPU
-  if ((/*t.nbytes() < 100 * 1024 * 1024 ||*/ curOid > 700) && !at::globalContext().ARCGlobal.isOnDemand()) {
-      //*fetch_loc = SavedVariable(t, isOutput);
-      //return;
-  }
- 
-  // save the information required for prefetching
   auto tid =  t.unsafeGetIntrusivePtr()->tensor_id;  
-  
-  if (tid == 0)
-      std::cout << "zero tid exists!" << std::endl;
-  
-  
+  if (liveness_result.find(tid) == liveness_result.end() && !at::globalContext().ARCGlobal.isOnDemand()) {
+    *fetch_loc = SavedVariable(t, isOutput);
+    return;
+  }
+
+  // save the information required for prefetching
   insertToPFDict_(curOid, fetch_loc, tid);  
   if (tensor_sync_dict_.find(tid) != tensor_sync_dict_.end()) {// this tensor is alredy offloaded
     if (at::globalContext().ARCGlobal.isDebugMode())
@@ -160,15 +215,14 @@ void ARCCppEngine::offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync s
     return;
     //if it was offloaded, the rest part is unecessary 
   }
-  
 
-  //if (tid == 650) {
-  //  std::cout << "offload at " << curOid << std::endl; 
-  //  std::cout << "sizes " << t.sizes()[0] << t.sizes()[1] << t.sizes()[2] << t.sizes()[3] << std::endl;
-  //}
-
-
-  //std::cout <<  "oid: " << curOid << "offload " <<  tid << std::endl;
+  if (at::globalContext().ARCGlobal.isOnDemand() && at::globalContext().ARCGlobal.isForward()) {
+    accumSize += (double)t.nbytes() / 1024 / 1024;
+    std::cout << "accumulated tensor size: " << tid << ", " << accumSize << std::endl;
+    liveness_temp.insert(std::pair<Tid, std::pair<double, bool>>(
+        tid, std::pair<double, bool>((double)t.nbytes() / 1024 / 1024, at::native::arc_vm.relu_thru)));
+    at::native::arc_vm.relu_thru = false;
+  }
 
   while(1) {
     if (offload_queue_.size() < 30) {
@@ -209,7 +263,14 @@ void ARCCppEngine::default_offload_() {
            opt = opt.dtype(task.second.first.dtype());  
            opt = opt.pinned_memory(true); 
 
-           tensor_dict_.insert(std::pair<Tid, std::pair<at::Tensor,bool>>(task.first, std::pair<at::Tensor,bool>(task.second.first.to(opt, false, true), task.second.second))); 
+           if (at::globalContext().ARCGlobal.isOnDemand()) {
+             tensor_dict_.insert(std::pair<Tid, std::pair<at::Tensor, bool>>(task.first,
+                 std::pair<at::Tensor, bool>(task.second.first.ARCto(opt, false, true, false), task.second.second)));
+           } else {
+             tensor_dict_.insert(std::pair<Tid, std::pair<at::Tensor, bool>>(task.first,
+                 std::pair<at::Tensor, bool>(task.second.first.ARCto(opt, false, true,
+                     liveness_result[task.first]), task.second.second)));
+           }
            csg.reset_stream(csg.original_stream());
         } else {
             if (offload_thread_run == 0) {
@@ -362,7 +423,7 @@ void ARCCppEngine::dropTensor(Oid oid, SavedVariable* fetch_loc) {
       //opt = opt.dtype(c10::ScalarType::Half); 
       opt = opt.pinned_memory(true); 
 
-      tref = tref.to(opt, false, true);
+      tref = tref.ARCto(opt, false, true, false);
     } else {
       if (oid == last_op_dict_[tid]) {
         //std::cout <<  "oid: " << oid << "last op of tensor id " <<  tid << " : "  << last_op_dict_[tid] << std::endl;
@@ -402,28 +463,22 @@ void ARCCppEngine::fetchRequiredTensors_(Oid oid,  ARCSync sync) {
     opt = opt.dtype(tref.dtype());
     //opt = opt.dtype(c10::ScalarType::Float);
        
+    if (tref.device().type() == c10::DeviceType::CPU ) {
+      if (at::globalContext().ARCGlobal.isOnDemand()) {
+        if (last_op_dict_.find(tid) == last_op_dict_.end()) {
+          last_op_dict_.insert(std::pair<Tid,Oid>(tid,oid));
+        }
+        else {
+          last_op_dict_[tid] = oid;   
+        }
+      }
 
-  if (tid == 1) {
-    std::cout << "fetch try  at " << oid << std::endl; 
-    std::cout << "sizes " << tref.sizes()[0] << tref.sizes()[1] << tref.sizes()[2] << tref.sizes()[3] << std::endl;
-  }
-
-        if (tref.device().type() == c10::DeviceType::CPU ) {
-          if (at::globalContext().ARCGlobal.isOnDemand()) {
-            
-              
-            if (last_op_dict_.find(tid) == last_op_dict_.end()) {
-              last_op_dict_.insert(std::pair<Tid,Oid>(tid,oid));
-              //std::cout << "tid, oid inserted: " << tid << " " << oid << std::endl;
-            }
-            else {
-              last_op_dict_[tid] = oid;   
-              //std::cout << "tid, oid updated: " << tid << " " << oid << std::endl;
-            }
-          }
-
-         tref = tref.to(opt, false, true); 
-     } else {
+      if (at::globalContext().ARCGlobal.isOnDemand()) {
+        tref = tref.ARCto(opt, false, true, false);
+      } else {
+        tref = tref.ARCto(opt, false, true, liveness_result[tid]);
+      }
+    } else {
       if (at::globalContext().ARCGlobal.isDebugMode())
         std::cout <<  tid << ": This tensor is already fetched" << std::endl;
     }

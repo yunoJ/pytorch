@@ -241,6 +241,10 @@ inline Tensor & Tensor::copy_(const Tensor & src, bool non_blocking) {
     static auto table = globalATenDispatch().getOpTable("aten::copy_(Tensor(a!) self, Tensor src, bool non_blocking=False) -> Tensor(a!)");
     return table->getOp<Tensor & (Tensor &, const Tensor &, bool)>(tensorTypeIdToBackend(type_id()), is_variable())(*this, src, non_blocking);
 }
+inline Tensor & Tensor::ARCcopy_(const Tensor & src, bool non_blocking, bool is_csr) {
+    static auto table = globalATenDispatch().getOpTable("aten::ARCcopy_(Tensor(a!) self, Tensor src, bool non_blocking=False, bool is_csr=False) -> Tensor(a!)");
+    return table->getOp<Tensor & (Tensor &, const Tensor &, bool, bool)>(tensorTypeIdToBackend(type_id()), is_variable())(*this, src, non_blocking, is_csr);
+}
 inline Tensor Tensor::cos() const {
     static auto table = globalATenDispatch().getOpTable("aten::cos(Tensor self) -> Tensor");
     return table->getOp<Tensor (const Tensor &)>(tensorTypeIdToBackend(type_id()), is_variable())(*this);
@@ -1059,17 +1063,33 @@ inline Tensor Tensor::to(const TensorOptions & options, bool non_blocking, bool 
     static auto table = globalATenDispatch().getOpTable("aten::to(Tensor self, *, ScalarType dtype, Layout layout, Device device, bool pin_memory=False, bool non_blocking=False, bool copy=False) -> Tensor");
     return table->getOp<Tensor (const Tensor &, const TensorOptions &, bool, bool)>(tensorTypeIdToBackend(type_id()), is_variable())(*this, options, non_blocking, copy);
 }
+inline Tensor Tensor::ARCto(const TensorOptions & options, bool non_blocking, bool copy, bool is_csr) const {
+    static auto table = globalATenDispatch().getOpTable("aten::ARCto(Tensor self, *, ScalarType dtype, Layout layout, Device device, bool pin_memory=False, bool non_blocking=False, bool copy=False, bool is_csr=False) -> Tensor");
+    return table->getOp<Tensor (const Tensor &, const TensorOptions &, bool, bool, bool)>(tensorTypeIdToBackend(type_id()), is_variable())(*this, options, non_blocking, copy, is_csr);
+}
 inline Tensor Tensor::to(Device device, ScalarType dtype, bool non_blocking, bool copy) const {
     static auto table = globalATenDispatch().getOpTable("aten::to(Tensor self, Device device, ScalarType dtype, bool non_blocking=False, bool copy=False) -> Tensor");
     return table->getOp<Tensor (const Tensor &, Device, ScalarType, bool, bool)>(tensorTypeIdToBackend(type_id()), is_variable())(*this, device, dtype, non_blocking, copy);
+}
+inline Tensor Tensor::ARCto(Device device, ScalarType dtype, bool non_blocking, bool copy, bool is_csr) const {
+    static auto table = globalATenDispatch().getOpTable("aten::ARCto(Tensor self, Device device, ScalarType dtype, bool non_blocking=False, bool copy=False, bool is_csr=False) -> Tensor");
+    return table->getOp<Tensor (const Tensor &, Device, ScalarType, bool, bool, bool)>(tensorTypeIdToBackend(type_id()), is_variable())(*this, device, dtype, non_blocking, copy, is_csr);
 }
 inline Tensor Tensor::to(ScalarType dtype, bool non_blocking, bool copy) const {
     static auto table = globalATenDispatch().getOpTable("aten::to(Tensor self, ScalarType dtype, bool non_blocking=False, bool copy=False) -> Tensor");
     return table->getOp<Tensor (const Tensor &, ScalarType, bool, bool)>(tensorTypeIdToBackend(type_id()), is_variable())(*this, dtype, non_blocking, copy);
 }
+inline Tensor Tensor::ARCto(ScalarType dtype, bool non_blocking, bool copy, bool is_csr) const {
+    static auto table = globalATenDispatch().getOpTable("aten::ARCto(Tensor self, ScalarType dtype, bool non_blocking=False, bool copy=False, bool is_csr=False) -> Tensor");
+    return table->getOp<Tensor (const Tensor &, ScalarType, bool, bool, bool)>(tensorTypeIdToBackend(type_id()), is_variable())(*this, dtype, non_blocking, copy, is_csr);
+}
 inline Tensor Tensor::to(const Tensor & other, bool non_blocking, bool copy) const {
     static auto table = globalATenDispatch().getOpTable("aten::to(Tensor self, Tensor other, bool non_blocking=False, bool copy=False) -> Tensor");
     return table->getOp<Tensor (const Tensor &, const Tensor &, bool, bool)>(tensorTypeIdToBackend(type_id()), is_variable())(*this, other, non_blocking, copy);
+}
+inline Tensor Tensor::ARCto(const Tensor & other, bool non_blocking, bool copy, bool is_csr) const {
+    static auto table = globalATenDispatch().getOpTable("aten::ARCto(Tensor self, Tensor other, bool non_blocking=False, bool copy=False, bool is_csr=False) -> Tensor");
+    return table->getOp<Tensor (const Tensor &, const Tensor &, bool, bool, bool)>(tensorTypeIdToBackend(type_id()), is_variable())(*this, other, non_blocking, copy, is_csr);
 }
 inline Scalar Tensor::item() const {
     static auto table = globalATenDispatch().getOpTable("aten::item(Tensor self) -> Scalar");
