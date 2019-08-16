@@ -162,11 +162,14 @@ void ARCCppEngine::offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync s
   }
   
 
-  if (tid == 1) {
-    std::cout << "offload at " << curOid << std::endl; 
-    std::cout << "sizes " << t.sizes()[0] << t.sizes()[1] << t.sizes()[2] << t.sizes()[3] << std::endl;
-  }
- 
+  //if (tid == 650) {
+  //  std::cout << "offload at " << curOid << std::endl; 
+  //  std::cout << "sizes " << t.sizes()[0] << t.sizes()[1] << t.sizes()[2] << t.sizes()[3] << std::endl;
+  //}
+
+
+  //std::cout <<  "oid: " << curOid << "offload " <<  tid << std::endl;
+
   while(1) {
     if (offload_queue_.size() < 30) {
       tensor_sync_dict_.insert(std::pair<Tid, bool>(tid, 1));
@@ -361,8 +364,8 @@ void ARCCppEngine::dropTensor(Oid oid, SavedVariable* fetch_loc) {
 
       tref = tref.to(opt, false, true);
     } else {
-      //std::cout <<  "oid: " << oid << "last op of tensor id " <<  tid << " : "  << last_op_dict_[tid] << std::endl;
       if (oid == last_op_dict_[tid]) {
+        //std::cout <<  "oid: " << oid << "last op of tensor id " <<  tid << " : "  << last_op_dict_[tid] << std::endl;
         tensor_dict_.erase(tid);   
         fetch_loc->reset_data(); 
       }

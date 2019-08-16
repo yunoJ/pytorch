@@ -113,12 +113,12 @@ REGISTER_LEGACY_TYPE_INIT(LegacyDeviceTypeInit);
 // Implemented by SNU-ARC Function/Data Structures///
 // //////////////////////////////////////////////////
 
-#define BP_NUM_PER_ITER 3
+#define BP_NUM_PER_ITER 1
 #define RESET_TID 0 // 4-4 = 0
 
 // network
-static bool cycle_gan = 1;
-static bool bert = 0;
+static bool cycle_gan = 0;
+static bool bert = 1;
 
 bool Context::ARCGlobalContext::isCycleGAN() {return cycle_gan;}
 bool Context::ARCGlobalContext::isBERT() {return bert;}
@@ -149,7 +149,9 @@ c10::cuda::CUDAStream Context::ARCGlobalContext::globalPrefetchStream() { return
 
 Tid Context::ARCGlobalContext::getTid(Tensor& t) { return t.unsafeGetTensorImpl()->tensor_id; }
 
-void Context::ARCGlobalContext::setNewTid(Tensor& t) { t.unsafeGetTensorImpl()->tensor_id = ++global_tensor_id_; }
+void Context::ARCGlobalContext::setNewTid(Tensor& t) { 
+    t.unsafeGetTensorImpl()->tensor_id = ++global_tensor_id_; 
+}
 void Context::ARCGlobalContext::updateTid(Tensor& t, int tid) { t.unsafeGetTensorImpl()->tensor_id = tid; }
 void Context::ARCGlobalContext::resetGlobalTid() { 
     if (cycle_gan) global_tensor_id_ = RESET_TID;

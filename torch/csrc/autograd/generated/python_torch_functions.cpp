@@ -472,7 +472,8 @@ static PyObject * THPVariable_tensor(PyObject* self, PyObject* args, PyObject* k
    Tensor output;
   output = torch::utils::tensor_ctor(torch::tensors::get_default_tensor_type_id(), torch::tensors::get_default_scalar_type(), args, kwargs);
  
-  at::globalContext().ARCGlobal.setNewTid(output);
+  if ( at::globalContext().ARCGlobal.isBERT() )
+    at::globalContext().ARCGlobal.setNewTid(output);
   return THPVariable_Wrap(output);
   END_HANDLE_TH_ERRORS
 }
@@ -10232,7 +10233,8 @@ static PyObject * THPVariable_zeros_like(PyObject* self_, PyObject* args, PyObje
     output = dispatch_zeros_like(input).set_requires_grad(r.toBool(3));
   }
 
-  at::globalContext().ARCGlobal.setNewTid(output);
+  if ( at::globalContext().ARCGlobal.isBERT())
+    at::globalContext().ARCGlobal.setNewTid(output);
 
   return wrap(output);
   Py_RETURN_NONE;

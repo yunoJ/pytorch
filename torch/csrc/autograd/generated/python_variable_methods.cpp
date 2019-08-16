@@ -1143,7 +1143,8 @@ static PyObject * THPVariable_add_(PyObject* self_, PyObject* args, PyObject* kw
     output = dispatch_add_(s, t0, r.scalar(1));
   }
 
-  at::globalContext().ARCGlobal.setNewTid(output);
+  if ( !at::globalContext().ARCGlobal.isCycleGAN())
+    at::globalContext().ARCGlobal.setNewTid(output);
   return wrap(output);
 
   Py_RETURN_NONE;
