@@ -15,6 +15,11 @@
 #include <c10/core/Storage.h>
 #include <dlfcn.h>
 #include <c10/cuda/CUDAStream.h>
+#include <mutex>
+
+#define BLK_SZ ((size_t)1 << 12)
+#define DEVICE_SZ (((size_t)1 << 30)*4)
+#define MAX_DEVICE (DEVICE_SZ / BLK_SZ)
 
 using namespace std;
 namespace at { namespace native {
@@ -36,11 +41,20 @@ using arcp2p_type3_fn = int      (*)(arcp2p *, uint64_t, uint64_t);
 using arcp2p_type4_fn = int      (*)(arcp2p *, uint64_t, uint64_t, uint64_t, arcp2p_cpl *, arcp2p_dir);
 
 class ARC_memory {
-public:
+ public:
   ARC_memory();
   ~ARC_memory();
 
   bool relu_thru;
+  bool mapping;
+  mutex m;
+
+  void device_malloc(void** gpu_ptr, size_t size);
+  void device_free(void* addr, size_t size);
+  void* get_device_addr();
+
+  void* get_fp16_addr(int tid);
+  void set_fp16_addr(int tid, uint64_t addr);
 
   void* get_bit_addr(int tid);
   void set_bit_addr(int tid, uint64_t addr);
@@ -70,7 +84,13 @@ public:
   bool is_fp16();
   bool is_csr();
 
-private:
+ private:
+  void* deviceAddr;
+  bool* deviceTable;
+  int deviceStartBlk;
+  unsigned int* device_page_map;
+
+  uint64_t* fp16_ptr_arr;
   uint64_t* bit_ptr_arr;
   uint64_t* pos_ptr_arr;
   unsigned int* resize_arr;

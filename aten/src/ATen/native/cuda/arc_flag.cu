@@ -79,7 +79,17 @@ typedef struct {
 } req_element;
 std::queue<req_element> req_queue;
 
-  ARC_memory::ARC_memory(): relu_thru(false) {
+  ARC_memory::ARC_memory(): relu_thru(false), mapping(false), deviceStartBlk(0) {
+    cudaMalloc(&deviceAddr, DEVICE_SZ);
+    deviceTable = new bool[MAX_DEVICE];
+    memset(deviceTable, 0, sizeof(bool) * MAX_DEVICE);
+
+    device_page_map = new unsigned int[MAX_DEVICE];
+    for (int i = 0; i < MAX_DEVICE; i++) {
+      device_page_map[i] = 0;
+    }
+
+    fp16_ptr_arr = new uint64_t[NUM_TENSOR];
     bit_ptr_arr = new uint64_t[NUM_TENSOR];
     pos_ptr_arr = new uint64_t[NUM_TENSOR];
     resize_arr = new unsigned int[NUM_TENSOR];
@@ -97,6 +107,11 @@ std::queue<req_element> req_queue;
   }
 
   ARC_memory::~ARC_memory() {
+    cudaFree(deviceAddr);
+    delete[] deviceTable;
+    delete[] device_page_map;
+
+    delete[] fp16_ptr_arr;
     delete[] bit_ptr_arr;
     delete[] pos_ptr_arr;
     delete[] resize_arr;
@@ -110,6 +125,82 @@ std::queue<req_element> req_queue;
       arcp2p_bar_detach(arc_handle);
     }
     arcp2p_release(arc_handle);
+  }
+
+  void ARC_memory::device_malloc(void** gpu_ptr, size_t size) {
+    int reqBlk = std::ceil((double)size / (double)BLK_SZ);
+    int blkCheck = 0;
+    int retryCnt = 0;
+  
+    if (reqBlk == 0) return;
+  
+    m.lock();
+  
+    while (true) {
+      for (int i = deviceStartBlk; i < MAX_DEVICE; i++) {
+        blkCheck += 1;
+        if (deviceTable[i]) {
+          if (device_page_map[i] == 0) {
+            LOG(FATAL) << "device_page_map[" << i << "] is zero, size: " << size << ", " << blkCheck << ", " << reqBlk;
+          }
+          i += device_page_map[i] - 1;
+          blkCheck = 0; deviceStartBlk = i + 1;
+          continue;
+        }
+  
+        if (blkCheck == reqBlk) {
+          device_page_map[deviceStartBlk] = reqBlk;
+          *gpu_ptr = (void* )((size_t)deviceAddr + (deviceStartBlk * BLK_SZ));
+  
+          for (int i = deviceStartBlk; i < deviceStartBlk + reqBlk; i++) {
+            deviceTable[i] = true;
+          }
+  
+          deviceStartBlk += reqBlk;
+  
+          m.unlock();
+          return;
+        }
+      }
+      deviceStartBlk = 0;  blkCheck = 0;
+      if (retryCnt++ % 10 == 0) {
+        LOG(INFO) << "retryCnt " << retryCnt << ", " << size;
+      }
+
+      if (retryCnt > 1000) {
+        std::cout << "Out-of-memory in device: " << size;
+        exit(1);
+      }
+    }
+  }
+
+  void ARC_memory::device_free(void* addr, size_t size) {
+    unsigned int startBlk = ((size_t)addr - (size_t)deviceAddr) / BLK_SZ;
+    unsigned int reqBlk = std::ceil((double)size / (double)BLK_SZ);
+
+    m.lock();
+
+    device_page_map[startBlk] = 0;
+
+    for (unsigned int i = startBlk; i < startBlk + reqBlk; i++) {
+      deviceTable[i] = false;
+    }
+
+    deviceStartBlk = std::min((unsigned int)deviceStartBlk, startBlk);
+
+    m.unlock();
+  }
+
+  void* ARC_memory::get_fp16_addr(int tid) {
+    return (void *)fp16_ptr_arr[tid];
+  }
+
+  void ARC_memory::set_fp16_addr(int tid, uint64_t addr) {
+    fp16_ptr_arr[tid] = addr;
+  }
+
+  void* ARC_memory::get_device_addr() {
+    return deviceAddr;
   }
 
   void* ARC_memory::get_bit_addr(int tid) {
@@ -377,20 +468,33 @@ std::queue<req_element> req_queue;
         unsigned int resize = arc_vm.get_resize(req.info->tid);
 
         if (isFP16 && (resize > 0))
-	{
+        {
           auto stream = at::cuda::getCurrentCUDAStream();
-
           uint64_t nTPB = req.info->ntpb;
           uint64_t numel = req.info->numel;
+
+          size_t bit_elements, pos_elements, pos_elements_before;
+          bit_elements = (size_t)((numel + 1024 - 1) / 1024) * 32;
+          pos_elements_before = (size_t)((numel + 32 - 1) / 32);
+          int count = 0;
+          while (pos_elements_before != 0) {
+            pos_elements_before = pos_elements_before >> 1;  count++;
+          }
+          pos_elements = 1 << count;
+          
           void* bit = arc_vm.get_bit_addr(req.info->tid);
           void* pos = arc_vm.get_pos_addr(req.info->tid);
           float *nz_dst;
-          cudaMalloc((void **)&nz_dst, resize * sizeof(float));
+          device_malloc((void **)&nz_dst, resize * sizeof(float));
           cudaMemsetAsync((void *)nz_dst, 0, resize * sizeof(float), stream);
 
           float_scale<<<(numel + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half *)req.info->ptr, nz_dst, resize);
           zero_insert<<<(numel + nTPB - 1) / nTPB, nTPB, 0, stream>>>((unsigned int*)bit, (unsigned int*)pos, nz_dst, (float *)req.info->dst, numel);
-	  cudaFree((void *)nz_dst);
+
+          device_free((void *)nz_dst, resize * sizeof(float));
+          device_free(req.info->ptr, sizeof(__half) * resize);
+          device_free(bit, sizeof(unsigned int) * bit_elements);
+          device_free(pos, sizeof(unsigned int) * pos_elements);
 
           delete req.info;
         }
@@ -402,6 +506,7 @@ std::queue<req_element> req_queue;
           uint64_t numel = req.info->numel;
 
           float_scale<<<(numel + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half* )req.info->ptr, (float* )req.info->dst, numel);
+          device_free(req.info->ptr, sizeof(__half) * numel);
 
           delete req.info;
         }

@@ -29,8 +29,6 @@ namespace native {
 
 using namespace at::cuda;
 
-void* ARCfp16_ptr = NULL;
-
 __global__ void half_scale(float *din, __half *dout, int dsize) {
         int idx = threadIdx.x + blockDim.x * blockIdx.x;
         if (idx < dsize)  dout[idx] = __float2half(din[idx]);
@@ -301,281 +299,282 @@ static void copy_kernel_cuda(TensorIterator& iter, bool non_blocking) {
 }
 
 static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int tid, bool is_csr) {
-    // [JS] SSD flag only concerned if 'dir' information is properly saved at arc_vm
-    //      only this case is from offload and prefetch.
-    arcp2p_dir dir = arc_vm.get_dir(tid);
-    bool ssd_flag  = arc_vm.is_using_ssd() && (dir != arcp2p_unused);
-    // [JS] now fp16 & csr option is delivered by flag setting
-    // Note. FP16 should be set when csr is set.
-    //       So we don't case about FP16=false & CSR=true case
-    bool fp16_flag = arc_vm.is_fp16();
-    bool csr_flag  = arc_vm.is_csr();
+  // [JS] SSD flag only concerned if 'dir' information is properly saved at arc_vm
+  //      only this case is from offload and prefetch.
+  arcp2p_dir dir = arc_vm.get_dir(tid);
+  bool ssd_flag  = arc_vm.is_using_ssd() && (dir != arcp2p_unused);
+  // [JS] now fp16 & csr option is delivered by flag setting
+  // Note. FP16 should be set when csr is set.
+  //       So we don't case about FP16=false & CSR=true case
+  bool fp16_flag = arc_vm.is_fp16();
+  bool csr_flag  = arc_vm.is_csr();
 
-    // [JS] clear dir value, to avoid confusion
-    arc_vm.set_dir(tid, arcp2p_unused);
+  // [JS] clear dir value, to avoid confusion
+  arc_vm.set_dir(tid, arcp2p_unused);
 
-    AT_ASSERT(iter.ntensors() == 2);
+  AT_ASSERT(iter.ntensors() == 2);
 
-    Device dst_device = iter.device(0);
-    Device src_device = iter.device(1);
+  Device dst_device = iter.device(0);
+  Device src_device = iter.device(1);
 
-    // Enable p2p access between devices. (No-op if it invovles the CPU)
-    bool p2p_enabled = maybe_enable_p2p_access(dst_device, src_device);
+  // Enable p2p access between devices. (No-op if it invovles the CPU)
+  bool p2p_enabled = maybe_enable_p2p_access(dst_device, src_device);
 
-    if (copy_requires_temporaries(iter, p2p_enabled)) {
-        // NB: this involves recursive calls to copy. Be careful that those copies
-        // don't require temporaries or you will cause an infinite recursion!
-        auto& dst = iter.tensor(0);
-        Tensor dst_contig;
-        Tensor src_contig;
+  if (copy_requires_temporaries(iter, p2p_enabled)) {
+      // NB: this involves recursive calls to copy. Be careful that those copies
+      // don't require temporaries or you will cause an infinite recursion!
+      auto& dst = iter.tensor(0);
+      Tensor dst_contig;
+      Tensor src_contig;
 
-        // Type conversions are performed on the CPU for CPU-GPU copies and on
-        // the src device for GPU-GPU copies.
-        if (iter.device_type(0) == kCUDA) {
-            dst_contig = dst.is_contiguous() ? dst : at::empty_like(dst);
-            src_contig = iter.tensor(1).to(iter.dtype(0)).expand_as(dst).contiguous();
-        } else {
-            bool same_type = iter.dtype(0) == iter.dtype(1);
-            dst_contig = (dst.is_contiguous() && same_type) ? dst : at::empty_like(dst, iter.dtype(1));
-            src_contig = iter.tensor(1).expand_as(dst).contiguous();
-        }
+      // Type conversions are performed on the CPU for CPU-GPU copies and on
+      // the src device for GPU-GPU copies.
+      if (iter.device_type(0) == kCUDA) {
+          dst_contig = dst.is_contiguous() ? dst : at::empty_like(dst);
+          src_contig = iter.tensor(1).to(iter.dtype(0)).expand_as(dst).contiguous();
+      } else {
+          bool same_type = iter.dtype(0) == iter.dtype(1);
+          dst_contig = (dst.is_contiguous() && same_type) ? dst : at::empty_like(dst, iter.dtype(1));
+          src_contig = iter.tensor(1).expand_as(dst).contiguous();
+      }
 
-        // perform a same-dtype copy on contiguous tensors
-        TORCH_INTERNAL_ASSERT(dst_contig.sizes().equals(src_contig.sizes()));
-        TORCH_INTERNAL_ASSERT(dst_contig.scalar_type() == src_contig.scalar_type());
-        dst_contig.copy_(src_contig, non_blocking);
+      // perform a same-dtype copy on contiguous tensors
+      TORCH_INTERNAL_ASSERT(dst_contig.sizes().equals(src_contig.sizes()));
+      TORCH_INTERNAL_ASSERT(dst_contig.scalar_type() == src_contig.scalar_type());
+      dst_contig.copy_(src_contig, non_blocking);
 
-        // if necessary, copy back into dst
-        if (!dst_contig.is_same(dst)) {
-            TORCH_INTERNAL_ASSERT(dst_contig.device() == dst.device());
-            dst.copy_(dst_contig, non_blocking);
-        }
-        return;
+      // if necessary, copy back into dst
+      if (!dst_contig.is_same(dst)) {
+          TORCH_INTERNAL_ASSERT(dst_contig.device() == dst.device());
+          dst.copy_(dst_contig, non_blocking);
+      }
+      return;
+  }
+
+  // Copy on GPU (or between GPUs)
+  if (dst_device.is_cuda() && src_device.is_cuda()) {
+      copy_device_to_device(iter, non_blocking);
+      return;
+  }
+
+  // Copy between CPU and GPU
+  cuda::OptionalCUDAGuard device_guard;
+  cudaMemcpyKind kind;
+  if (dst_device.is_cuda() && src_device.is_cpu()) {
+      device_guard.set_device(dst_device);
+      kind = cudaMemcpyHostToDevice;
+  } else if (dst_device.is_cpu() && src_device.is_cuda()) {
+      device_guard.set_device(src_device);
+      kind = cudaMemcpyDeviceToHost;
+  } else {
+      TORCH_INTERNAL_ASSERT(false, "unsupported devices in GPU copy_()");
+  }
+
+  uint64_t p2p_addr = 0, p2p_size = 0;
+
+  void* dst = iter.data_ptr(0);
+  void* src = iter.data_ptr(1);
+  int64_t nbytes = iter.numel() * iter.element_size(0);
+  CUDAStream stream = getCurrentCUDAStream();
+
+  if (true == ssd_flag) {
+    if (!arc_vm.mapping) {
+      // [TODO] this should be called only for Tesla option enabled
+      void* deviceAddr = arc_vm.get_device_addr();
+      std::cout << "Hi addr: " << deviceAddr << std::endl;
+      arc_vm.Arcp2pBarMapping((uint64_t)deviceAddr, (uint64_t)4 << 30);
+      arc_vm.mapping = true;
     }
+  }
 
-    // Copy on GPU (or between GPUs)
-    if (dst_device.is_cuda() && src_device.is_cuda()) {
-        copy_device_to_device(iter, non_blocking);
-        return;
+  size_t bit_elements, pos_elements, pos_elements_before;
+
+  if (csr_flag) {
+    bit_elements = (size_t)((iter.numel() + 1024 - 1) / 1024) * 32;
+    pos_elements_before = (size_t)((iter.numel() + 32 - 1) / 32);
+    int count = 0;
+    while (pos_elements_before != 0) {
+      pos_elements_before = pos_elements_before >> 1;  count++;
     }
+    pos_elements = 1 << count;
+  }
 
-    // Copy between CPU and GPU
-    cuda::OptionalCUDAGuard device_guard;
-    cudaMemcpyKind kind;
-    if (dst_device.is_cuda() && src_device.is_cpu()) {
-        device_guard.set_device(dst_device);
-        kind = cudaMemcpyHostToDevice;
-    } else if (dst_device.is_cpu() && src_device.is_cuda()) {
-        device_guard.set_device(src_device);
-        kind = cudaMemcpyDeviceToHost;
+  if (kind == cudaMemcpyDeviceToHost) {
+    if (csr_flag && is_csr) {
+      void *fp16, *bit, *pos;
+      arc_vm.device_malloc(&bit, sizeof(unsigned int) * bit_elements);
+      arc_vm.device_malloc(&pos, sizeof(unsigned int) * pos_elements);
+
+      arc_vm.set_bit_addr(tid, (uint64_t)bit);
+      arc_vm.set_pos_addr(tid, (uint64_t)pos);
+
+      unsigned int *nz_pos;
+      arc_vm.device_malloc((void **)&nz_pos, pos_elements * sizeof(unsigned int));
+
+      float *nz_src;
+      arc_vm.device_malloc((void **)&nz_src, iter.numel() * sizeof(float));
+
+      cudaMemsetAsync((void *)bit, 0, sizeof(unsigned int) * bit_elements, stream);
+      cudaMemsetAsync((void *)pos, 0, sizeof(unsigned int) * pos_elements, stream);
+      cudaMemsetAsync((void *)nz_pos, 0, sizeof(unsigned int) * pos_elements, stream);
+
+      thrust::device_ptr<float> dA_V((float *)src);
+      thrust::device_ptr<float> dA_R((float *)nz_src);
+      thrust::copy_if(dA_V, dA_V + iter.numel(), dA_R, is_not_zero());
+
+      zero_mask<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((float *)src, (unsigned int *)bit, nz_pos, iter.numel());
+      pos_first<<<nblocks, nthreads, 0, stream>>>(nz_pos, pos_elements);
+      pos_second<<<nblocks, nthreads, 0, stream>>>(nz_pos, (unsigned int*)pos, pos_elements);
+
+      unsigned int resize = 0;
+      cudaMemcpyAsync((void *)&resize, (void *)((size_t)pos + sizeof(unsigned int) * (pos_elements - 1)),
+          sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
+
+      cudaStreamSynchronize(stream);
+      arc_vm.set_resize(tid, resize);
+      arc_vm.device_malloc(&fp16, sizeof(__half) * resize);
+      arc_vm.set_fp16_addr(tid, (uint64_t)fp16);
+
+      half_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((float *)nz_src, (__half *)fp16, resize);
+
+      if (true == ssd_flag) {
+        p2p_addr = (uint64_t)fp16;
+        p2p_size = (uint64_t)(resize * sizeof(__half));
+      } else {
+        AT_CUDA_CHECK(cudaMemcpyAsync(dst, fp16, resize * sizeof(__half), kind, stream));
+      }
+
+      std::cout << "CSR in d2h, resize: " << resize << ", original: " << iter.numel() << ", fp16: " << fp16 << ", tid: " << tid << std::endl;
+
+      arc_vm.device_free((void *)nz_pos, pos_elements * sizeof(unsigned int));
+      arc_vm.device_free((void *)nz_src, iter.numel() * sizeof(float));
+    } else if (fp16_flag) {
+      // this case include both cases
+      // 1. csr_flag==true && is_csr==false (csr_flag==true always guarantee fp16_flag==true)
+      // 2. csr_flag==false && fp16_flag==true
+
+      // keep print message for debug purpose
+      void *fp16;
+      arc_vm.device_malloc(&fp16, sizeof(__half) * iter.numel());
+      arc_vm.set_fp16_addr(tid, (uint64_t)fp16);
+
+      if (csr_flag) {
+        std::cout << "No CSR in d2h, fp16: " << fp16 << ", tid: " << tid << std::endl;
+      } else {
+        std::cout << "FP16 in d2h, fp16: " << fp16 << ", tid: " << tid << std::endl;
+      }
+
+      half_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((float *)src, (__half *)fp16, iter.numel());
+
+      if (true == ssd_flag) {
+        arc_vm.set_resize(tid, 0); // [TODO] slight hack code, we will distinguish CSR / FP16 by resize value
+        p2p_addr = (uint64_t)fp16;
+        p2p_size = (uint64_t)(nbytes / 2);
+      } else {
+        AT_CUDA_CHECK(cudaMemcpyAsync(dst, fp16, nbytes / 2, kind, stream));
+      }
+    } else { // false == csr_flag && false == fp16_flag
+      std::cout << "Nothing in d2h, tid: " << tid << std::endl;
+      if (true == ssd_flag) {
+        p2p_addr = (uint64_t)src;
+        p2p_size = (uint64_t)nbytes;
+      } else {
+        AT_CUDA_CHECK(cudaMemcpyAsync(dst, src, nbytes, kind, stream));
+      }
+    }
+  }
+
+  if (kind == cudaMemcpyHostToDevice) {
+    if (csr_flag && is_csr) {
+      void* fp16 = arc_vm.get_fp16_addr(tid);
+      void* bit = arc_vm.get_bit_addr(tid);
+      void* pos = arc_vm.get_pos_addr(tid);
+
+      unsigned int resize = arc_vm.get_resize(tid);
+
+      std::cout << "CSR in h2d, resize: " << resize << ", original: " << iter.numel() << ", fp16: " << fp16 << ", tid: " << tid << std::endl;
+
+      if (ssd_flag) {
+        p2p_addr = (uint64_t)fp16;
+        p2p_size = (uint64_t)(resize * sizeof(__half));
+        // [JS] all backend job will be called at Arcp2pCompletion
+      } else {
+        float *nz_dst;
+        arc_vm.device_malloc((void **)&nz_dst, resize * sizeof(float));
+        cudaMemsetAsync((void *)nz_dst, 0, resize * sizeof(float), stream);
+
+        AT_CUDA_CHECK(cudaMemcpyAsync(fp16, src, resize * sizeof(__half), kind, stream));
+
+        float_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half *)fp16, nz_dst, resize);
+        zero_insert<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((unsigned int*)bit, (unsigned int*)pos, nz_dst, (float *)dst, iter.numel());
+
+        arc_vm.device_free((void *)nz_dst, resize * sizeof(float));
+        arc_vm.device_free(fp16, sizeof(__half) * resize);
+        arc_vm.device_free(bit, sizeof(unsigned int) * bit_elements);
+        arc_vm.device_free(pos, sizeof(unsigned int) * pos_elements);
+      }
+    } else if (fp16_flag) {
+      // keep print message for debug purpose
+      void* fp16 = arc_vm.get_fp16_addr(tid);
+      if (csr_flag) {
+        std::cout << "No CSR in h2d, fp16: " << fp16 << ", tid: " << tid << std::endl;
+      } else {
+        std::cout << "FP16 in h2d, fp16: " << fp16 << ", tid: " << tid << std::endl;
+      }
+
+      if (ssd_flag) {
+        p2p_addr = (uint64_t)fp16;
+        p2p_size = (uint64_t)(nbytes / 2);
+      } else {
+        AT_CUDA_CHECK(cudaMemcpyAsync(fp16, src, nbytes / 2, kind, stream));
+        float_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half* )fp16, (float* )dst, iter.numel());
+        arc_vm.device_free(fp16, sizeof(__half) * iter.numel());
+      }
     } else {
-        TORCH_INTERNAL_ASSERT(false, "unsupported devices in GPU copy_()");
+      std::cout << "Nothing in h2d, tid: " << tid << std::endl;
+      if (true == ssd_flag) {
+        p2p_addr = (uint64_t)dst;
+        p2p_size = (uint64_t)nbytes;
+      } else {
+        AT_CUDA_CHECK(cudaMemcpyAsync(dst, src, nbytes, kind, stream));
+      }
     }
+  }
 
-    uint64_t p2p_addr = 0, p2p_size = 0;
+  if (ssd_flag) {
+    uint64_t *p_offs = arc_vm.get_offset_ptr(tid);
+    arcp2p_cpl *p_cpl = (arcp2p_cpl *)arc_vm.get_cpl_addr(tid, dir);
 
-    void* dst = iter.data_ptr(0);
-    void* src = iter.data_ptr(1);
-    int64_t nbytes = iter.numel() * iter.element_size(0);
-    CUDAStream stream = getCurrentCUDAStream();
+    if (arcp2p_gputossd == dir) {
+      c10::Storage *stor = new c10::Storage;
+      *stor = iter.tensor(1).storage();
 
-    if (fp16_flag) {
-        if (ARCfp16_ptr == NULL) {
-            cudaMalloc(&ARCfp16_ptr, (size_t)(1 << 30));
-            if (true == ssd_flag) {
-                // [TODO] this should be called only for Tesla option enabled
-                arc_vm.Arcp2pBarMapping((uint64_t)ARCfp16_ptr, (uint64_t)(1 << 30));
-            }
-        }
+      arc_vm.Arcp2pSubmission(p2p_addr, p2p_size, p_offs, p_cpl, dir, stor, nullptr);
+      arc_vm.Arcp2pCompletion();
+    } else if (arcp2p_ssdtogpu == dir) {
+      arcp2p_info *info = nullptr;
+
+      if (true == fp16_flag) {
+        info = new arcp2p_info;
+        info->tid = (uint64_t)tid;
+        info->numel = (uint64_t)iter.numel();
+        info->ntpb = nTPB;
+        info->dst = iter.data_ptr(0);
+        info->src = iter.data_ptr(1);
+        info->ptr = arc_vm.get_fp16_addr(tid);
+      }
+
+      arc_vm.Arcp2pSubmission(p2p_addr, p2p_size, p_offs, p_cpl, dir, nullptr, info);
+      arc_vm.Arcp2pCompletion();
     }
-
-    size_t bit_elements, pos_elements, pos_elements_before;
-
-    if (csr_flag) {
-        bit_elements = (size_t)((iter.numel() + 1024 - 1) / 1024) * 32;
-        pos_elements_before = (size_t)((iter.numel() + 32 - 1) / 32);
-        int count = 0;
-        while (pos_elements_before != 0) {
-                pos_elements_before = pos_elements_before >> 1;  count++;
-        }
-        pos_elements = 1 << count;
-    }
-
-    if (kind == cudaMemcpyDeviceToHost) {
-        if (csr_flag && is_csr) {
-            void *bit, *pos;
-            cudaMalloc((void **)&bit, sizeof(unsigned int) * bit_elements);
-            cudaMalloc((void **)&pos, sizeof(unsigned int) * pos_elements);
-
-            arc_vm.set_bit_addr(tid, (uint64_t)bit);
-            arc_vm.set_pos_addr(tid, (uint64_t)pos);
-
-            unsigned int *nz_pos;
-            cudaMalloc((void **)&nz_pos, pos_elements * sizeof(unsigned int));
-
-            float *nz_src;
-            cudaMalloc((void **)&nz_src, iter.numel() * sizeof(float));
-
-            cudaMemsetAsync((void *)bit, 0, sizeof(unsigned int) * bit_elements, stream);
-            cudaMemsetAsync((void *)pos, 0, sizeof(unsigned int) * pos_elements, stream);
-            cudaMemsetAsync((void *)nz_pos, 0, sizeof(unsigned int) * pos_elements, stream);
-
-            thrust::device_ptr<float> dA_V((float *)src);
-            thrust::device_ptr<float> dA_R((float *)nz_src);
-            thrust::copy_if(dA_V, dA_V + iter.numel(), dA_R, is_not_zero());
-
-            zero_mask<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((float *)src, (unsigned int *)bit, nz_pos, iter.numel());
-            pos_first<<<nblocks, nthreads, 0, stream>>>(nz_pos, pos_elements);
-            pos_second<<<nblocks, nthreads, 0, stream>>>(nz_pos, (unsigned int*)pos, pos_elements);
-
-            unsigned int resize = 0;
-            cudaMemcpyAsync((void *)&resize, (void *)((size_t)pos + sizeof(unsigned int) * (pos_elements - 1)),
-                            sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
-
-            cudaStreamSynchronize(stream);
-            arc_vm.set_resize(tid, resize);
-
-            half_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((float *)nz_src, (__half *)ARCfp16_ptr, resize);
-
-            if (true == ssd_flag)
-            {
-                p2p_addr = (uint64_t)ARCfp16_ptr;
-                p2p_size = (uint64_t)(resize * sizeof(__half));
-            }
-            else
-            {
-                AT_CUDA_CHECK(cudaMemcpyAsync(dst, ARCfp16_ptr, resize * sizeof(__half), kind, stream));
-            }
-
-            std::cout << "CSR in d2h, resize: " << resize << ", original: " << iter.numel() << ", bit: " << bit << ", pos: " << pos << ", dst: " << dst << ", src: " << src << ", tid: " << tid << std::endl;
-            cudaFree((void *)nz_pos);
-            cudaFree((void *)nz_src);
-        } else if (fp16_flag) {
-            // this case include both cases
-            // 1. csr_flag==true && is_csr==false (csr_flag==true always guarantee fp16_flag==true)
-            // 2. csr_flag==false && fp16_flag==true
-
-            // keep print message for debug purpose
-            if (csr_flag) {
-                std::cout << "No CSR in d2h, dst: " << dst << ", src: " << src << ", tid: " << tid << std::endl;
-            } else {
-                std::cout << "FP16 in d2h, dst: " << dst << ", src: " << src << ", tid: " << tid << std::endl;
-            }
-
-            half_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((float *)src, (__half *)ARCfp16_ptr, iter.numel());
-            if (true == ssd_flag)
-            {
-                arc_vm.set_resize(tid, 0); // [TODO] slight hack code, we will distinguish CSR / FP16 by resize value
-                p2p_addr = (uint64_t)ARCfp16_ptr;
-                p2p_size = (uint64_t)(nbytes / 2);
-            }
-            else
-            {
-                AT_CUDA_CHECK(cudaMemcpyAsync(dst, ARCfp16_ptr, nbytes / 2, kind, stream));
-            }
-        }
-        else // false == csr_flag && false == fp16_flag
-        {
-            std::cout << "Nothing in d2h, tid: " << tid << std::endl;
-            if (true == ssd_flag)
-            {
-                p2p_addr = (uint64_t)src;
-                p2p_size = (uint64_t)nbytes;
-            }
-            else
-            {
-                AT_CUDA_CHECK(cudaMemcpyAsync(dst, src, nbytes, kind, stream));
-            }
-        }
-    }
-
-    if (kind == cudaMemcpyHostToDevice) {
-        if (csr_flag && is_csr) {
-            void* bit = arc_vm.get_bit_addr(tid);
-            void* pos = arc_vm.get_pos_addr(tid);
-
-            unsigned int resize = arc_vm.get_resize(tid);
-
-            std::cout << "CSR in h2d, resize: " << resize << ", original: " << iter.numel() << ", bit: " << bit << ", pos: " << pos << ", dst: " << dst << ", src: " << src << ", tid: " << tid << std::endl;
-
-            if (ssd_flag) {
-                p2p_addr = (uint64_t)ARCfp16_ptr;
-                p2p_size = (uint64_t)(resize * sizeof(__half));
-                // [JS] all backend job will be called at Arcp2pCompletion
-            } else {
-                float *nz_dst;
-                cudaMalloc((void **)&nz_dst, resize * sizeof(float));
-                cudaMemsetAsync((void *)nz_dst, 0, resize * sizeof(float), stream);
-
-                AT_CUDA_CHECK(cudaMemcpyAsync(ARCfp16_ptr, src, resize * sizeof(__half), kind, stream));
-
-                float_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half *)ARCfp16_ptr, nz_dst, resize);
-                zero_insert<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((unsigned int*)bit, (unsigned int*)pos, nz_dst, (float *)dst, iter.numel());
-
-                cudaFree((void *)nz_dst);
-            }
-            cudaFree((void *)bit);
-            cudaFree((void *)pos);
-        } else if (fp16_flag) {
-            // keep print message for debug purpose
-            if (csr_flag) {
-                std::cout << "No CSR in h2d, dst: " << dst << ", src: " << src << ", tid: " << tid << std::endl;
-            } else {
-                std::cout << "FP16 in h2d, dst: " << dst << ", src: " << src << ", tid: " << tid << std::endl;
-            }
-            if (ssd_flag) {
-                p2p_addr = (uint64_t)ARCfp16_ptr;
-                p2p_size = (uint64_t)(nbytes / 2);
-            } else {
-                AT_CUDA_CHECK(cudaMemcpyAsync(ARCfp16_ptr, src, nbytes / 2, kind, stream));
-                float_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half* )ARCfp16_ptr, (float* )dst, iter.numel());
-            }
-        } else {
-            std::cout << "Nothing in h2d, tid: " << tid << std::endl;
-            if (true == ssd_flag) {
-                p2p_addr = (uint64_t)dst;
-                p2p_size = (uint64_t)nbytes;
-            } else {
-                AT_CUDA_CHECK(cudaMemcpyAsync(dst, src, nbytes, kind, stream));
-            }
-        }
-    }
-
-    if (ssd_flag) {
-        uint64_t *p_offs = arc_vm.get_offset_ptr(tid);
-        arcp2p_cpl *p_cpl = (arcp2p_cpl *)arc_vm.get_cpl_addr(tid, dir);
-
-        if (arcp2p_gputossd == dir) {
-            c10::Storage *stor = new c10::Storage;
-            *stor = iter.tensor(1).storage();
-
-            arc_vm.Arcp2pSubmission(p2p_addr, p2p_size, p_offs, p_cpl, dir, stor, nullptr);
-            arc_vm.Arcp2pCompletion();
-        }
-        else if (arcp2p_ssdtogpu == dir) {
-            arcp2p_info *info = nullptr;
-
-            if (true == fp16_flag) {
-                info = new arcp2p_info;
-                info->tid = (uint64_t)tid;
-                info->numel = (uint64_t)iter.numel();
-                info->ntpb = nTPB;
-                info->dst = iter.data_ptr(0);
-                info->src = iter.data_ptr(1);
-                info->ptr = ARCfp16_ptr;
-            }
-
-            arc_vm.Arcp2pSubmission(p2p_addr, p2p_size, p_offs, p_cpl, dir, nullptr, info);
-            arc_vm.Arcp2pCompletion();
-        }
+  } else {
+    if (non_blocking) {
+      void* ptr = (dst_device == kCPU ? dst : src);
+      AT_CUDA_CHECK(THCCachingHostAllocator_recordEvent(ptr, stream));
     } else {
-        if (non_blocking) {
-            void* ptr = (dst_device == kCPU ? dst : src);
-            AT_CUDA_CHECK(THCCachingHostAllocator_recordEvent(ptr, stream));
-        } else {
-            AT_CUDA_CHECK(cudaStreamSynchronize(stream));
-        }
+      AT_CUDA_CHECK(cudaStreamSynchronize(stream));
     }
+  }
 }
 
 REGISTER_DISPATCH(copy_stub, &copy_kernel_cuda);
