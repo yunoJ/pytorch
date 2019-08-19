@@ -143,58 +143,61 @@ static bool offload_thread_run = 0;
 static double accumSize = 0;
 
 double ARCCppEngine::checkCSR(double freeSize) {
-        double remainSize = accumSize - freeSize;
-        std::cout << "checkCSR" << std::endl;
+  double remainSize = accumSize - freeSize;
+  std::cout << "checkCSR" << std::endl;
 
-        if (remainSize <= 0) {
-                std::cout << "checkCSR no remain" << std::endl;
-                return 0;
-        }
+  if (remainSize <= 0) {
+    std::cout << "checkCSR no remain" << std::endl;
+    return 0;
+  }
 
-        for (auto it = liveness_temp.begin(); it != liveness_temp.end(); ++it) {
-                if ((it->second).second) {
-                        std::cout << "\tcheckCSR tid: " << it->first << ", size: " << (it->second).first << std::endl;
-                        remainSize -= (it->second).first;
-                        liveness_result.insert(std::pair<Tid, bool>(it->first, (it->second).second));
-                }
+  for (auto it = liveness_temp.begin(); it != liveness_temp.end(); ++it) {
+    if ((it->second).second) {
+      std::cout << "\tcheckCSR tid: " << it->first << ", size: " << (it->second).first << std::endl;
+      remainSize -= (it->second).first;
+      liveness_result.insert(std::pair<Tid, bool>(it->first, (it->second).second));
+    }
 
-                if (remainSize <= 0)  break;
-        }
+    if (remainSize <= 0) {
+      std::cout << "CSR check end" << std::endl;
+      break;
+    }
+  }
 
-        return remainSize;
+  return remainSize;
 }
 
 double ARCCppEngine::checkLarge(double remainSize) {
-        std::cout << "checkLarge" << std::endl;
+  std::cout << "checkLarge" << std::endl;
 
-        for (auto it = liveness_temp.begin(); it != liveness_temp.end(); ++it) {
-                if (liveness_result.find(it->first) == liveness_result.end()) {
-                        if ((it->second).first > 12) {
-                                std::cout << "\tcheckLarge tid: " << it->first << ", size: " << (it->second).first << std::endl;
-                                remainSize -= (it->second).first;
-                                liveness_result.insert(std::pair<Tid, bool>(it->first, (it->second).second));
-                        }
-                }
+  for (auto it = liveness_temp.begin(); it != liveness_temp.end(); ++it) {
+    if (liveness_result.find(it->first) == liveness_result.end()) {
+      if ((it->second).first > 12) {
+        std::cout << "\tcheckLarge tid: " << it->first << ", size: " << (it->second).first << std::endl;
+        remainSize -= (it->second).first;
+        liveness_result.insert(std::pair<Tid, bool>(it->first, (it->second).second));
+      }
+    }
 
-                if (remainSize <= 0)  break;
-        }
+    if (remainSize <= 0)  break;
+  }
 
-        return remainSize;
+  return remainSize;
 }
 
 double ARCCppEngine::checkFirst(double remainSize) {
-        std::cout << "checkFirst" << std::endl;
+  std::cout << "checkFirst" << std::endl;
 
-        for (auto it = liveness_temp.begin(); it != liveness_temp.end(); ++it) {
-                if (liveness_result.find(it->first) == liveness_result.end()) {
-                        std::cout << "\tcheckFirst tid: " << it->first << ", size: " << (it->second).first << std::endl;
-                        remainSize -= (it->second).first;
-                        liveness_result.insert(std::pair<Tid, bool>(it->first, (it->second).second));
-                }
+  for (auto it = liveness_temp.begin(); it != liveness_temp.end(); ++it) {
+    if (liveness_result.find(it->first) == liveness_result.end()) {
+      std::cout << "\tcheckFirst tid: " << it->first << ", size: " << (it->second).first << std::endl;
+      remainSize -= (it->second).first;
+      liveness_result.insert(std::pair<Tid, bool>(it->first, (it->second).second));
+    }
 
-                if (remainSize <= 0)  break;
-        }
-        return remainSize;
+    if (remainSize <= 0)  break;
+  }
+  return remainSize;
 }
 
 //Note: Not referecne but copy a tensor to make it alive
@@ -218,7 +221,7 @@ void ARCCppEngine::offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync s
 
   if (at::globalContext().ARCGlobal.isOnDemand() && at::globalContext().ARCGlobal.isForward()) {
     accumSize += (double)t.nbytes() / 1024 / 1024;
-    std::cout << "accumulated tensor size: " << tid << ", " << accumSize << std::endl;
+    std::cout << "accumulated tensor tid: " << tid << ", accum: " << accumSize << ", relu_thru: " << at::native::arc_vm.relu_thru << std::endl;
     liveness_temp.insert(std::pair<Tid, std::pair<double, bool>>(
         tid, std::pair<double, bool>((double)t.nbytes() / 1024 / 1024, at::native::arc_vm.relu_thru)));
     at::native::arc_vm.relu_thru = false;
@@ -276,6 +279,7 @@ void ARCCppEngine::default_offload_() {
              tensor_dict_.insert(std::pair<Tid, std::pair<at::Tensor, bool>>(task.first,
                  std::pair<at::Tensor, bool>(task.second.first.ARCto(opt, false, true, false), task.second.second)));
            } else {
+             std::cout << "Tensor insert: " << task.first << ", csr: " << liveness_result[task.first] << std::endl;
              tensor_dict_.insert(std::pair<Tid, std::pair<at::Tensor, bool>>(task.first,
                  std::pair<at::Tensor, bool>(task.second.first.ARCto(opt, false, true,
                      liveness_result[task.first]), task.second.second)));
@@ -376,6 +380,7 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
   c10::cuda::CUDAStream str(c10::Stream(c10::Stream::UNSAFE, c10::Device(c10::DeviceType::CUDA, 0), sid)); 
   str.synchronize();
 
+
   auto fetch_vec = pf_dict_[oid]; 
   for (auto it = fetch_vec.begin(); it != fetch_vec.end(); it++) {
     auto tid = it->second;
@@ -390,22 +395,56 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
     volatile at::native::arcp2p_cpl *p_flu_cpl = (volatile at::native::arcp2p_cpl *)at::native::arc_vm.get_cpl_addr(tid, at::native::arcp2p_gputossd);
     volatile at::native::arcp2p_cpl *p_pre_cpl = (volatile at::native::arcp2p_cpl *)at::native::arc_vm.get_cpl_addr(tid, at::native::arcp2p_ssdtogpu);
     while (1) {
-      if (tensor_dict_[tid].first.device().type() == c10::DeviceType::CUDA) {
-        break;
+      void* fp16 = at::native::arc_vm.get_fp16_addr(tid);
+      size_t numel = at::native::arc_vm.get_numel(tid);
+
+      size_t bit_elements, pos_elements, pos_elements_before;
+      bit_elements = (size_t)((numel + 1024 - 1) / 1024) * 32;
+      pos_elements_before = (size_t)((numel + 32 - 1) / 32);
+      int count = 0;
+      while (pos_elements_before != 0) {
+        pos_elements_before = pos_elements_before >> 1;  count++;
       }
-      if (at::native::arc_vm.is_using_ssd())
-      {
-          if (false == p_flu_cpl->requested && false == p_pre_cpl->requested)
-          {
+      pos_elements = 1 << count;
+
+      if (at::native::arc_vm.is_using_ssd()) {
+          if (false == p_flu_cpl->requested && false == p_pre_cpl->requested) {
+              at::native::arc_vm.event_arr[tid].block(str);
+              unsigned int resize = at::native::arc_vm.get_resize(tid);
+
+              if (at::native::arc_vm.is_csr() && resize > 0) {
+                void* bit = at::native::arc_vm.get_bit_addr(tid);
+                void* pos = at::native::arc_vm.get_pos_addr(tid);
+
+                at::native::arc_vm.device_free(fp16, sizeof(__half) * resize);
+                at::native::arc_vm.device_free(bit, sizeof(unsigned int) * bit_elements);
+                at::native::arc_vm.device_free(pos, sizeof(unsigned int) * pos_elements);
+              } else { // TODO arcp2p without any comprression (fp16 == false, is_csr == false)
+                at::native::arc_vm.device_free(fp16, sizeof(__half) * numel);
+              }
+
               delete p_flu_cpl;
               delete p_pre_cpl;
               break;
           }
+          at::native::arc_vm.Arcp2pCompletion();
+      } else {
+        if (tensor_dict_[tid].first.device().type() == c10::DeviceType::CUDA) {
+          if (at::native::arc_vm.is_csr()) {
+            void* bit = at::native::arc_vm.get_bit_addr(tid);
+            void* pos = at::native::arc_vm.get_pos_addr(tid);
+            unsigned int resize = at::native::arc_vm.get_resize(tid);
 
-          std::cerr << "sync tensor is not prefetched from ssd yet" << std::endl;
+            at::native::arc_vm.device_free(fp16, sizeof(__half) * resize);
+            at::native::arc_vm.device_free(bit, sizeof(unsigned int) * bit_elements);
+            at::native::arc_vm.device_free(pos, sizeof(unsigned int) * pos_elements);
+          } else {
+            at::native::arc_vm.device_free(fp16, sizeof(__half) * numel);
+          }
+          std::cerr << "sync tensor is not on gpu yet" << std::endl;
+          break;
+        }
       }
-      std::cerr << "sync tensor is not on gpu yet" << std::endl;
-      return;
     }
 
     //at::globalContext().ARCGlobal.globalPrefetchStream().synchronize(); 
@@ -446,6 +485,14 @@ void ARCCppEngine::dropTensor(Oid oid, SavedVariable* fetch_loc) {
       opt = opt.dtype(tref.dtype());
       //opt = opt.dtype(c10::ScalarType::Half); 
       opt = opt.pinned_memory(true); 
+
+      // [JS] p2p setting if ssd mode is on
+      if (at::native::arc_vm.is_using_ssd())
+      {
+        at::native::arc_vm.set_dir(tid, at::native::arcp2p_gputossd);
+        at::native::arcp2p_cpl *p_cpl = new at::native::arcp2p_cpl;
+        at::native::arc_vm.set_cpl_addr(tid, at::native::arcp2p_gputossd, (void *)p_cpl);
+      }
 
       tref = tref.ARCto(opt, false, true, false);
     } else {

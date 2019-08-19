@@ -743,7 +743,9 @@ auto Engine::execute(const edge_list& roots,
     ARCCppEngine::joinPrefetchThread();
 
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    double remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 - 1024);
+    double freeSize = 2048;
+    double remainSize = ARCCppEngine::checkCSR(freeSize);
+//    double remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 - 1024);
 
     if (remainSize > 0)  remainSize = ARCCppEngine::checkLarge(remainSize);
 

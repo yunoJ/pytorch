@@ -430,12 +430,14 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
       cudaMemcpyAsync((void *)&resize, (void *)((size_t)pos + sizeof(unsigned int) * (pos_elements - 1)),
           sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
 
-      cudaStreamSynchronize(stream);
-      arc_vm.set_resize(tid, resize);
       arc_vm.device_malloc(&fp16, sizeof(__half) * resize);
       arc_vm.set_fp16_addr(tid, (uint64_t)fp16);
 
       half_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((float *)nz_src, (__half *)fp16, resize);
+
+      cudaStreamSynchronize(stream);
+      arc_vm.set_resize(tid, resize);
+      arc_vm.set_numel(tid, iter.numel());
 
       if (true == ssd_flag) {
         p2p_addr = (uint64_t)fp16;
@@ -466,8 +468,10 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
 
       half_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((float *)src, (__half *)fp16, iter.numel());
 
+      arc_vm.set_resize(tid, 0); // [TODO] slight hack code, we will distinguish CSR / FP16 by resize value
+      arc_vm.set_numel(tid, iter.numel());
+
       if (true == ssd_flag) {
-        arc_vm.set_resize(tid, 0); // [TODO] slight hack code, we will distinguish CSR / FP16 by resize value
         p2p_addr = (uint64_t)fp16;
         p2p_size = (uint64_t)(nbytes / 2);
       } else {
@@ -486,11 +490,14 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
 
   if (kind == cudaMemcpyHostToDevice) {
     if (csr_flag && is_csr) {
-      void* fp16 = arc_vm.get_fp16_addr(tid);
       void* bit = arc_vm.get_bit_addr(tid);
       void* pos = arc_vm.get_pos_addr(tid);
 
       unsigned int resize = arc_vm.get_resize(tid);
+
+      void* fp16;
+      arc_vm.device_malloc(&fp16, sizeof(__half) * resize);
+      arc_vm.set_fp16_addr(tid, (uint64_t)fp16);
 
       std::cout << "CSR in h2d, resize: " << resize << ", original: " << iter.numel() << ", fp16: " << fp16 << ", tid: " << tid << std::endl;
 
@@ -509,13 +516,13 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
         zero_insert<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((unsigned int*)bit, (unsigned int*)pos, nz_dst, (float *)dst, iter.numel());
 
         arc_vm.device_free((void *)nz_dst, resize * sizeof(float));
-        arc_vm.device_free(fp16, sizeof(__half) * resize);
-        arc_vm.device_free(bit, sizeof(unsigned int) * bit_elements);
-        arc_vm.device_free(pos, sizeof(unsigned int) * pos_elements);
       }
     } else if (fp16_flag) {
       // keep print message for debug purpose
-      void* fp16 = arc_vm.get_fp16_addr(tid);
+      void* fp16;
+      arc_vm.device_malloc(&fp16, sizeof(__half) * iter.numel());
+      arc_vm.set_fp16_addr(tid, (uint64_t)fp16);
+
       if (csr_flag) {
         std::cout << "No CSR in h2d, fp16: " << fp16 << ", tid: " << tid << std::endl;
       } else {
@@ -548,8 +555,15 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
     if (arcp2p_gputossd == dir) {
       c10::Storage *stor = new c10::Storage;
       *stor = iter.tensor(1).storage();
+      arcp2p_info *info = nullptr;
 
-      arc_vm.Arcp2pSubmission(p2p_addr, p2p_size, p_offs, p_cpl, dir, stor, nullptr);
+      if (true == fp16_flag) {
+        info = new arcp2p_info;
+        info->tid = (uint64_t)tid;
+        info->ptr = arc_vm.get_fp16_addr(tid);
+      }
+
+      arc_vm.Arcp2pSubmission(p2p_addr, p2p_size, p_offs, p_cpl, dir, stor, info);
       arc_vm.Arcp2pCompletion();
     } else if (arcp2p_ssdtogpu == dir) {
       arcp2p_info *info = nullptr;

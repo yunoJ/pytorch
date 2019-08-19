@@ -16,6 +16,7 @@
 #include <dlfcn.h>
 #include <c10/cuda/CUDAStream.h>
 #include <mutex>
+#include <ATen/cuda/CUDAEvent.h>
 
 #define BLK_SZ ((size_t)1 << 12)
 #define DEVICE_SZ (((size_t)1 << 30)*4)
@@ -23,6 +24,8 @@
 
 using namespace std;
 namespace at { namespace native {
+
+using namespace at::cuda;
 
 typedef struct
 {
@@ -47,6 +50,7 @@ class ARC_memory {
 
   bool relu_thru;
   bool mapping;
+  CUDAEvent* event_arr;
   mutex m;
 
   void device_malloc(void** gpu_ptr, size_t size);
@@ -64,6 +68,9 @@ class ARC_memory {
 
   unsigned int get_resize(int tid);
   void set_resize(int tid, unsigned int resize);
+
+  size_t get_numel(int tid);
+  void set_numel(int tid, size_t numel);
 
   void* get_cpl_addr(int tid, arcp2p_dir dir);
   void set_cpl_addr(int tid, arcp2p_dir dir, void *addr);
@@ -94,6 +101,7 @@ class ARC_memory {
   uint64_t* bit_ptr_arr;
   uint64_t* pos_ptr_arr;
   unsigned int* resize_arr;
+  size_t* numel_arr;
   uint64_t* cpl_flu_ptr_arr;
   uint64_t* cpl_pre_ptr_arr;
   uint64_t* offset_arr;
