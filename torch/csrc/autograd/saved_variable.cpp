@@ -253,15 +253,24 @@ void ARCCppEngine::joinOffloadThread() {
 void ARCCppEngine::default_offload_() {
     while(1) { 
         if (!offload_queue_.empty()) {
-           auto task = offload_queue_.front(); 
-           offload_queue_.pop(); 
-           auto str = c10::cuda::getStreamFromPool(false, 0);
-           str.synchronize();
-           c10::cuda::CUDAStreamGuard csg(str);     
-           c10::TensorOptions opt = c10::TensorOptions();
-           opt = opt.device(c10::Device(c10::DeviceType::CPU));
-           opt = opt.dtype(task.second.first.dtype());  
-           opt = opt.pinned_memory(true); 
+            auto task = offload_queue_.front(); 
+            offload_queue_.pop(); 
+            auto str = c10::cuda::getStreamFromPool(false, 0);
+            str.synchronize();
+            c10::cuda::CUDAStreamGuard csg(str);     
+            c10::TensorOptions opt = c10::TensorOptions();
+            opt = opt.device(c10::Device(c10::DeviceType::CPU));
+            opt = opt.dtype(task.second.first.dtype());  
+            opt = opt.pinned_memory(true); 
+
+            // [JS] p2p setting if ssd mode is on
+            if (at::native::arc_vm.is_using_ssd())
+            {
+              auto tid = task.second.first.unsafeGetIntrusivePtr()->tensor_id;  
+              at::native::arc_vm.set_dir(tid, at::native::arcp2p_gputossd);
+              at::native::arcp2p_cpl *p_cpl = new at::native::arcp2p_cpl;
+              at::native::arc_vm.set_cpl_addr(tid, at::native::arcp2p_gputossd, (void *)p_cpl);
+            }
 
            if (at::globalContext().ARCGlobal.isOnDemand()) {
              tensor_dict_.insert(std::pair<Tid, std::pair<at::Tensor, bool>>(task.first,
@@ -376,9 +385,24 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
       std::cerr << "sync tensor dictionary lookup miss" << std::endl;
       return;
     }
+
+    // [JS] for p2p support
+    volatile at::native::arcp2p_cpl *p_flu_cpl = (volatile at::native::arcp2p_cpl *)at::native::arc_vm.get_cpl_addr(tid, at::native::arcp2p_gputossd);
+    volatile at::native::arcp2p_cpl *p_pre_cpl = (volatile at::native::arcp2p_cpl *)at::native::arc_vm.get_cpl_addr(tid, at::native::arcp2p_ssdtogpu);
     while (1) {
       if (tensor_dict_[tid].first.device().type() == c10::DeviceType::CUDA) {
         break;
+      }
+      if (at::native::arc_vm.is_using_ssd())
+      {
+          if (false == p_flu_cpl->requested && false == p_pre_cpl->requested)
+          {
+              delete p_flu_cpl;
+              delete p_pre_cpl;
+              break;
+          }
+
+          std::cerr << "sync tensor is not prefetched from ssd yet" << std::endl;
       }
       std::cerr << "sync tensor is not on gpu yet" << std::endl;
       return;
@@ -471,6 +495,14 @@ void ARCCppEngine::fetchRequiredTensors_(Oid oid,  ARCSync sync) {
         else {
           last_op_dict_[tid] = oid;   
         }
+      }
+
+      // [JS] p2p
+      if (at::native::arc_vm.is_using_ssd())
+      {
+          at::native::arc_vm.set_dir(tid, at::native::arcp2p_ssdtogpu);
+          at::native::arcp2p_cpl *p_cpl = new at::native::arcp2p_cpl;
+          at::native::arc_vm.set_cpl_addr(tid, at::native::arcp2p_ssdtogpu, (void *)p_cpl);
       }
 
       if (at::globalContext().ARCGlobal.isOnDemand()) {

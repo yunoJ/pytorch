@@ -16,10 +16,6 @@
 #include <dlfcn.h>
 #include <c10/cuda/CUDAStream.h>
 
-#define ARC_FP16
-#define ARC_CSR
-//#define ARC_P2P
-
 using namespace std;
 namespace at { namespace native {
 
@@ -68,6 +64,11 @@ public:
   int  Arcp2pBarMapping(uint64_t, uint64_t);
   void Arcp2pSubmission(uint64_t, uint64_t, uint64_t *, arcp2p_cpl *, arcp2p_dir, c10::Storage *, arcp2p_info *);
   void Arcp2pCompletion();
+
+  // [JS] flag check
+  bool is_using_ssd();
+  bool is_fp16();
+  bool is_csr();
 
 private:
   uint64_t* bit_ptr_arr;

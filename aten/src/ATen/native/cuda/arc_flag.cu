@@ -22,9 +22,10 @@
 #define mask(n) (0x80000000 >> (unsigned int)((n % 1024) / 32))
 
 // [JS] Arcp2p Setting flag define
-#define ARC_FLAG_SSD  (1U << 0)
-#define ARC_FLAG_FP16 (1U << 1)
-#define ARC_FLAG_CSR  (1U << 2)
+#define ARC_FLAG_SSD   (1U << 0)
+#define ARC_FLAG_FP16  (1U << 1)
+#define ARC_FLAG_CSR   (1U << 2)
+#define ARC_FLAG_TESLA (1U << 3)
 
 using namespace at::cuda;
 __global__ void float_scale(__half *din, float *dout, int dsize) {
@@ -88,6 +89,11 @@ std::queue<req_element> req_queue;
     dir_arr = new arcp2p_dir[NUM_TENSOR];
 
     memset(dir_arr, 0, sizeof(arcp2p_dir) * NUM_TENSOR);
+
+    isTesla = false;
+    isUsingSSD = false;
+    isFP16 = false;
+    isCSR = false;
   }
 
   ARC_memory::~ARC_memory() {
@@ -168,17 +174,46 @@ std::queue<req_element> req_queue;
     dir_arr[tid] = dir;
   }
 
+  bool ARC_memory::is_using_ssd(void) {
+    return isUsingSSD;
+  }
+
+  bool ARC_memory::is_fp16(void) {
+    return isFP16;
+  }
+
+  bool ARC_memory::is_csr(void) {
+    return isCSR;
+  }
+
   void ARC_memory::Arcp2pSetting(int flags)
   {
     printf("Arcp2pSetting : 0x%x\n", flags);
 
-    // for flag index 0
+    if (flags & ARC_FLAG_FP16)
+    {
+      printf("FP16 flag set\n");
+      isFP16 = true;
+    }
+
+    if (flags & ARC_FLAG_CSR)
+    {
+      printf("CSR flag set\n");
+      isCSR = true;
+      isFP16 = true;
+    }
+
+    if (flags & ARC_FLAG_TESLA)
+    {
+      printf("Tesla flag set\n");
+      isTesla = true;
+    }
+
     if (flags & ARC_FLAG_SSD)
     {
       printf("SSD flag set\n");
       // [JS] P2P
       isUsingSSD = true;
-      isTesla = true;
       last_allocated_offset = 0;
 
       const char *nvme_path_tesla[PATH_LENGTH] = {"0000:65:00.00", "0000:66:00.00"}; // TESLA
@@ -214,19 +249,6 @@ std::queue<req_element> req_queue;
       if (true == isTesla)
       {
         arc_handle = arcp2p_initialize(nvme_path_tesla, nvme_cnt_tesla);
-
-        /*
-        // allocate whole gpu memory
-        void *gpu_addr;
-        const size_t gpu_size = (size_t)16 * 1024 * 1024 * 1024;  // 16GB allocation for large chunks
-        at::Allocator *cuda_allocator = c10::cuda::CUDACachingAllocator::get();
-        gpu_addr = cuda_allocator->raw_allocate(gpu_size);
-        if (ARCP2P_NO_ERROR != arcp2p_bar_attach(arc_handle, (uint64_t)gpu_addr, (uint64_t)gpu_size))
-        {
-          printf("Bar attach trial for Tesla failed\n");
-        }
-        cuda_allocator->raw_deallocate(gpu_addr);
-        */
       }
       else
       {
@@ -236,16 +258,6 @@ std::queue<req_element> req_queue;
     else // if not ssd
     {
       isUsingSSD = false;
-    }
-
-    if (flags & ARC_FLAG_FP16)
-    {
-      printf("FP16 flag set\n");
-    }
-
-    if (flags & ARC_FLAG_CSR)
-    {
-      printf("CSR flag set\n");
     }
   }
 
@@ -362,37 +374,37 @@ std::queue<req_element> req_queue;
         // [TODO] arcp2p_data would be freed here? or after?
 
         // FP16 & CSR handling
-
-#ifdef ARC_CSR
-        at::Allocator *cuda_allocator = c10::cuda::CUDACachingAllocator::get();
-        auto stream = at::cuda::getCurrentCUDAStream();
-
-        uint64_t nTPB = req.info->ntpb;
-        uint64_t numel = req.info->numel;
-        void* bit = arc_vm.get_bit_addr(req.info->tid);
-        void* pos = arc_vm.get_pos_addr(req.info->tid);
         unsigned int resize = arc_vm.get_resize(req.info->tid);
-        float *nz_dst;
-    //    cudaMalloc((void **)&nz_dst, resize * sizeof(float));
-        nz_dst = (float *)cuda_allocator->raw_allocate(sizeof(float) * resize);
-        cudaMemsetAsync((void *)nz_dst, 0, resize * sizeof(float), stream);
 
-        float_scale<<<(numel + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half *)req.info->ptr, nz_dst, resize);
-        zero_insert<<<(numel + nTPB - 1) / nTPB, nTPB, 0, stream>>>((unsigned int*)bit, (unsigned int*)pos, nz_dst, (float *)req.info->dst, numel);
-        cuda_allocator->raw_deallocate((void *)nz_dst);
+        if (isFP16 && (resize > 0))
+	{
+          auto stream = at::cuda::getCurrentCUDAStream();
 
-        delete req.info;
-#elif ARC_FP16
-        at::Allocator *cuda_allocator = c10::cuda::CUDACachingAllocator::get();
-        auto stream = at::cuda::getCurrentCUDAStream();
+          uint64_t nTPB = req.info->ntpb;
+          uint64_t numel = req.info->numel;
+          void* bit = arc_vm.get_bit_addr(req.info->tid);
+          void* pos = arc_vm.get_pos_addr(req.info->tid);
+          float *nz_dst;
+          cudaMalloc((void **)&nz_dst, resize * sizeof(float));
+          cudaMemsetAsync((void *)nz_dst, 0, resize * sizeof(float), stream);
 
-        uint64_t nTPB = req.info->ntpb;
-        uint64_t numel = req.info->numel;
+          float_scale<<<(numel + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half *)req.info->ptr, nz_dst, resize);
+          zero_insert<<<(numel + nTPB - 1) / nTPB, nTPB, 0, stream>>>((unsigned int*)bit, (unsigned int*)pos, nz_dst, (float *)req.info->dst, numel);
+	  cudaFree((void *)nz_dst);
 
-        float_scale<<<(numel + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half* )req.info->ptr, (float* )req.info->dst, numel);
+          delete req.info;
+        }
+        else if (isFP16 && (resize == 0))
+        {
+          auto stream = at::cuda::getCurrentCUDAStream();
 
-        delete req.info;
-#endif
+          uint64_t nTPB = req.info->ntpb;
+          uint64_t numel = req.info->numel;
+
+          float_scale<<<(numel + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half* )req.info->ptr, (float* )req.info->dst, numel);
+
+          delete req.info;
+        }
       }
       else
       {
