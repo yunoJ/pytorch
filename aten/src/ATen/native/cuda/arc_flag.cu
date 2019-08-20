@@ -463,11 +463,15 @@ std::queue<req_element> req_queue;
   // completion
   void ARC_memory::Arcp2pCompletion()
   {
+    m2.lock();
+
     // if req_list empty, nothing to do
     if (req_queue.empty())
     {
+      m2.unlock();
       return;
     }
+
 
     // first, run completer of arcp2p, this will update cpl.issued
     arcp2p_completion(arc_handle);
@@ -490,6 +494,7 @@ std::queue<req_element> req_queue;
           device_free(req.info->ptr, sizeof(__half) * numel);
         }
         delete req.info;
+        delete req.stor;
       } else if (arcp2p_ssdtogpu == req.dir) {
 //        printf("NVMe read done\n");
         // [TODO] backend job needed for read done case (ex. notify backward operation that data is ready)
@@ -540,12 +545,6 @@ std::queue<req_element> req_queue;
 
           delete req.info;
         }
-      } else {
-//        printf("NVMe write done\n");
-        // [TODO] backend job needed for write done case (ex. gpu memory free)
-        // Because of constructor / destructor definition of storage_impl in Tensor,
-        // We just drop Tensor at here
-        delete req.stor;
       }
 
       req.p_cpl->requested = false;
@@ -579,6 +578,7 @@ std::queue<req_element> req_queue;
         }
       }
     }
+    m2.unlock();
   }
 
 }}

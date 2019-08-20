@@ -30,91 +30,92 @@ namespace native {
 using namespace at::cuda;
 
 __global__ void half_scale(float *din, __half *dout, int dsize) {
-        int idx = threadIdx.x + blockDim.x * blockIdx.x;
-        if (idx < dsize)  dout[idx] = __float2half(din[idx]);
+  int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  if (idx < dsize)  dout[idx] = __float2half(din[idx]);
 }
 
 __global__ void float_scale(__half *din, float *dout, int dsize) {
-        int idx = threadIdx.x + blockDim.x * blockIdx.x;
-        if (idx < dsize)  dout[idx] = __half2float(din[idx]);
+  int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  if (idx < dsize)  dout[idx] = __half2float(din[idx]);
 }
 
 __global__ void zero_mask(float *din, unsigned int *bit, unsigned int *pos, int dsize) {
-        int idx = threadIdx.x + blockDim.x * blockIdx.x;
-        if (idx < dsize) {
-                if (din[idx] != 0.0f) {
-                        atomicAdd(&bit[find(idx)], mask(idx));
-                        atomicAdd(&pos[(unsigned int)(idx / 32)], 1);
-                }
-        }
+  int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  if (idx < dsize) {
+    if (din[idx] != 0.0f) {
+      atomicAdd(&bit[find(idx)], mask(idx));
+      atomicAdd(&pos[(unsigned int)(idx / 32)], 1);
+    }
+  }
 }
 
 __global__ void pos_first(unsigned int* pos, int asize) {
-        int total_idx = nblocks * nthreads;
+  int total_idx = nblocks * nthreads;
 
-        for (int j = 0; j < (asize / per_threads / total_idx + 1); j++) {
-                int global_idx = threadIdx.x + blockIdx.x * blockDim.x;
+  for (int j = 0; j < (asize / per_threads / total_idx + 1); j++) {
+    int global_idx = threadIdx.x + blockIdx.x * blockDim.x;
 
-                if ((global_idx + 1) * per_threads - 1 <= asize) {
-                        for (int i = 0; i < per_threads; i++) {
-                                int idx = global_idx * per_threads + i;
-                                if (idx % per_threads != 0) {
-                                        pos[idx] += pos[idx - 1];
-                                }
-                        }
-                }
+    if ((global_idx + 1) * per_threads - 1 <= asize) {
+      for (int i = 0; i < per_threads; i++) {
+        int idx = global_idx * per_threads + i;
+        if (idx % per_threads != 0) {
+          pos[idx] += pos[idx - 1];
         }
+      }
+    }
+  }
 }
 
 __global__ void pos_second(unsigned int* pos, unsigned int* opos, int asize) {
-        int total_idx = nblocks * nthreads;
+  int total_idx = nblocks * nthreads;
 
-        for (int j = 0; j < (asize / per_threads / total_idx + 1); j++) {
-                int global_idx = threadIdx.x + blockIdx.x * blockDim.x;
+  for (int j = 0; j < (asize / per_threads / total_idx + 1); j++) {
+    int global_idx = threadIdx.x + blockIdx.x * blockDim.x;
 
-                if ((global_idx + 1) * per_threads - 1 <= asize) {
-                        unsigned int temp = 0;
+    if ((global_idx + 1) * per_threads - 1 <= asize) {
+      unsigned int temp = 0;
 
-                        for (int i = 0; i < global_idx; i++) {
-                                int idx = (i + 1) * per_threads - 1;
-                                temp += pos[idx];
-                        }
+      for (int i = 0; i < global_idx; i++) {
+        int idx = (i + 1) * per_threads - 1;
+        temp += pos[idx];
+      }
 
-                        for (int i = 0; i < per_threads; i++) {
-                                int idx = (global_idx) * per_threads + i;
-                                opos[idx] = pos[idx] + temp;
-                        }
-                }
-        }
+      for (int i = 0; i < per_threads; i++) {
+        int idx = (global_idx) * per_threads + i;
+        opos[idx] = pos[idx] + temp;
+      }
+    }
+  }
 }
 
 __global__ void zero_insert(unsigned int *bit, unsigned int *nz_pos, float* din, float *dout, int dsize) {
-        int idx = threadIdx.x + blockDim.x * blockIdx.x;
-        if (idx < dsize) {
-                int count = -1;
-                if ((unsigned int)(bit[find(idx)] & mask(idx)) > 0) {
-                        for (int i = (int)(idx / 32) * 32; i < idx + 1; i++) {
-                                unsigned int mask = bit[find(i)] & mask(i);
-                                if (mask > 0)  count += 1;
-                        }
-                }
+  int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  if (idx < dsize) {
+    int count = -1;
+    if ((unsigned int)(bit[find(idx)] & mask(idx)) > 0) {
+      for (int i = (int)(idx / 32) * 32; i < idx + 1; i++) {
+        unsigned int mask = bit[find(i)] & mask(i);
+        if (mask > 0)  count += 1;
+      }
+    }
 
-                if (count == -1)  dout[idx] = 0.0f;
-                else {
-                        if ((unsigned int)(idx / 32) == 0) {
-                                dout[idx] = din[count + 0];
-                        } else {
-                                dout[idx] = din[count + nz_pos[(unsigned int)(idx / 32) - 1]];
-                        }
-                }
-        }
+    if (count == -1)  dout[idx] = 0.0f;
+    else {
+      if ((unsigned int)(idx / 32) == 0) {
+        dout[idx] = din[count + 0];
+      } else {
+        dout[idx] = din[count + nz_pos[(unsigned int)(idx / 32) - 1]];
+      }
+    }
+  }
 }
 
+
 struct is_not_zero {
-        __host__ __device__
-                bool operator()(const float x) {
-                        return (x != 0);
-                }
+  __host__ __device__
+  bool operator()(const float x) {
+    return (x != 0);
+  }
 };
 
 template <typename dst_t, typename src_t>
@@ -381,7 +382,6 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
     if (!arc_vm.mapping) {
       // [TODO] this should be called only for Tesla option enabled
       void* deviceAddr = arc_vm.get_device_addr();
-      std::cout << "Hi addr: " << deviceAddr << std::endl;
       arc_vm.Arcp2pBarMapping((uint64_t)deviceAddr, (uint64_t)4 << 30);
       arc_vm.mapping = true;
     }
@@ -444,9 +444,12 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
         p2p_size = (uint64_t)(resize * sizeof(__half));
       } else {
         AT_CUDA_CHECK(cudaMemcpyAsync(dst, fp16, resize * sizeof(__half), kind, stream));
+        arc_vm.device_free(fp16, resize * sizeof(__half));
       }
 
-      std::cout << "CSR in d2h, resize: " << resize << ", original: " << iter.numel() << ", fp16: " << fp16 << ", tid: " << tid << std::endl;
+      if (globalContext().ARCGlobal.isDebugMode()) {
+        std::cout << "CSR in d2h, resize: " << resize << ", original: " << iter.numel() << ", fp16: " << fp16 << ", tid: " << tid << std::endl;
+      }
 
       arc_vm.device_free((void *)nz_pos, pos_elements * sizeof(unsigned int));
       arc_vm.device_free((void *)nz_src, iter.numel() * sizeof(float));
@@ -460,10 +463,12 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
       arc_vm.device_malloc(&fp16, sizeof(__half) * iter.numel());
       arc_vm.set_fp16_addr(tid, (uint64_t)fp16);
 
-      if (csr_flag) {
-        std::cout << "No CSR in d2h, fp16: " << fp16 << ", tid: " << tid << std::endl;
-      } else {
-        std::cout << "FP16 in d2h, fp16: " << fp16 << ", tid: " << tid << std::endl;
+      if (globalContext().ARCGlobal.isDebugMode()) {
+        if (csr_flag) {
+          std::cout << "No CSR in d2h, fp16: " << fp16 << ", tid: " << tid << std::endl;
+        } else {
+          std::cout << "FP16 in d2h, fp16: " << fp16 << ", tid: " << tid << std::endl;
+        }
       }
 
       half_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((float *)src, (__half *)fp16, iter.numel());
@@ -476,9 +481,13 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
         p2p_size = (uint64_t)(nbytes / 2);
       } else {
         AT_CUDA_CHECK(cudaMemcpyAsync(dst, fp16, nbytes / 2, kind, stream));
+        arc_vm.device_free(fp16, iter.numel() * sizeof(__half));
       }
     } else { // false == csr_flag && false == fp16_flag
-      std::cout << "Nothing in d2h, tid: " << tid << std::endl;
+      if (globalContext().ARCGlobal.isDebugMode()) {
+        std::cout << "Nothing in d2h, tid: " << tid << std::endl;
+      }
+
       if (true == ssd_flag) {
         p2p_addr = (uint64_t)src;
         p2p_size = (uint64_t)nbytes;
@@ -499,7 +508,9 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
       arc_vm.device_malloc(&fp16, sizeof(__half) * resize);
       arc_vm.set_fp16_addr(tid, (uint64_t)fp16);
 
-      std::cout << "CSR in h2d, resize: " << resize << ", original: " << iter.numel() << ", fp16: " << fp16 << ", tid: " << tid << std::endl;
+      if (globalContext().ARCGlobal.isDebugMode()) {
+        std::cout << "CSR in h2d, resize: " << resize << ", original: " << iter.numel() << ", fp16: " << fp16 << ", tid: " << tid << std::endl;
+      }
 
       if (ssd_flag) {
         p2p_addr = (uint64_t)fp16;
@@ -523,10 +534,12 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
       arc_vm.device_malloc(&fp16, sizeof(__half) * iter.numel());
       arc_vm.set_fp16_addr(tid, (uint64_t)fp16);
 
-      if (csr_flag) {
-        std::cout << "No CSR in h2d, fp16: " << fp16 << ", tid: " << tid << std::endl;
-      } else {
-        std::cout << "FP16 in h2d, fp16: " << fp16 << ", tid: " << tid << std::endl;
+      if (globalContext().ARCGlobal.isDebugMode()) {
+        if (csr_flag) {
+          std::cout << "No CSR in h2d, fp16: " << fp16 << ", tid: " << tid << std::endl;
+        } else {
+          std::cout << "FP16 in h2d, fp16: " << fp16 << ", tid: " << tid << std::endl;
+        }
       }
 
       if (ssd_flag) {
@@ -535,10 +548,12 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
       } else {
         AT_CUDA_CHECK(cudaMemcpyAsync(fp16, src, nbytes / 2, kind, stream));
         float_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half* )fp16, (float* )dst, iter.numel());
-        arc_vm.device_free(fp16, sizeof(__half) * iter.numel());
       }
     } else {
-      std::cout << "Nothing in h2d, tid: " << tid << std::endl;
+      if (globalContext().ARCGlobal.isDebugMode()) {
+        std::cout << "Nothing in h2d, tid: " << tid << std::endl;
+      }
+
       if (true == ssd_flag) {
         p2p_addr = (uint64_t)dst;
         p2p_size = (uint64_t)nbytes;

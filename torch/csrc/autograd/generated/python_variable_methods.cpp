@@ -227,9 +227,9 @@ static PyObject * THPVariable_contiguous(PyObject* self, PyObject* args, PyObjec
   Tensor output;
   output = dispatch_contiguous(input, memory_format);
   
-  at::globalContext().ARCGlobal.setNewTid(output);
 
   if ( at::globalContext().ARCGlobal.isBERT() ) {
+      at::globalContext().ARCGlobal.setNewTid(output);
       if (at::globalContext().ARCGlobal.isDebugMode()) {
         std::cout << "CONTIGUOUS OUTPUT TENSOR ID: " << at:: globalContext().ARCGlobal.getTid(output) << std::endl; 
       }
@@ -1215,8 +1215,13 @@ static PyObject * THPVariable_add_(PyObject* self_, PyObject* args, PyObject* kw
     output = dispatch_add_(s, t0, r.scalar(1));
   }
 
-  if ( !at::globalContext().ARCGlobal.isCycleGAN())
+  if (at::globalContext().ARCGlobal.isBERT()) {
     at::globalContext().ARCGlobal.setNewTid(output);
+    if (at::globalContext().ARCGlobal.isDebugMode()) {
+      std::cout << "add_ OUTPUT TENSOR ID: " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
+    }
+  }
+
   return wrap(output);
 
   Py_RETURN_NONE;

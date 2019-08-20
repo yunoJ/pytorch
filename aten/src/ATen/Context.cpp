@@ -118,7 +118,7 @@ REGISTER_LEGACY_TYPE_INIT(LegacyDeviceTypeInit);
 
 // network
 static bool cycle_gan = 0;
-static bool bert = 1;
+static bool bert = 0;
 
 bool Context::ARCGlobalContext::isCycleGAN() {return cycle_gan;}
 bool Context::ARCGlobalContext::isBERT() {return bert;}

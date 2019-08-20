@@ -147,19 +147,19 @@ double ARCCppEngine::checkCSR(double freeSize) {
   std::cout << "checkCSR" << std::endl;
 
   if (remainSize <= 0) {
-    std::cout << "checkCSR no remain" << std::endl;
     return 0;
   }
 
   for (auto it = liveness_temp.begin(); it != liveness_temp.end(); ++it) {
     if ((it->second).second) {
-      std::cout << "\tcheckCSR tid: " << it->first << ", size: " << (it->second).first << std::endl;
+      if (at::globalContext().ARCGlobal.isDebugMode()) {
+        std::cout << "\tcheckCSR tid: " << it->first << ", size: " << (it->second).first << std::endl;
+      }
       remainSize -= (it->second).first;
       liveness_result.insert(std::pair<Tid, bool>(it->first, (it->second).second));
     }
 
     if (remainSize <= 0) {
-      std::cout << "CSR check end" << std::endl;
       break;
     }
   }
@@ -168,12 +168,12 @@ double ARCCppEngine::checkCSR(double freeSize) {
 }
 
 double ARCCppEngine::checkLarge(double remainSize) {
-  std::cout << "checkLarge" << std::endl;
-
   for (auto it = liveness_temp.begin(); it != liveness_temp.end(); ++it) {
     if (liveness_result.find(it->first) == liveness_result.end()) {
       if ((it->second).first > 12) {
-        std::cout << "\tcheckLarge tid: " << it->first << ", size: " << (it->second).first << std::endl;
+        if (at::globalContext().ARCGlobal.isDebugMode()) {
+          std::cout << "\tcheckLarge tid: " << it->first << ", size: " << (it->second).first << std::endl;
+        }
         remainSize -= (it->second).first;
         liveness_result.insert(std::pair<Tid, bool>(it->first, (it->second).second));
       }
@@ -186,11 +186,11 @@ double ARCCppEngine::checkLarge(double remainSize) {
 }
 
 double ARCCppEngine::checkFirst(double remainSize) {
-  std::cout << "checkFirst" << std::endl;
-
   for (auto it = liveness_temp.begin(); it != liveness_temp.end(); ++it) {
     if (liveness_result.find(it->first) == liveness_result.end()) {
-      std::cout << "\tcheckFirst tid: " << it->first << ", size: " << (it->second).first << std::endl;
+      if (at::globalContext().ARCGlobal.isDebugMode()) {
+        std::cout << "\tcheckFirst tid: " << it->first << ", size: " << (it->second).first << std::endl;
+      }
       remainSize -= (it->second).first;
       liveness_result.insert(std::pair<Tid, bool>(it->first, (it->second).second));
     }
@@ -221,7 +221,11 @@ void ARCCppEngine::offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync s
 
   if (at::globalContext().ARCGlobal.isOnDemand() && at::globalContext().ARCGlobal.isForward()) {
     accumSize += (double)t.nbytes() / 1024 / 1024;
-    std::cout << "accumulated tensor tid: " << tid << ", accum: " << accumSize << ", relu_thru: " << at::native::arc_vm.relu_thru << std::endl;
+
+    if (at::globalContext().ARCGlobal.isDebugMode()) {
+      std::cout << "accumulated tensor tid: " << tid << ", accum: " << accumSize << ", relu_thru: " << at::native::arc_vm.relu_thru << std::endl;
+    }
+
     liveness_temp.insert(std::pair<Tid, std::pair<double, bool>>(
         tid, std::pair<double, bool>((double)t.nbytes() / 1024 / 1024, at::native::arc_vm.relu_thru)));
     at::native::arc_vm.relu_thru = false;
@@ -279,11 +283,11 @@ void ARCCppEngine::default_offload_() {
              tensor_dict_.insert(std::pair<Tid, std::pair<at::Tensor, bool>>(task.first,
                  std::pair<at::Tensor, bool>(task.second.first.ARCto(opt, false, true, false), task.second.second)));
            } else {
-             std::cout << "Tensor insert: " << task.first << ", csr: " << liveness_result[task.first] << std::endl;
              tensor_dict_.insert(std::pair<Tid, std::pair<at::Tensor, bool>>(task.first,
                  std::pair<at::Tensor, bool>(task.second.first.ARCto(opt, false, true,
                      liveness_result[task.first]), task.second.second)));
            }
+           at::native::arc_vm.Arcp2pCompletion();
            csg.reset_stream(csg.original_stream());
         } else {
             if (offload_thread_run == 0) {
@@ -364,22 +368,21 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
     //std::cerr << oid << " Prefetching dictionary lookup miss" << std::endl;
     return;
   }
+
   if (at::globalContext().ARCGlobal.isDebugMode())
     std::cout << oid << " pf sync start" << std::endl;
-   while (1) {
+  
+  while (1) {
     auto check = pf_sync_dict_.find(oid);
-      
     if (check != pf_sync_dict_.end())
       break;
     if (at::globalContext().ARCGlobal.isDebugMode())
       std::cout << oid << " pf sync" << std::endl;
-
   }
 
   auto sid = pf_sync_dict_[oid];
   c10::cuda::CUDAStream str(c10::Stream(c10::Stream::UNSAFE, c10::Device(c10::DeviceType::CUDA, 0), sid)); 
   str.synchronize();
-
 
   auto fetch_vec = pf_dict_[oid]; 
   for (auto it = fetch_vec.begin(); it != fetch_vec.end(); it++) {
@@ -394,6 +397,7 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
     // [JS] for p2p support
     volatile at::native::arcp2p_cpl *p_flu_cpl = (volatile at::native::arcp2p_cpl *)at::native::arc_vm.get_cpl_addr(tid, at::native::arcp2p_gputossd);
     volatile at::native::arcp2p_cpl *p_pre_cpl = (volatile at::native::arcp2p_cpl *)at::native::arc_vm.get_cpl_addr(tid, at::native::arcp2p_ssdtogpu);
+
     while (1) {
       void* fp16 = at::native::arc_vm.get_fp16_addr(tid);
       size_t numel = at::native::arc_vm.get_numel(tid);
@@ -408,29 +412,30 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
       pos_elements = 1 << count;
 
       if (at::native::arc_vm.is_using_ssd()) {
-          if (false == p_flu_cpl->requested && false == p_pre_cpl->requested) {
-              at::native::arc_vm.event_arr[tid].block(str);
-              unsigned int resize = at::native::arc_vm.get_resize(tid);
+        if (false == p_flu_cpl->requested && false == p_pre_cpl->requested) {
+          at::native::arc_vm.event_arr[tid].block(str);
+          unsigned int resize = at::native::arc_vm.get_resize(tid);
 
-              if (at::native::arc_vm.is_csr() && resize > 0) {
-                void* bit = at::native::arc_vm.get_bit_addr(tid);
-                void* pos = at::native::arc_vm.get_pos_addr(tid);
+          if (at::native::arc_vm.is_csr() && resize > 0) {
+            void* bit = at::native::arc_vm.get_bit_addr(tid);
+            void* pos = at::native::arc_vm.get_pos_addr(tid);
 
-                at::native::arc_vm.device_free(fp16, sizeof(__half) * resize);
-                at::native::arc_vm.device_free(bit, sizeof(unsigned int) * bit_elements);
-                at::native::arc_vm.device_free(pos, sizeof(unsigned int) * pos_elements);
-              } else { // TODO arcp2p without any comprression (fp16 == false, is_csr == false)
-                at::native::arc_vm.device_free(fp16, sizeof(__half) * numel);
-              }
-
-              delete p_flu_cpl;
-              delete p_pre_cpl;
-              break;
+            at::native::arc_vm.device_free(fp16, sizeof(__half) * resize);
+            at::native::arc_vm.device_free(bit, sizeof(unsigned int) * bit_elements);
+            at::native::arc_vm.device_free(pos, sizeof(unsigned int) * pos_elements);
+          } else { // TODO arcp2p without any comprression (fp16 == false, is_csr == false)
+            at::native::arc_vm.device_free(fp16, sizeof(__half) * numel);
           }
-          at::native::arc_vm.Arcp2pCompletion();
+
+          delete p_flu_cpl;
+          delete p_pre_cpl;
+          break;
+        }
+        at::native::arc_vm.Arcp2pCompletion();
       } else {
         if (tensor_dict_[tid].first.device().type() == c10::DeviceType::CUDA) {
-          if (at::native::arc_vm.is_csr()) {
+          unsigned int resize = at::native::arc_vm.get_resize(tid);
+          if (at::native::arc_vm.is_csr() && resize > 0) {
             void* bit = at::native::arc_vm.get_bit_addr(tid);
             void* pos = at::native::arc_vm.get_pos_addr(tid);
             unsigned int resize = at::native::arc_vm.get_resize(tid);
@@ -441,7 +446,6 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
           } else {
             at::native::arc_vm.device_free(fp16, sizeof(__half) * numel);
           }
-          std::cerr << "sync tensor is not on gpu yet" << std::endl;
           break;
         }
       }
@@ -498,10 +502,10 @@ void ARCCppEngine::dropTensor(Oid oid, SavedVariable* fetch_loc) {
     } else {
       if (oid == last_op_dict_[tid]) {
         //std::cout <<  "oid: " << oid << "last op of tensor id " <<  tid << " : "  << last_op_dict_[tid] << std::endl;
-        tensor_dict_.erase(tid);   
+        tensor_dict_.erase(tid);
         fetch_loc->reset_data(); 
       }
-    } 
+    }
   }
 }
 
@@ -577,10 +581,12 @@ void ARCCppEngine::resetCppEngine() {
   static int remaining_backward = -1;//backward_num_in_one_iter;
 
   if (remaining_backward == -1) {
-    if (at::globalContext().ARCGlobal.isCycleGAN())
+    if (at::globalContext().ARCGlobal.isCycleGAN()) {
         remaining_backward = backward_num_CycleGAN;
-    if (at::globalContext().ARCGlobal.isBERT())
+    } else {
+//    if (at::globalContext().ARCGlobal.isBERT())
         remaining_backward = backward_num_BERT;
+    }
   }
   
   tensor_dict_.clear();
@@ -593,10 +599,13 @@ void ARCCppEngine::resetCppEngine() {
   if (remaining_backward == 0) {
     at::globalContext().ARCGlobal.resetGlobalTid();
     at::globalContext().ARCGlobal.resetGlobalOid();
-    if (at::globalContext().ARCGlobal.isCycleGAN())
+    if (at::globalContext().ARCGlobal.isCycleGAN()) {
         remaining_backward = backward_num_CycleGAN;
-    if (at::globalContext().ARCGlobal.isBERT())
-        remaining_backward = backward_num_BERT;  }
+    } else {
+//    if (at::globalContext().ARCGlobal.isBERT())
+        remaining_backward = backward_num_BERT;
+    }
+  }
 }
 
 }} // namespace torch::autograd

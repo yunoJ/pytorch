@@ -52,6 +52,7 @@ class ARC_memory {
   bool mapping;
   CUDAEvent* event_arr;
   mutex m;
+  mutex m2;
 
   void device_malloc(void** gpu_ptr, size_t size);
   void device_free(void* addr, size_t size);
