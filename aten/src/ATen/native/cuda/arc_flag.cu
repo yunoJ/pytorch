@@ -12,6 +12,7 @@
 // [JS] P2P define
 #include <queue>
 #include <c10/cuda/CUDACachingAllocator.h>
+#include <ATen/cuda/CUDAEvent.h>
 
 // Half precision
 #include <cuda_fp16.h>
@@ -58,6 +59,8 @@ __global__ void zero_insert(unsigned int *bit, unsigned int *nz_pos, float* din,
 
 namespace at { namespace native {
 
+using namespace at::cuda;
+
 ARC_memory arc_vm;
 
 typedef struct {
@@ -94,10 +97,13 @@ std::queue<req_element> req_queue;
     bit_ptr_arr = new uint64_t[NUM_TENSOR];
     pos_ptr_arr = new uint64_t[NUM_TENSOR];
     resize_arr = new unsigned int[NUM_TENSOR];
+    numel_arr = new size_t[NUM_TENSOR];
     cpl_flu_ptr_arr = new uint64_t[NUM_TENSOR];
     cpl_pre_ptr_arr = new uint64_t[NUM_TENSOR];
     offset_arr = new uint64_t[NUM_TENSOR];
     dir_arr = new arcp2p_dir[NUM_TENSOR];
+
+    event_arr = new CUDAEvent[NUM_TENSOR];
 
     memset(dir_arr, 0, sizeof(arcp2p_dir) * NUM_TENSOR);
 
@@ -116,10 +122,13 @@ std::queue<req_element> req_queue;
     delete[] bit_ptr_arr;
     delete[] pos_ptr_arr;
     delete[] resize_arr;
+    delete[] numel_arr;
     delete[] cpl_flu_ptr_arr;
     delete[] cpl_pre_ptr_arr;
     delete[] offset_arr;
     delete[] dir_arr;
+
+    delete[] event_arr;
 
     if (true == isTesla)
     {
@@ -226,6 +235,14 @@ std::queue<req_element> req_queue;
 
   void ARC_memory::set_resize(int tid, unsigned int resize) {
     resize_arr[tid] = resize;
+  }
+
+  size_t ARC_memory::get_numel(int tid) {
+    return numel_arr[tid];
+  }
+
+  void ARC_memory::set_numel(int tid, size_t numel) {
+    numel_arr[tid] = numel;
   }
 
   void* ARC_memory::get_cpl_addr(int tid, arcp2p_dir dir) {
@@ -460,19 +477,26 @@ std::queue<req_element> req_queue;
 
     if (true == req.p_cpl->issued)
     {
-      req.p_cpl->requested = false;
 
       // if completed request is ssdtogpu
       // 1. we need to update fetch_loc
       // 2. we should remove loc_element
-      if (arcp2p_ssdtogpu == req.dir)
-      {
+      if (arcp2p_gputossd == req.dir) {
+        size_t numel = get_numel(req.info->tid);
+        unsigned int resize = get_resize(req.info->tid);
+        if (resize > 0) {
+          device_free(req.info->ptr, sizeof(__half) * resize);
+        } else if (resize == 0) {
+          device_free(req.info->ptr, sizeof(__half) * numel);
+        }
+        delete req.info;
+      } else if (arcp2p_ssdtogpu == req.dir) {
 //        printf("NVMe read done\n");
         // [TODO] backend job needed for read done case (ex. notify backward operation that data is ready)
         // [TODO] arcp2p_data would be freed here? or after?
 
         // FP16 & CSR handling
-        unsigned int resize = arc_vm.get_resize(req.info->tid);
+        unsigned int resize = get_resize(req.info->tid);
 
         if (isFP16 && (resize > 0))
         {
@@ -497,11 +521,10 @@ std::queue<req_element> req_queue;
 
           float_scale<<<(numel + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half *)req.info->ptr, nz_dst, resize);
           zero_insert<<<(numel + nTPB - 1) / nTPB, nTPB, 0, stream>>>((unsigned int*)bit, (unsigned int*)pos, nz_dst, (float *)req.info->dst, numel);
+          
+          event_arr[req.info->tid].record(stream);
 
           device_free((void *)nz_dst, resize * sizeof(float));
-          device_free(req.info->ptr, sizeof(__half) * resize);
-          device_free(bit, sizeof(unsigned int) * bit_elements);
-          device_free(pos, sizeof(unsigned int) * pos_elements);
 
           delete req.info;
         }
@@ -513,19 +536,19 @@ std::queue<req_element> req_queue;
           uint64_t numel = req.info->numel;
 
           float_scale<<<(numel + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half* )req.info->ptr, (float* )req.info->dst, numel);
-          device_free(req.info->ptr, sizeof(__half) * numel);
+          event_arr[req.info->tid].record(stream);
 
           delete req.info;
         }
-      }
-      else
-      {
+      } else {
 //        printf("NVMe write done\n");
         // [TODO] backend job needed for write done case (ex. gpu memory free)
         // Because of constructor / destructor definition of storage_impl in Tensor,
         // We just drop Tensor at here
         delete req.stor;
       }
+
+      req.p_cpl->requested = false;
 
       // remove current element
       req_queue.pop();

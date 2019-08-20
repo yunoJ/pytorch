@@ -4912,8 +4912,8 @@ static PyObject * THPVariable_flatten(PyObject* self_, PyObject* args, PyObject*
 
   at::globalContext().ARCGlobal.setNewTid(output);
 
-  std::cout << "OUTPUT TENSOR ID: ";
-  std::cout << at::globalContext().ARCGlobal.getTid(output);
+//  std::cout << "OUTPUT TENSOR ID: ";
+//  std::cout << at::globalContext().ARCGlobal.getTid(output);
 
   if (at::globalContext().ARCGlobal.isOnDemand()) {
     ARCPyEngine::offLoad(output);
