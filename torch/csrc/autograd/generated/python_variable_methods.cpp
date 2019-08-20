@@ -5387,8 +5387,6 @@ static PyObject * THPVariable_sub(PyObject* self_, PyObject* args, PyObject* kwa
     output = dispatch_sub(s, t0, r.scalar(1));
   }
 
-  at::globalContext().ARCGlobal.setNewTid(output);
-
   if (at::globalContext().ARCGlobal.isOnDemand()) {
     ARCPyEngine::offLoad(output);
   }

@@ -179,6 +179,7 @@ void Context::ARCGlobalContext::endOnDemand() {
 bool Context::ARCGlobalContext::isForward() { return on_forwarding_; }
 bool Context::ARCGlobalContext::isOnDemand() { return on_demand_mode_; }
 bool Context::ARCGlobalContext::isDebugMode() { return on_debug_mode_; }
+bool Context::ARCGlobalContext::turnOnDebugMode() { on_debug_mode_ = 1; }
 
 void Context::ARCGlobalContext::pushBackOid(Oid oid) { 
   if (!on_demand_mode_) std::cerr << "Illegal call: not on-demand mode" << std::endl;

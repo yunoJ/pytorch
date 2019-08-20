@@ -6,7 +6,7 @@
 #include <mutex>
 
 #include <ATen/native/cuda/arc_flag.h>
-
+#include <ATen/Context.h>
 #define NUM_TENSOR 1024
 
 // [JS] P2P define
@@ -26,6 +26,7 @@
 #define ARC_FLAG_FP16  (1U << 1)
 #define ARC_FLAG_CSR   (1U << 2)
 #define ARC_FLAG_TESLA (1U << 3)
+#define ARC_FLAG_DEBUG (1U << 4)
 
 using namespace at::cuda;
 __global__ void float_scale(__half *din, float *dout, int dsize) {
@@ -298,6 +299,12 @@ std::queue<req_element> req_queue;
     {
       printf("Tesla flag set\n");
       isTesla = true;
+    }
+
+    if (flags & ARC_FLAG_DEBUG)
+    {
+      printf("Debug mode on\n");
+      at::globalContext().ARCGlobal.turnOnDebugMode();
     }
 
     if (flags & ARC_FLAG_SSD)
