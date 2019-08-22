@@ -31,12 +31,39 @@
 #define ARC_FLAG_DEBUG (1U << 5)
 
 using namespace at::cuda;
+__global__ void double_scale(__half *din, double *dout, int dsize) {
+  int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  if (idx < dsize)  dout[idx] = (double)__half2float(din[idx]);
+}
+
 __global__ void float_scale(__half *din, float *dout, int dsize) {
   int idx = threadIdx.x + blockDim.x * blockIdx.x;
   if (idx < dsize)  dout[idx] = __half2float(din[idx]);
 }
 
-__global__ void zero_insert(unsigned int *bit, unsigned int *nz_pos, float* din, float *dout, int dsize) {
+__global__ void zero_insert_double(unsigned int *bit, unsigned int *nz_pos, float* din, double *dout, int dsize) {
+  int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  if (idx < dsize) {
+    int count = -1;
+    if ((unsigned int)(bit[find(idx)] & mask(idx)) > 0) {
+      for (int i = (int)(idx / 32) * 32; i < idx + 1; i++) {
+        unsigned int mask = bit[find(i)] & mask(i);
+        if (mask > 0)  count += 1;
+      }
+    }
+
+    if (count == -1)  dout[idx] = 0.0;
+    else {
+      if ((unsigned int)(idx / 32) == 0) {
+        dout[idx] = (double)din[count + 0];
+      } else {
+        dout[idx] = (double)din[count + nz_pos[(unsigned int)(idx / 32) - 1]];
+      }
+    }
+  }
+}
+
+__global__ void zero_insert_float(unsigned int *bit, unsigned int *nz_pos, float* din, float *dout, int dsize) {
   int idx = threadIdx.x + blockDim.x * blockIdx.x;
   if (idx < dsize) {
     int count = -1;
@@ -99,6 +126,7 @@ ARC_memory::ARC_memory(): relu_thru(false), mapping(false), deviceStartBlk(0) {
   pos_ptr_arr = new uint64_t[NUM_TENSOR];
   resize_arr = new int[NUM_TENSOR];
   numel_arr = new size_t[NUM_TENSOR];
+  elem_arr = new int[NUM_TENSOR];
   cpl_flu_ptr_arr = new uint64_t[NUM_TENSOR];
   cpl_pre_ptr_arr = new uint64_t[NUM_TENSOR];
   offset_arr = new uint64_t[NUM_TENSOR];
@@ -124,6 +152,7 @@ ARC_memory::~ARC_memory() {
   delete[] pos_ptr_arr;
   delete[] resize_arr;
   delete[] numel_arr;
+  delete[] elem_arr;
   delete[] cpl_flu_ptr_arr;
   delete[] cpl_pre_ptr_arr;
   delete[] offset_arr;
@@ -131,11 +160,14 @@ ARC_memory::~ARC_memory() {
 
   delete[] event_arr;
 
-  if (true == isTesla)
+  if (true == isUsingSSD)
   {
-    arcp2p_bar_detach(arc_handle);
+    if (true == isTesla)
+    {
+      arcp2p_bar_detach(arc_handle);
+    }
+    arcp2p_release(arc_handle);
   }
-  arcp2p_release(arc_handle);
 }
 
 void ARC_memory::device_malloc(void** gpu_ptr, size_t size) {
@@ -246,6 +278,14 @@ void ARC_memory::set_numel(int tid, size_t numel) {
   numel_arr[tid] = numel;
 }
 
+int ARC_memory::get_elem(int tid) {
+  return elem_arr[tid];
+}
+
+void ARC_memory::set_elem(int tid, int elem) {
+  elem_arr[tid] = elem;
+}
+
 void* ARC_memory::get_cpl_addr(int tid, arcp2p_dir dir) {
   if (arcp2p_gputossd == dir) {
     return (void *)cpl_flu_ptr_arr[tid];
@@ -352,6 +392,9 @@ void ARC_memory::Arcp2pSetting(int flags) {
     if(dlerror()) { fprintf(stderr, "Error linking\n"); return; }
 
     arcp2p_completion = (arcp2p_type2_fn)dlsym(lib_handle, "ARCP2P_completion");
+    if(dlerror()) { fprintf(stderr, "Error linking\n"); return; }
+
+    arcp2p_synchronize= (arcp2p_type2_fn)dlsym(lib_handle, "ARCP2P_synchronize");
     if(dlerror()) { fprintf(stderr, "Error linking\n"); return; }
 
     if (true == isTesla) {
@@ -484,17 +527,17 @@ void ARC_memory::Arcp2pCompletion()
       int resize = get_resize(req.info->tid);
       if (isFP16 && (resize > 0)) {
         if (isDebug)
-          std::cout << "CSR FP16 mem free tid: " << req.info->tid << ", size: " << sizeof(__half) * resize << std::endl;
+          std::cout << "CSR FP16 mem free tid: " << req.info->tid << ", size: " << sizeof(__half) * resize << ", fp16: " << req.info->ptr << std::endl;
 
         device_free(req.info->ptr, sizeof(__half) * resize);
       } else if (isFP16 && (resize == 0)) {
         if (isDebug)
-          std::cout << "No CSR FP16 mem free tid: " << req.info->tid << ", size: " << sizeof(__half) * numel << std::endl;
+          std::cout << "No CSR FP16 mem free tid: " << req.info->tid << ", size: " << sizeof(__half) * numel << ", fp16: " << req.info->ptr << std::endl;
 
         device_free(req.info->ptr, sizeof(__half) * numel);
       } else {
         if (isDebug)
-          std::cout << "TODO: Duplicated FP16 mem free tid: " << req.info->tid << ", size: " << req.size << std::endl;
+          std::cout << "TODO: Duplicated FP16 mem free tid: " << req.info->tid << ", size: " << req.size << ", fp16: " << req.info->ptr << std::endl;
 
         device_free(req.info->ptr, req.size);
       }
@@ -529,7 +572,12 @@ void ARC_memory::Arcp2pCompletion()
         cudaMemsetAsync((void *)nz_dst, 0, resize * sizeof(float), stream);
 
         float_scale<<<(numel + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half *)req.info->ptr, nz_dst, resize);
-        zero_insert<<<(numel + nTPB - 1) / nTPB, nTPB, 0, stream>>>((unsigned int*)bit, (unsigned int*)pos, nz_dst, (float *)req.info->dst, numel);
+
+        if (arc_vm.get_elem(req.info->tid) == 8) {
+          zero_insert_double<<<(numel + nTPB - 1) / nTPB, nTPB, 0, stream>>>((unsigned int*)bit, (unsigned int*)pos, nz_dst, (double *)req.info->dst, numel);
+        } else {
+          zero_insert_float<<<(numel + nTPB - 1) / nTPB, nTPB, 0, stream>>>((unsigned int*)bit, (unsigned int*)pos, nz_dst, (float *)req.info->dst, numel);
+        }
         
         event_arr[req.info->tid].record(stream);
 
@@ -544,7 +592,11 @@ void ARC_memory::Arcp2pCompletion()
         uint64_t nTPB = req.info->ntpb;
         uint64_t numel = req.info->numel;
 
-        float_scale<<<(numel + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half* )req.info->ptr, (float* )req.info->dst, numel);
+        if (arc_vm.get_elem(req.info->tid) == 8) {
+          double_scale<<<(numel + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half* )req.info->ptr, (double* )req.info->dst, numel);
+        } else {
+          float_scale<<<(numel + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half* )req.info->ptr, (float* )req.info->dst, numel);
+        }
         event_arr[req.info->tid].record(stream);
 
         delete req.info;
@@ -589,6 +641,11 @@ void ARC_memory::Arcp2pCompletion()
     }
   }
   m2.unlock();
+}
+
+void ARC_memory::Arcp2pSynchronize()
+{
+  arcp2p_synchronize(arc_handle);
 }
 
 }}

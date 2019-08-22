@@ -39,6 +39,11 @@ __global__ void float_scale(__half *din, float *dout, int dsize) {
   if (idx < dsize)  dout[idx] = __half2float(din[idx]);
 }
 
+__global__ void double_scale(__half *din, double *dout, int dsize) {
+  int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  if (idx < dsize)  dout[idx] = (double)__half2float(din[idx]);
+}
+
 __global__ void zero_mask(float *din, unsigned int *bit, unsigned int *pos, int dsize) {
   int idx = threadIdx.x + blockDim.x * blockIdx.x;
   if (idx < dsize) {
@@ -88,7 +93,29 @@ __global__ void pos_second(unsigned int* pos, unsigned int* opos, int asize) {
   }
 }
 
-__global__ void zero_insert(unsigned int *bit, unsigned int *nz_pos, float* din, float *dout, int dsize) {
+__global__ void zero_insert_double(unsigned int *bit, unsigned int *nz_pos, float* din, double *dout, int dsize) {
+  int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  if (idx < dsize) {
+    int count = -1;
+    if ((unsigned int)(bit[find(idx)] & mask(idx)) > 0) {
+      for (int i = (int)(idx / 32) * 32; i < idx + 1; i++) {
+        unsigned int mask = bit[find(i)] & mask(i);
+        if (mask > 0)  count += 1;
+      }
+    }
+
+    if (count == -1)  dout[idx] = 0.0;
+    else {
+      if ((unsigned int)(idx / 32) == 0) {
+        dout[idx] = (double)din[count + 0];
+      } else {
+        dout[idx] = (double)din[count + nz_pos[(unsigned int)(idx / 32) - 1]];
+      }
+    }
+  }
+}
+
+__global__ void zero_insert_float(unsigned int *bit, unsigned int *nz_pos, float* din, float *dout, int dsize) {
   int idx = threadIdx.x + blockDim.x * blockIdx.x;
   if (idx < dsize) {
     int count = -1;
@@ -378,6 +405,8 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
   int64_t nbytes = iter.numel() * iter.element_size(0);
   CUDAStream stream = getCurrentCUDAStream();
 
+  arc_vm.set_elem(tid, iter.element_size(0));
+
   if (true == ssd_flag) {
     if (!arc_vm.mapping) {
       // [TODO] this should be called only for Tesla option enabled
@@ -436,7 +465,6 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
 
         half_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((float *)nz_src, (__half *)fp16, resize);
 
-        cudaStreamSynchronize(stream);
         arc_vm.set_resize(tid, resize);
         arc_vm.set_numel(tid, iter.numel());
 
@@ -450,7 +478,7 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
         }
 
         if (globalContext().ARCGlobal.isDebugMode()) {
-          std::cout << "CSR in d2h, resize: " << resize << ", original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << std::endl;
+          std::cout << "CSR in d2h, resize: " << resize << ", original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << ", fp16: " << fp16 << std::endl;
         }
 
         arc_vm.device_free((void *)nz_pos, pos_elements * sizeof(unsigned int));
@@ -467,14 +495,13 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
 
         if (globalContext().ARCGlobal.isDebugMode()) {
           if (csr_flag) {
-            std::cout << "No CSR in d2h, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << std::endl;
+            std::cout << "No CSR in d2h, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << ", fp16 addr: " << fp16 << std::endl;
           } else {
-            std::cout << "FP16 in d2h, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << std::endl;
+            std::cout << "FP16 in d2h, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << ", fp16 addr: " << std::endl;
           }
         }
 
         half_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((float *)src, (__half *)fp16, iter.numel());
-        cudaStreamSynchronize(stream);
 
         arc_vm.set_resize(tid, 0); // [TODO] slight hack code, we will distinguish CSR / FP16 by resize value
         arc_vm.set_numel(tid, iter.numel());
@@ -488,10 +515,6 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
           arc_vm.device_free(fp16, iter.numel() * sizeof(__half));
         }
       } else { // false == csr_flag && false == fp16_flag
-        if (globalContext().ARCGlobal.isDebugMode()) {
-          std::cout << "Nothing in d2h, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << std::endl;
-        }
-
         if (true == ssd_flag) {
           // TODO Need to malloc src ptr to BAR attached region
           void *fp16;
@@ -503,6 +526,10 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
 
           p2p_addr = (uint64_t)fp16;
           p2p_size = (uint64_t)nbytes;
+
+          if (globalContext().ARCGlobal.isDebugMode()) {
+            std::cout << "Nothing in d2h, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << ", fp16: " << fp16 << std::endl;
+          }
         } else {
           arc_vm.set_resize(tid, -1); // [TODO] slight hack code, we will distinguish CSR / FP16 by resize value
           arc_vm.set_numel(tid, iter.numel());
@@ -511,9 +538,6 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
         }
       }
     } else { // Non double or float
-      if (globalContext().ARCGlobal.isDebugMode()) {
-        std::cout << "No float/double in d2h, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << std::endl;
-      }
 
       if (true == ssd_flag) {
         // TODO Need to malloc src ptr to BAR attached region
@@ -526,6 +550,10 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
 
         p2p_addr = (uint64_t)fp16;
         p2p_size = (uint64_t)nbytes;
+
+        if (globalContext().ARCGlobal.isDebugMode()) {
+          std::cout << "No float/double in d2h, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << ", fp16: " << fp16 << std::endl;
+        }
       } else {
         arc_vm.set_resize(tid, -1); // [TODO] slight hack code, we will distinguish CSR / FP16 by resize value
         arc_vm.set_numel(tid, iter.numel());
@@ -549,7 +577,7 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
         arc_vm.set_fp16_addr(tid, (uint64_t)fp16);
 
         if (globalContext().ARCGlobal.isDebugMode()) {
-          std::cout << "CSR in h2d, resize: " << resize << ", original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << std::endl;
+          std::cout << "CSR in h2d, resize: " << resize << ", original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << ", fp16: " << fp16 << std::endl;
         }
 
         if (ssd_flag) {
@@ -564,7 +592,11 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
           AT_CUDA_CHECK(cudaMemcpyAsync(fp16, src, resize * sizeof(__half), kind, stream));
 
           float_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half *)fp16, nz_dst, resize);
-          zero_insert<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((unsigned int*)bit, (unsigned int*)pos, nz_dst, (float *)dst, iter.numel());
+          if (iter.element_size(0) == 8) {
+            zero_insert_double<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((unsigned int*)bit, (unsigned int*)pos, nz_dst, (double *)dst, iter.numel());
+          } else {
+            zero_insert_float<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((unsigned int*)bit, (unsigned int*)pos, nz_dst, (float *)dst, iter.numel());
+          }
 
           arc_vm.device_free((void *)nz_dst, resize * sizeof(float));
         }
@@ -576,9 +608,9 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
 
         if (globalContext().ARCGlobal.isDebugMode()) {
           if (csr_flag) {
-            std::cout << "No CSR in h2d, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << std::endl;
+            std::cout << "No CSR in h2d, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << ", fp16: " << fp16 << std::endl;
           } else {
-            std::cout << "FP16 in h2d, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << std::endl;
+            std::cout << "FP16 in h2d, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << ", fp16: " << fp16 << std::endl;
           }
         }
 
@@ -587,13 +619,13 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
           p2p_size = (uint64_t)(iter.numel() * sizeof(__half));
         } else {
           AT_CUDA_CHECK(cudaMemcpyAsync(fp16, src, iter.numel() * sizeof(__half), kind, stream));
-          float_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half* )fp16, (float* )dst, iter.numel());
+          if (iter.element_size(0) == 8) {
+            double_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half* )fp16, (double*)dst, iter.numel());
+          } else {
+            float_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half* )fp16, (float*)dst, iter.numel());
+          }
         }
       } else {
-        if (globalContext().ARCGlobal.isDebugMode()) {
-          std::cout << "Nothing in h2d, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << std::endl;
-        }
-
         if (true == ssd_flag) {
           void* fp16;
           arc_vm.device_malloc(&fp16, nbytes);
@@ -601,16 +633,16 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
 
           p2p_addr = (uint64_t)fp16;
           p2p_size = (uint64_t)nbytes;
+
+          if (globalContext().ARCGlobal.isDebugMode()) {
+            std::cout << "Nothing in h2d, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << ", fp16: " << fp16 << std::endl;
+          }
         } else {
           arc_vm.set_fp16_addr(tid, (uint64_t)NULL);
           AT_CUDA_CHECK(cudaMemcpyAsync(dst, src, nbytes, kind, stream));
         }
       }
     } else {
-      if (globalContext().ARCGlobal.isDebugMode()) {
-        std::cout << "No float/double in h2d, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << std::endl;
-      }
-
       if (true == ssd_flag) {
         void* fp16;
         arc_vm.device_malloc(&fp16, nbytes);
@@ -618,6 +650,11 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
 
         p2p_addr = (uint64_t)fp16;
         p2p_size = (uint64_t)nbytes;
+
+        if (globalContext().ARCGlobal.isDebugMode()) {
+          std::cout << "No float/double in h2d, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << ", fp16: " << fp16 << std::endl;
+        }
+
       } else {
         arc_vm.set_fp16_addr(tid, (uint64_t)NULL);
         AT_CUDA_CHECK(cudaMemcpyAsync(dst, src, nbytes, kind, stream));

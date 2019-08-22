@@ -251,77 +251,86 @@ void ARCCppEngine::offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync s
 }
 
 void ARCCppEngine::startOffloadThread() {
-    if (offload_thread_run == 1) return;  
-    offload_thread_run = 1;
-    offload_thread_ = std::thread(default_offload_);
+  if (offload_thread_run == 1) return;
+
+  offload_thread_run = 1;
+  offload_thread_ = std::thread(default_offload_);
 }
 
-void ARCCppEngine::joinOffloadThread() {    
-    offload_thread_run = 0;
-    if (offload_thread_.joinable())
-      offload_thread_.join();
+void ARCCppEngine::joinOffloadThread() {
+  offload_thread_run = 0;
+
+  if (at::globalContext().ARCGlobal.isDebugMode())
+    std::cout << "Wait until all offload_queue_ is free" << std::endl;
+
+  while (!offload_queue_.empty());
+  if (at::native::arc_vm.is_using_ssd())
+  {
+    at::native::arc_vm.Arcp2pSynchronize();
+  }
+
+  if (at::globalContext().ARCGlobal.isDebugMode())
+    std::cout << "Wait end" << std::endl;
+
+  if (offload_thread_.joinable())
+    offload_thread_.join();
 }
 
 void ARCCppEngine::default_offload_() {
-    while(1) { 
-        if (!offload_queue_.empty()) {
-            auto task = offload_queue_.front(); 
-            offload_queue_.pop(); 
-            auto str = c10::cuda::getStreamFromPool(false, 0);
-            str.synchronize();
-            c10::cuda::CUDAStreamGuard csg(str);     
-            c10::TensorOptions opt = c10::TensorOptions();
-            opt = opt.device(c10::Device(c10::DeviceType::CPU));
-            opt = opt.dtype(task.second.first.dtype());  
-            opt = opt.pinned_memory(true); 
+  while(1) {
+    if (!offload_queue_.empty()) {
+      auto task = offload_queue_.front();
+      offload_queue_.pop();
+      auto str = c10::cuda::getStreamFromPool(false, 0);
+      str.synchronize();
+      c10::cuda::CUDAStreamGuard csg(str);
+      c10::TensorOptions opt = c10::TensorOptions();
+      opt = opt.device(c10::Device(c10::DeviceType::CPU));
+      opt = opt.dtype(task.second.first.dtype());
+      opt = opt.pinned_memory(true);
 
-            // [JS] p2p setting if ssd mode is on
-            if (at::native::arc_vm.is_using_ssd())
-            {
-              auto tid = task.second.first.unsafeGetIntrusivePtr()->tensor_id;  
-              at::native::arc_vm.set_dir(tid, at::native::arcp2p_gputossd);
-              at::native::arcp2p_cpl *p_cpl = new at::native::arcp2p_cpl;
-              at::native::arc_vm.set_cpl_addr(tid, at::native::arcp2p_gputossd, (void *)p_cpl);
-            }
+      // [JS] p2p setting if ssd mode is on
+      if (at::native::arc_vm.is_using_ssd()) {
+        auto tid = task.second.first.unsafeGetIntrusivePtr()->tensor_id;
+        at::native::arc_vm.set_dir(tid, at::native::arcp2p_gputossd);
+        at::native::arcp2p_cpl *p_cpl = new at::native::arcp2p_cpl;
+        at::native::arc_vm.set_cpl_addr(tid, at::native::arcp2p_gputossd, (void *)p_cpl);
+      }
 
-            if (at::globalContext().ARCGlobal.isOnDemand()) {
-              tensor_dict_.insert(std::pair<Tid, std::pair<at::Tensor, bool>>(task.first,
-                  std::pair<at::Tensor, bool>(task.second.first.ARCto(opt, false, true, false), task.second.second)));
-            } else {
-              tensor_dict_.insert(std::pair<Tid, std::pair<at::Tensor, bool>>(task.first,
-                  std::pair<at::Tensor, bool>(task.second.first.ARCto(opt, false, true,
-                      liveness_result[task.first]), task.second.second)));
-            }
+      if (at::globalContext().ARCGlobal.isOnDemand()) {
+        tensor_dict_.insert(std::pair<Tid, std::pair<at::Tensor, bool>>(task.first,
+            std::pair<at::Tensor, bool>(task.second.first.ARCto(opt, false, true, false), task.second.second)));
+      } else {
+        tensor_dict_.insert(std::pair<Tid, std::pair<at::Tensor, bool>>(task.first,
+            std::pair<at::Tensor, bool>(task.second.first.ARCto(opt, false, true,
+                liveness_result[task.first]), task.second.second)));
+      }
 
-            if (at::native::arc_vm.is_using_ssd())
-                at::native::arc_vm.Arcp2pCompletion();
+      if (at::native::arc_vm.is_using_ssd())
+          at::native::arc_vm.Arcp2pCompletion();
 
-            csg.reset_stream(csg.original_stream());
-        } else {
-            if (offload_thread_run == 0) {
-                break;
-            }
-        }
-        //std::cout << "offload thread: " << offload_queue_.size()  << std::endl;
+      csg.reset_stream(csg.original_stream());
+    } else {
+      if (offload_thread_run == 0)  break;
     }
+    //std::cout << "offload thread: " << offload_queue_.size()  << std::endl;
+  }
 }
 
 
 // doing nothing really
 void ARCCppEngine::explicitAllSync() {
   for (auto it = memcpy_threads_.begin(); it != memcpy_threads_.end(); ++it)
-      it->join();
+    it->join();
+
   memcpy_threads_.clear();
 }
 
 // prefetch all tensors required for back prop of curOid
 void ARCCppEngine::preFetch(Oid curOid, ARCSync sync) {//int required_tensor_num, ARCSync sync) {
   if (curOid == 0)
-      return;
+    return;
     
-  if (at::globalContext().ARCGlobal.isDebugMode())
-    std::cout <<  curOid << "prefetching" << std::endl;
-
   at::globalContext().ARCGlobal.globalOffloadStream().synchronize();   
   
   Oid target = whoWillPrefetched_(curOid);
@@ -354,8 +363,7 @@ void ARCCppEngine::default_prefetch_() {
     size_t dummy1, dummy2;
     THCudaMemGetInfo(at::globalContext().getTHCState(), &freeBytes, &dummy1, &dummy2);
     while(1) {
-      if (freeBytes > 500 * 1024 * 1024) //500MB spare
-        break;
+      if (freeBytes > 500 * 1024 * 1024)  break;
     } 
     preFetch(*it, Sync);
   }
@@ -377,8 +385,6 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
     return;
   }
 
-  if (at::globalContext().ARCGlobal.isDebugMode())
-    std::cout << oid << " pf sync start" << std::endl;
 
   int while_count = 0;
   while (1) {
@@ -404,6 +410,9 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
     auto tid = it->second;
     auto fetch_loc = it->first;
 
+    if (at::globalContext().ARCGlobal.isDebugMode())
+      std::cout << "tid " << tid << " in oid " << oid << " pf sync start" << std::endl;
+
     if (tensor_dict_.find(tid) == tensor_dict_.end()) {
       std::cerr << "sync tensor dictionary lookup miss" << std::endl;
       return;
@@ -416,7 +425,6 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
     while (1) {
       void* fp16 = at::native::arc_vm.get_fp16_addr(tid);
       size_t numel = at::native::arc_vm.get_numel(tid);
-
 
       if (at::native::arc_vm.is_using_ssd()) {
         if (false == p_flu_cpl->requested && false == p_pre_cpl->requested) {
@@ -432,6 +440,9 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
 
           at::native::arc_vm.event_arr[tid].block(str);
           if (at::native::arc_vm.is_csr() && resize > 0) {
+            if (at::globalContext().ARCGlobal.isDebugMode())
+              std::cout << "CSR h2d mem free tid: " << tid << ", size: " << sizeof(__half) * resize << ", fp16: " << fp16 << std::endl;
+
             void* bit = at::native::arc_vm.get_bit_addr(tid);
             void* pos = at::native::arc_vm.get_pos_addr(tid);
 
@@ -440,8 +451,14 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
             at::native::arc_vm.device_free(pos, sizeof(unsigned int) * pos_elements);
           } else if (at::native::arc_vm.is_fp16() && resize == 0) {
             // TODO arcp2p without any comprression (fp16 == false, is_csr == false)
+            if (at::globalContext().ARCGlobal.isDebugMode())
+              std::cout << "No CSR h2d mem free tid: " << tid << ", size: " << sizeof(__half) * numel << ", fp16: " << fp16 << std::endl;
+
             at::native::arc_vm.device_free(fp16, sizeof(__half) * numel);
           } else {
+            if (at::globalContext().ARCGlobal.isDebugMode())
+              std::cout << "No float/double h2d mem free tid: " << tid << ", size: " << numel << ", fp16: " << fp16 << std::endl;
+
             at::native::arc_vm.device_free(fp16, numel);
           }
 

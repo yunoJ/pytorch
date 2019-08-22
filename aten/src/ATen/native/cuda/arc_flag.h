@@ -73,6 +73,9 @@ class ARC_memory {
   size_t get_numel(int tid);
   void set_numel(int tid, size_t numel);
 
+  int get_elem(int tid);
+  void set_elem(int tid, int elem);
+
   void* get_cpl_addr(int tid, arcp2p_dir dir);
   void set_cpl_addr(int tid, arcp2p_dir dir, void *addr);
 
@@ -86,6 +89,7 @@ class ARC_memory {
   int  Arcp2pBarMapping(uint64_t, uint64_t);
   void Arcp2pSubmission(uint64_t, uint64_t, uint64_t *, arcp2p_cpl *, arcp2p_dir, c10::Storage *, arcp2p_info *);
   void Arcp2pCompletion();
+  void Arcp2pSynchronize();
 
   // [JS] flag check
   bool is_vdnn();
@@ -104,6 +108,7 @@ class ARC_memory {
   uint64_t* pos_ptr_arr;
   int* resize_arr;
   size_t* numel_arr;
+  int* elem_arr;
   uint64_t* cpl_flu_ptr_arr;
   uint64_t* cpl_pre_ptr_arr;
   uint64_t* offset_arr;
@@ -116,6 +121,7 @@ class ARC_memory {
   arcp2p_type2_fn arcp2p_bar_detach;
   arcp2p_type4_fn arcp2p_transfer;
   arcp2p_type2_fn arcp2p_completion;
+  arcp2p_type2_fn arcp2p_synchronize;
 
   arcp2p *arc_handle;
   uint64_t last_allocated_offset;

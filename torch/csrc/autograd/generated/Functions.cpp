@@ -2351,8 +2351,6 @@ variable_list AddmmBackward::apply(variable_list&& grads) {
   }
   ARCCppEngine::preFetchSync(this->getOid());
   
-
-
   auto mat1 = mat1_.unpack();
   auto mat2 = mat2_.unpack();
   if (should_compute_output({ mat1_ix })) {
@@ -4194,7 +4192,6 @@ variable_list NativeBatchNormBackward::apply(variable_list&& grads) {
   }
 
   ARCCppEngine::preFetchSync(this->getOid());
- 
 
   auto input = input_.unpack();
   auto weight = weight_.unpack();
@@ -5058,6 +5055,13 @@ variable_list SqrtBackward::apply(variable_list&& grads) {
   auto self_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
+
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCCppEngine::preFetch(this->getOid(), Sync);
+  }
+
+  ARCCppEngine::preFetchSync(this->getOid());
+
   auto result = result_.unpack(shared_from_this());
   
   if (should_compute_output({ self_ix })) {
@@ -6073,15 +6077,12 @@ variable_list ReluBackward1::apply(variable_list&& grads) {
   }
   ARCCppEngine::preFetchSync(this->getOid(), true);
 
-
   auto result = result_.unpack(shared_from_this());
   
- 
   if (should_compute_output({ self_ix })) {
     auto grad_result = threshold_backward(grad, result, 0);
     copy_range(grad_inputs, self_ix, grad_result);
   }
-
   
   ARCCppEngine::dropTensor(this->getOid(), &result_);
   
@@ -6618,11 +6619,10 @@ variable_list AvgPool2DBackward::apply(variable_list&& grads) {
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
   ARCCppEngine::preFetchSync(this->getOid());
-  
 
   auto self = self_.unpack();
   
-    if (should_compute_output({ self_ix })) {
+  if (should_compute_output({ self_ix })) {
     auto grad_result = avg_pool2d_backward(grad, self, kernel_size, stride, padding, ceil_mode, count_include_pad, divisor_override);
     copy_range(grad_inputs, self_ix, grad_result);
   }
@@ -8028,7 +8028,6 @@ variable_list CudnnConvolutionBackward::apply(variable_list&& grads) {
   ARCCppEngine::preFetchSync(this->getOid());
   
 
-
   auto self = self_.unpack();
   auto weight = weight_.unpack();
   if (should_compute_output({ self_ix, weight_ix, bias_ix })) {
@@ -8049,9 +8048,6 @@ variable_list CudnnConvolutionBackward::apply(variable_list&& grads) {
       }
   }
 
-  //SNU-AR;C
-  //ARCCppEngine::dropTensor(this->getOid()); 
-  
   ARCCppEngine::dropTensor(this->getOid(), &self_);
   
   return grad_inputs;
