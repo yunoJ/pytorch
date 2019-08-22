@@ -202,10 +202,15 @@ double ARCCppEngine::checkFirst(double remainSize) {
 
 //Note: Not referecne but copy a tensor to make it alive
 void ARCCppEngine::offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync sync,*/ Oid curOid, SavedVariable* fetch_loc, bool isOutput) {
-  
+
   // partial offloading
   auto tid =  t.unsafeGetIntrusivePtr()->tensor_id;  
   if (liveness_result.find(tid) == liveness_result.end() && !at::globalContext().ARCGlobal.isOnDemand()) {
+    *fetch_loc = SavedVariable(t, isOutput);
+    return;
+  }
+
+  if (tid == 0) {
     *fetch_loc = SavedVariable(t, isOutput);
     return;
   }
@@ -279,16 +284,19 @@ void ARCCppEngine::default_offload_() {
               at::native::arc_vm.set_cpl_addr(tid, at::native::arcp2p_gputossd, (void *)p_cpl);
             }
 
-           if (at::globalContext().ARCGlobal.isOnDemand()) {
-             tensor_dict_.insert(std::pair<Tid, std::pair<at::Tensor, bool>>(task.first,
-                 std::pair<at::Tensor, bool>(task.second.first.ARCto(opt, false, true, false), task.second.second)));
-           } else {
-             tensor_dict_.insert(std::pair<Tid, std::pair<at::Tensor, bool>>(task.first,
-                 std::pair<at::Tensor, bool>(task.second.first.ARCto(opt, false, true,
-                     liveness_result[task.first]), task.second.second)));
-           }
-           at::native::arc_vm.Arcp2pCompletion();
-           csg.reset_stream(csg.original_stream());
+            if (at::globalContext().ARCGlobal.isOnDemand()) {
+              tensor_dict_.insert(std::pair<Tid, std::pair<at::Tensor, bool>>(task.first,
+                  std::pair<at::Tensor, bool>(task.second.first.ARCto(opt, false, true, false), task.second.second)));
+            } else {
+              tensor_dict_.insert(std::pair<Tid, std::pair<at::Tensor, bool>>(task.first,
+                  std::pair<at::Tensor, bool>(task.second.first.ARCto(opt, false, true,
+                      liveness_result[task.first]), task.second.second)));
+            }
+
+            if (at::native::arc_vm.is_using_ssd())
+                at::native::arc_vm.Arcp2pCompletion();
+
+            csg.reset_stream(csg.original_stream());
         } else {
             if (offload_thread_run == 0) {
                 break;
@@ -362,29 +370,36 @@ void ARCCppEngine::joinPrefetchThread() {
 void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) { 
   //this operation has nothing to prefetch 
   if (oid == 0)
-      return;
+    return;
 
-    if (pf_dict_.find(oid) == pf_dict_.end()) {
+  if (pf_dict_.find(oid) == pf_dict_.end()) {
     //std::cerr << oid << " Prefetching dictionary lookup miss" << std::endl;
     return;
   }
 
   if (at::globalContext().ARCGlobal.isDebugMode())
     std::cout << oid << " pf sync start" << std::endl;
-  
+
+  int while_count = 0;
   while (1) {
     auto check = pf_sync_dict_.find(oid);
     if (check != pf_sync_dict_.end())
       break;
+
     if (at::globalContext().ARCGlobal.isDebugMode())
       std::cout << oid << " pf sync" << std::endl;
+
+    if (++while_count > 100) {
+      std::cerr << "Error something" << std::endl;
+      exit(1);
+    }
   }
 
   auto sid = pf_sync_dict_[oid];
-  c10::cuda::CUDAStream str(c10::Stream(c10::Stream::UNSAFE, c10::Device(c10::DeviceType::CUDA, 0), sid)); 
+  c10::cuda::CUDAStream str(c10::Stream(c10::Stream::UNSAFE, c10::Device(c10::DeviceType::CUDA, 0), sid));
   str.synchronize();
 
-  auto fetch_vec = pf_dict_[oid]; 
+  auto fetch_vec = pf_dict_[oid];
   for (auto it = fetch_vec.begin(); it != fetch_vec.end(); it++) {
     auto tid = it->second;
     auto fetch_loc = it->first;
@@ -402,20 +417,20 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
       void* fp16 = at::native::arc_vm.get_fp16_addr(tid);
       size_t numel = at::native::arc_vm.get_numel(tid);
 
-      size_t bit_elements, pos_elements, pos_elements_before;
-      bit_elements = (size_t)((numel + 1024 - 1) / 1024) * 32;
-      pos_elements_before = (size_t)((numel + 32 - 1) / 32);
-      int count = 0;
-      while (pos_elements_before != 0) {
-        pos_elements_before = pos_elements_before >> 1;  count++;
-      }
-      pos_elements = 1 << count;
 
       if (at::native::arc_vm.is_using_ssd()) {
         if (false == p_flu_cpl->requested && false == p_pre_cpl->requested) {
-          at::native::arc_vm.event_arr[tid].block(str);
-          unsigned int resize = at::native::arc_vm.get_resize(tid);
+          int resize = at::native::arc_vm.get_resize(tid);
+          size_t bit_elements, pos_elements, pos_elements_before;
+          bit_elements = (size_t)((numel + 1024 - 1) / 1024) * 32;
+          pos_elements_before = (size_t)((numel + 32 - 1) / 32);
+          int count = 0;
+          while (pos_elements_before != 0) {
+            pos_elements_before = pos_elements_before >> 1;  count++;
+          }
+          pos_elements = 1 << count;
 
+          at::native::arc_vm.event_arr[tid].block(str);
           if (at::native::arc_vm.is_csr() && resize > 0) {
             void* bit = at::native::arc_vm.get_bit_addr(tid);
             void* pos = at::native::arc_vm.get_pos_addr(tid);
@@ -423,8 +438,11 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
             at::native::arc_vm.device_free(fp16, sizeof(__half) * resize);
             at::native::arc_vm.device_free(bit, sizeof(unsigned int) * bit_elements);
             at::native::arc_vm.device_free(pos, sizeof(unsigned int) * pos_elements);
-          } else { // TODO arcp2p without any comprression (fp16 == false, is_csr == false)
+          } else if (at::native::arc_vm.is_fp16() && resize == 0) {
+            // TODO arcp2p without any comprression (fp16 == false, is_csr == false)
             at::native::arc_vm.device_free(fp16, sizeof(__half) * numel);
+          } else {
+            at::native::arc_vm.device_free(fp16, numel);
           }
 
           delete p_flu_cpl;
@@ -434,18 +452,30 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
         at::native::arc_vm.Arcp2pCompletion();
       } else {
         if (tensor_dict_[tid].first.device().type() == c10::DeviceType::CUDA) {
-          unsigned int resize = at::native::arc_vm.get_resize(tid);
-          if (at::native::arc_vm.is_csr() && resize > 0) {
-            void* bit = at::native::arc_vm.get_bit_addr(tid);
-            void* pos = at::native::arc_vm.get_pos_addr(tid);
-            unsigned int resize = at::native::arc_vm.get_resize(tid);
-
-            at::native::arc_vm.device_free(fp16, sizeof(__half) * resize);
-            at::native::arc_vm.device_free(bit, sizeof(unsigned int) * bit_elements);
-            at::native::arc_vm.device_free(pos, sizeof(unsigned int) * pos_elements);
-          } else {
-            at::native::arc_vm.device_free(fp16, sizeof(__half) * numel);
+          int resize = at::native::arc_vm.get_resize(tid);
+          size_t bit_elements, pos_elements, pos_elements_before;
+          bit_elements = (size_t)((numel + 1024 - 1) / 1024) * 32;
+          pos_elements_before = (size_t)((numel + 32 - 1) / 32);
+          int count = 0;
+          while (pos_elements_before != 0) {
+            pos_elements_before = pos_elements_before >> 1;  count++;
           }
+          pos_elements = 1 << count;
+
+          if (fp16 != NULL) {
+            if (at::native::arc_vm.is_csr() && resize > 0) {
+              void* bit = at::native::arc_vm.get_bit_addr(tid);
+              void* pos = at::native::arc_vm.get_pos_addr(tid);
+              unsigned int resize = at::native::arc_vm.get_resize(tid);
+
+              at::native::arc_vm.device_free(fp16, sizeof(__half) * resize);
+              at::native::arc_vm.device_free(bit, sizeof(unsigned int) * bit_elements);
+              at::native::arc_vm.device_free(pos, sizeof(unsigned int) * pos_elements);
+            } else if (at::native::arc_vm.is_fp16() && resize == 0) {
+              at::native::arc_vm.device_free(fp16, sizeof(__half) * numel);
+            }
+          }
+
           break;
         }
       }

@@ -118,7 +118,7 @@ REGISTER_LEGACY_TYPE_INIT(LegacyDeviceTypeInit);
 
 // network
 static bool cycle_gan = 0;
-static bool bert = 0;
+static bool bert = 1;
 
 bool Context::ARCGlobalContext::isCycleGAN() {return cycle_gan;}
 bool Context::ARCGlobalContext::isBERT() {return bert;}
@@ -179,7 +179,7 @@ void Context::ARCGlobalContext::endOnDemand() {
 bool Context::ARCGlobalContext::isForward() { return on_forwarding_; }
 bool Context::ARCGlobalContext::isOnDemand() { return on_demand_mode_; }
 bool Context::ARCGlobalContext::isDebugMode() { return on_debug_mode_; }
-bool Context::ARCGlobalContext::turnOnDebugMode() { on_debug_mode_ = 1; }
+void Context::ARCGlobalContext::turnOnDebugMode() { on_debug_mode_ = 1; }
 
 void Context::ARCGlobalContext::pushBackOid(Oid oid) { 
   if (!on_demand_mode_) std::cerr << "Illegal call: not on-demand mode" << std::endl;

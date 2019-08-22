@@ -30,6 +30,8 @@
 
 #include <THC/THCGeneral.h>
 
+#include <ATen/native/cuda/arc_flag.h>
+
 namespace torch { namespace autograd {
 
 // NB: -1 indicates the CPU worker!
@@ -652,6 +654,10 @@ auto Engine::execute(const edge_list& roots,
   // by sam SNU-ARC
   // backward start
   // ends forward
+
+  // TODO Wait until all SSD commands are finished
+  at::native::arc_vm.Arcp2pCompletion();
+
   at::globalContext().ARCGlobal.endForward();
   ARCCppEngine::joinOffloadThread();
   if (!at::globalContext().ARCGlobal.isOnDemand())
@@ -661,7 +667,6 @@ auto Engine::execute(const edge_list& roots,
   size_t freeBytes, dummy1, dummy2;
   if (at::globalContext().ARCGlobal.isOnDemand()) {
     THCudaMemGetInfo(at::globalContext().getTHCState(), &freeBytes, &dummy1, &dummy2);
-    std::cout << "Free size: " << freeBytes << std::endl;
   }
 
   std::call_once(start_threads_flag_, &Engine::start_threads, this);
@@ -743,17 +748,18 @@ auto Engine::execute(const edge_list& roots,
     ARCCppEngine::joinPrefetchThread();
 
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-//    double freeSize = 2048;
-//    double remainSize = ARCCppEngine::checkCSR(freeSize);
-    double remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 - 1024);
+    double remainSize = 0;
+    if (at::native::arc_vm.is_vdnn()) {
+      remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 - 1024);
+   
+      if (remainSize > 0)  remainSize = ARCCppEngine::checkLarge(remainSize);
 
-    if (remainSize > 0)  remainSize = ARCCppEngine::checkLarge(remainSize);
+      if (remainSize > 0)  remainSize = ARCCppEngine::checkFirst(remainSize);
 
-    if (remainSize > 0)  remainSize = ARCCppEngine::checkFirst(remainSize);
-
-    if (remainSize > 0) {
-      std::cout << "We cannot operate this model because it is too large" << std::endl;
-      exit(1);
+      if (remainSize > 0) {
+        std::cout << "We cannot operate this model because it is too large" << std::endl;
+        exit(1);
+      }
     }
   }
 

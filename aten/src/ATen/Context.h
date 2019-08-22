@@ -134,7 +134,7 @@ class CAFFE2_API Context {
     bool isForward();
     bool isOnDemand();
     bool isDebugMode();
-    bool turnOnDebugMode();
+    void turnOnDebugMode();
   };
   ARCGlobalContext ARCGlobal;
 

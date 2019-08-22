@@ -400,164 +400,226 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
   }
 
   if (kind == cudaMemcpyDeviceToHost) {
-    if (csr_flag && is_csr) {
-      void *fp16, *bit, *pos;
-      arc_vm.device_malloc(&bit, sizeof(unsigned int) * bit_elements);
-      arc_vm.device_malloc(&pos, sizeof(unsigned int) * pos_elements);
+    if (iter.element_size(0) >= 4) {
+      if (csr_flag && is_csr) {
+        void *fp16, *bit, *pos;
+        arc_vm.device_malloc(&bit, sizeof(unsigned int) * bit_elements);
+        arc_vm.device_malloc(&pos, sizeof(unsigned int) * pos_elements);
 
-      arc_vm.set_bit_addr(tid, (uint64_t)bit);
-      arc_vm.set_pos_addr(tid, (uint64_t)pos);
+        arc_vm.set_bit_addr(tid, (uint64_t)bit);
+        arc_vm.set_pos_addr(tid, (uint64_t)pos);
 
-      unsigned int *nz_pos;
-      arc_vm.device_malloc((void **)&nz_pos, pos_elements * sizeof(unsigned int));
+        unsigned int *nz_pos;
+        arc_vm.device_malloc((void **)&nz_pos, pos_elements * sizeof(unsigned int));
 
-      float *nz_src;
-      arc_vm.device_malloc((void **)&nz_src, iter.numel() * sizeof(float));
+        float *nz_src;
+        arc_vm.device_malloc((void **)&nz_src, iter.numel() * sizeof(float));
 
-      cudaMemsetAsync((void *)bit, 0, sizeof(unsigned int) * bit_elements, stream);
-      cudaMemsetAsync((void *)pos, 0, sizeof(unsigned int) * pos_elements, stream);
-      cudaMemsetAsync((void *)nz_pos, 0, sizeof(unsigned int) * pos_elements, stream);
+        cudaMemsetAsync((void *)bit, 0, sizeof(unsigned int) * bit_elements, stream);
+        cudaMemsetAsync((void *)pos, 0, sizeof(unsigned int) * pos_elements, stream);
+        cudaMemsetAsync((void *)nz_pos, 0, sizeof(unsigned int) * pos_elements, stream);
 
-      thrust::device_ptr<float> dA_V((float *)src);
-      thrust::device_ptr<float> dA_R((float *)nz_src);
-      thrust::copy_if(dA_V, dA_V + iter.numel(), dA_R, is_not_zero());
+        thrust::device_ptr<float> dA_V((float *)src);
+        thrust::device_ptr<float> dA_R((float *)nz_src);
+        thrust::copy_if(dA_V, dA_V + iter.numel(), dA_R, is_not_zero());
 
-      zero_mask<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((float *)src, (unsigned int *)bit, nz_pos, iter.numel());
-      pos_first<<<nblocks, nthreads, 0, stream>>>(nz_pos, pos_elements);
-      pos_second<<<nblocks, nthreads, 0, stream>>>(nz_pos, (unsigned int*)pos, pos_elements);
+        zero_mask<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((float *)src, (unsigned int *)bit, nz_pos, iter.numel());
+        pos_first<<<nblocks, nthreads, 0, stream>>>(nz_pos, pos_elements);
+        pos_second<<<nblocks, nthreads, 0, stream>>>(nz_pos, (unsigned int*)pos, pos_elements);
 
-      unsigned int resize = 0;
-      cudaMemcpyAsync((void *)&resize, (void *)((size_t)pos + sizeof(unsigned int) * (pos_elements - 1)),
-          sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
+        int resize = 0;
+        cudaMemcpyAsync((void *)&resize, (void *)((size_t)pos + sizeof(unsigned int) * (pos_elements - 1)),
+            sizeof(int), cudaMemcpyDeviceToHost, stream);
 
-      arc_vm.device_malloc(&fp16, sizeof(__half) * resize);
-      arc_vm.set_fp16_addr(tid, (uint64_t)fp16);
+        arc_vm.device_malloc(&fp16, sizeof(__half) * resize);
+        arc_vm.set_fp16_addr(tid, (uint64_t)fp16);
 
-      half_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((float *)nz_src, (__half *)fp16, resize);
+        half_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((float *)nz_src, (__half *)fp16, resize);
 
-      cudaStreamSynchronize(stream);
-      arc_vm.set_resize(tid, resize);
-      arc_vm.set_numel(tid, iter.numel());
+        cudaStreamSynchronize(stream);
+        arc_vm.set_resize(tid, resize);
+        arc_vm.set_numel(tid, iter.numel());
 
-      if (true == ssd_flag) {
-        p2p_addr = (uint64_t)fp16;
-        p2p_size = (uint64_t)(resize * sizeof(__half));
-      } else {
-        AT_CUDA_CHECK(cudaMemcpyAsync(dst, fp16, resize * sizeof(__half), kind, stream));
-        arc_vm.device_free(fp16, resize * sizeof(__half));
-      }
-
-      if (globalContext().ARCGlobal.isDebugMode()) {
-        std::cout << "CSR in d2h, resize: " << resize << ", original: " << iter.numel() << ", fp16: " << fp16 << ", tid: " << tid << std::endl;
-      }
-
-      arc_vm.device_free((void *)nz_pos, pos_elements * sizeof(unsigned int));
-      arc_vm.device_free((void *)nz_src, iter.numel() * sizeof(float));
-    } else if (fp16_flag) {
-      // this case include both cases
-      // 1. csr_flag==true && is_csr==false (csr_flag==true always guarantee fp16_flag==true)
-      // 2. csr_flag==false && fp16_flag==true
-
-      // keep print message for debug purpose
-      void *fp16;
-      arc_vm.device_malloc(&fp16, sizeof(__half) * iter.numel());
-      arc_vm.set_fp16_addr(tid, (uint64_t)fp16);
-
-      if (globalContext().ARCGlobal.isDebugMode()) {
-        if (csr_flag) {
-          std::cout << "No CSR in d2h, fp16: " << fp16 << ", tid: " << tid << std::endl;
+        if (true == ssd_flag) {
+          p2p_addr = (uint64_t)fp16;
+          p2p_size = (uint64_t)(resize * sizeof(__half));
         } else {
-          std::cout << "FP16 in d2h, fp16: " << fp16 << ", tid: " << tid << std::endl;
+          AT_CUDA_CHECK(cudaMemcpyAsync(dst, fp16, resize * sizeof(__half), kind, stream));
+          cudaStreamSynchronize(stream);
+          arc_vm.device_free(fp16, resize * sizeof(__half));
+        }
+
+        if (globalContext().ARCGlobal.isDebugMode()) {
+          std::cout << "CSR in d2h, resize: " << resize << ", original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << std::endl;
+        }
+
+        arc_vm.device_free((void *)nz_pos, pos_elements * sizeof(unsigned int));
+        arc_vm.device_free((void *)nz_src, iter.numel() * sizeof(float));
+      } else if (fp16_flag) {
+        // this case include both cases
+        // 1. csr_flag==true && is_csr==false (csr_flag==true always guarantee fp16_flag==true)
+        // 2. csr_flag==false && fp16_flag==true
+
+        // keep print message for debug purpose
+        void *fp16;
+        arc_vm.device_malloc(&fp16, sizeof(__half) * iter.numel());
+        arc_vm.set_fp16_addr(tid, (uint64_t)fp16);
+
+        if (globalContext().ARCGlobal.isDebugMode()) {
+          if (csr_flag) {
+            std::cout << "No CSR in d2h, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << std::endl;
+          } else {
+            std::cout << "FP16 in d2h, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << std::endl;
+          }
+        }
+
+        half_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((float *)src, (__half *)fp16, iter.numel());
+        cudaStreamSynchronize(stream);
+
+        arc_vm.set_resize(tid, 0); // [TODO] slight hack code, we will distinguish CSR / FP16 by resize value
+        arc_vm.set_numel(tid, iter.numel());
+
+        if (true == ssd_flag) {
+          p2p_addr = (uint64_t)fp16;
+          p2p_size = (uint64_t)(iter.numel() * sizeof(__half));
+        } else {
+          AT_CUDA_CHECK(cudaMemcpyAsync(dst, fp16, sizeof(__half) * iter.numel(), kind, stream));
+          cudaStreamSynchronize(stream);
+          arc_vm.device_free(fp16, iter.numel() * sizeof(__half));
+        }
+      } else { // false == csr_flag && false == fp16_flag
+        if (globalContext().ARCGlobal.isDebugMode()) {
+          std::cout << "Nothing in d2h, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << std::endl;
+        }
+
+        if (true == ssd_flag) {
+          // TODO Need to malloc src ptr to BAR attached region
+          void *fp16;
+          arc_vm.device_malloc(&fp16, nbytes);
+          arc_vm.set_fp16_addr(tid, (uint64_t)fp16);
+          arc_vm.set_numel(tid, (size_t)nbytes);
+          arc_vm.set_resize(tid, -1); // [TODO] slight hack code, we will distinguish CSR / FP16 by resize value
+          AT_CUDA_CHECK(cudaMemcpyAsync(fp16, src, nbytes, cudaMemcpyDeviceToDevice, stream));
+
+          p2p_addr = (uint64_t)fp16;
+          p2p_size = (uint64_t)nbytes;
+        } else {
+          arc_vm.set_resize(tid, -1); // [TODO] slight hack code, we will distinguish CSR / FP16 by resize value
+          arc_vm.set_numel(tid, iter.numel());
+
+          AT_CUDA_CHECK(cudaMemcpyAsync(dst, src, nbytes, kind, stream));
         }
       }
-
-      half_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((float *)src, (__half *)fp16, iter.numel());
-
-      arc_vm.set_resize(tid, 0); // [TODO] slight hack code, we will distinguish CSR / FP16 by resize value
-      arc_vm.set_numel(tid, iter.numel());
-
-      if (true == ssd_flag) {
-        p2p_addr = (uint64_t)fp16;
-        p2p_size = (uint64_t)(nbytes / 2);
-      } else {
-        AT_CUDA_CHECK(cudaMemcpyAsync(dst, fp16, nbytes / 2, kind, stream));
-        arc_vm.device_free(fp16, iter.numel() * sizeof(__half));
-      }
-    } else { // false == csr_flag && false == fp16_flag
+    } else { // Non double or float
       if (globalContext().ARCGlobal.isDebugMode()) {
-        std::cout << "Nothing in d2h, tid: " << tid << std::endl;
+        std::cout << "No float/double in d2h, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << std::endl;
       }
 
       if (true == ssd_flag) {
-        p2p_addr = (uint64_t)src;
+        // TODO Need to malloc src ptr to BAR attached region
+        void *fp16;
+        arc_vm.device_malloc(&fp16, nbytes);
+        arc_vm.set_fp16_addr(tid, (uint64_t)fp16);
+        arc_vm.set_resize(tid, -1); // [TODO] slight hack code, we will distinguish CSR / FP16 by resize value
+        arc_vm.set_numel(tid, (size_t)nbytes);
+        AT_CUDA_CHECK(cudaMemcpyAsync(fp16, src, nbytes, cudaMemcpyDeviceToDevice, stream));
+
+        p2p_addr = (uint64_t)fp16;
         p2p_size = (uint64_t)nbytes;
       } else {
+        arc_vm.set_resize(tid, -1); // [TODO] slight hack code, we will distinguish CSR / FP16 by resize value
+        arc_vm.set_numel(tid, iter.numel());
+        arc_vm.set_fp16_addr(tid, (uint64_t)NULL);
+
         AT_CUDA_CHECK(cudaMemcpyAsync(dst, src, nbytes, kind, stream));
       }
     }
   }
 
   if (kind == cudaMemcpyHostToDevice) {
-    if (csr_flag && is_csr) {
-      void* bit = arc_vm.get_bit_addr(tid);
-      void* pos = arc_vm.get_pos_addr(tid);
+    if (iter.element_size(0) >= 4) {
+      if (csr_flag && is_csr) {
+        void* bit = arc_vm.get_bit_addr(tid);
+        void* pos = arc_vm.get_pos_addr(tid);
 
-      unsigned int resize = arc_vm.get_resize(tid);
+        int resize = arc_vm.get_resize(tid);
 
-      void* fp16;
-      arc_vm.device_malloc(&fp16, sizeof(__half) * resize);
-      arc_vm.set_fp16_addr(tid, (uint64_t)fp16);
+        void* fp16;
+        arc_vm.device_malloc(&fp16, sizeof(__half) * resize);
+        arc_vm.set_fp16_addr(tid, (uint64_t)fp16);
 
-      if (globalContext().ARCGlobal.isDebugMode()) {
-        std::cout << "CSR in h2d, resize: " << resize << ", original: " << iter.numel() << ", fp16: " << fp16 << ", tid: " << tid << std::endl;
-      }
-
-      if (ssd_flag) {
-        p2p_addr = (uint64_t)fp16;
-        p2p_size = (uint64_t)(resize * sizeof(__half));
-        // [JS] all backend job will be called at Arcp2pCompletion
-      } else {
-        float *nz_dst;
-        arc_vm.device_malloc((void **)&nz_dst, resize * sizeof(float));
-        cudaMemsetAsync((void *)nz_dst, 0, resize * sizeof(float), stream);
-
-        AT_CUDA_CHECK(cudaMemcpyAsync(fp16, src, resize * sizeof(__half), kind, stream));
-
-        float_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half *)fp16, nz_dst, resize);
-        zero_insert<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((unsigned int*)bit, (unsigned int*)pos, nz_dst, (float *)dst, iter.numel());
-
-        arc_vm.device_free((void *)nz_dst, resize * sizeof(float));
-      }
-    } else if (fp16_flag) {
-      // keep print message for debug purpose
-      void* fp16;
-      arc_vm.device_malloc(&fp16, sizeof(__half) * iter.numel());
-      arc_vm.set_fp16_addr(tid, (uint64_t)fp16);
-
-      if (globalContext().ARCGlobal.isDebugMode()) {
-        if (csr_flag) {
-          std::cout << "No CSR in h2d, fp16: " << fp16 << ", tid: " << tid << std::endl;
-        } else {
-          std::cout << "FP16 in h2d, fp16: " << fp16 << ", tid: " << tid << std::endl;
+        if (globalContext().ARCGlobal.isDebugMode()) {
+          std::cout << "CSR in h2d, resize: " << resize << ", original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << std::endl;
         }
-      }
 
-      if (ssd_flag) {
-        p2p_addr = (uint64_t)fp16;
-        p2p_size = (uint64_t)(nbytes / 2);
+        if (ssd_flag) {
+          p2p_addr = (uint64_t)fp16;
+          p2p_size = (uint64_t)(resize * sizeof(__half));
+          // [JS] all backend job will be called at Arcp2pCompletion
+        } else {
+          float *nz_dst;
+          arc_vm.device_malloc((void **)&nz_dst, resize * sizeof(float));
+          cudaMemsetAsync((void *)nz_dst, 0, resize * sizeof(float), stream);
+
+          AT_CUDA_CHECK(cudaMemcpyAsync(fp16, src, resize * sizeof(__half), kind, stream));
+
+          float_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half *)fp16, nz_dst, resize);
+          zero_insert<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((unsigned int*)bit, (unsigned int*)pos, nz_dst, (float *)dst, iter.numel());
+
+          arc_vm.device_free((void *)nz_dst, resize * sizeof(float));
+        }
+      } else if (fp16_flag) {
+        // keep print message for debug purpose
+        void* fp16;
+        arc_vm.device_malloc(&fp16, sizeof(__half) * iter.numel());
+        arc_vm.set_fp16_addr(tid, (uint64_t)fp16);
+
+        if (globalContext().ARCGlobal.isDebugMode()) {
+          if (csr_flag) {
+            std::cout << "No CSR in h2d, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << std::endl;
+          } else {
+            std::cout << "FP16 in h2d, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << std::endl;
+          }
+        }
+
+        if (ssd_flag) {
+          p2p_addr = (uint64_t)fp16;
+          p2p_size = (uint64_t)(iter.numel() * sizeof(__half));
+        } else {
+          AT_CUDA_CHECK(cudaMemcpyAsync(fp16, src, iter.numel() * sizeof(__half), kind, stream));
+          float_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half* )fp16, (float* )dst, iter.numel());
+        }
       } else {
-        AT_CUDA_CHECK(cudaMemcpyAsync(fp16, src, nbytes / 2, kind, stream));
-        float_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((__half* )fp16, (float* )dst, iter.numel());
+        if (globalContext().ARCGlobal.isDebugMode()) {
+          std::cout << "Nothing in h2d, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << std::endl;
+        }
+
+        if (true == ssd_flag) {
+          void* fp16;
+          arc_vm.device_malloc(&fp16, nbytes);
+          arc_vm.set_fp16_addr(tid, (uint64_t)fp16);
+
+          p2p_addr = (uint64_t)fp16;
+          p2p_size = (uint64_t)nbytes;
+        } else {
+          arc_vm.set_fp16_addr(tid, (uint64_t)NULL);
+          AT_CUDA_CHECK(cudaMemcpyAsync(dst, src, nbytes, kind, stream));
+        }
       }
     } else {
       if (globalContext().ARCGlobal.isDebugMode()) {
-        std::cout << "Nothing in h2d, tid: " << tid << std::endl;
+        std::cout << "No float/double in h2d, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << std::endl;
       }
 
       if (true == ssd_flag) {
-        p2p_addr = (uint64_t)dst;
+        void* fp16;
+        arc_vm.device_malloc(&fp16, nbytes);
+        arc_vm.set_fp16_addr(tid, (uint64_t)fp16);
+
+        p2p_addr = (uint64_t)fp16;
         p2p_size = (uint64_t)nbytes;
       } else {
+        arc_vm.set_fp16_addr(tid, (uint64_t)NULL);
         AT_CUDA_CHECK(cudaMemcpyAsync(dst, src, nbytes, kind, stream));
       }
     }

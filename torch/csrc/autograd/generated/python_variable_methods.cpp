@@ -3914,7 +3914,7 @@ static PyObject * THPVariable_mm(PyObject* self_, PyObject* args, PyObject* kwar
   at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::globalContext().ARCGlobal.isDebugMode()) {
-    std::cout << "* OUTPUT TENSOR ID : " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
+    std::cout << "*(mm) OUTPUT TENSOR ID : " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
   }
 
   if (at::globalContext().ARCGlobal.isOnDemand()) {
@@ -3972,7 +3972,7 @@ static PyObject * THPVariable_mul(PyObject* self_, PyObject* args, PyObject* kwa
   Tensor s = self, t0 = r.tensor(0);
  
   if (at::globalContext().ARCGlobal.isDebugMode()) {
-    std::cout << "* INPUT TENSOR ID (self, r.tensor): " << at::globalContext().ARCGlobal.getTid(s) << " " << at::globalContext().ARCGlobal.getTid(t0) << std::endl;
+    std::cout << "* (mul) INPUT TENSOR ID (self, r.tensor): " << at::globalContext().ARCGlobal.getTid(s) << " " << at::globalContext().ARCGlobal.getTid(t0) << std::endl;
   }
 
   
@@ -4000,9 +4000,8 @@ static PyObject * THPVariable_mul(PyObject* self_, PyObject* args, PyObject* kwa
   }
 
   at::globalContext().ARCGlobal.setNewTid(output);
-
   if (at::globalContext().ARCGlobal.isDebugMode()) {
-    std::cout << "* OUTPUT TENSOR ID : " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
+    std::cout << "* (mul) OUTPUT TENSOR ID : " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
   }
 
   if (at::globalContext().ARCGlobal.isOnDemand()) {

@@ -19,7 +19,7 @@
 #include <ATen/cuda/CUDAEvent.h>
 
 #define BLK_SZ ((size_t)1 << 12)
-#define DEVICE_SZ (((size_t)1 << 30)*4)
+#define DEVICE_SZ (((size_t)1 << 30)*8)
 #define MAX_DEVICE (DEVICE_SZ / BLK_SZ)
 
 using namespace std;
@@ -67,8 +67,8 @@ class ARC_memory {
   void* get_pos_addr(int tid);
   void set_pos_addr(int tid, uint64_t addr);
 
-  unsigned int get_resize(int tid);
-  void set_resize(int tid, unsigned int resize);
+  int get_resize(int tid);
+  void set_resize(int tid, int resize);
 
   size_t get_numel(int tid);
   void set_numel(int tid, size_t numel);
@@ -88,9 +88,10 @@ class ARC_memory {
   void Arcp2pCompletion();
 
   // [JS] flag check
-  bool is_using_ssd();
+  bool is_vdnn();
   bool is_fp16();
   bool is_csr();
+  bool is_using_ssd();
 
  private:
   void* deviceAddr;
@@ -101,7 +102,7 @@ class ARC_memory {
   uint64_t* fp16_ptr_arr;
   uint64_t* bit_ptr_arr;
   uint64_t* pos_ptr_arr;
-  unsigned int* resize_arr;
+  int* resize_arr;
   size_t* numel_arr;
   uint64_t* cpl_flu_ptr_arr;
   uint64_t* cpl_pre_ptr_arr;
@@ -118,10 +119,12 @@ class ARC_memory {
 
   arcp2p *arc_handle;
   uint64_t last_allocated_offset;
-  bool isTesla;
-  bool isUsingSSD;
+  bool isVDNN;
   bool isFP16;
   bool isCSR;
+  bool isUsingSSD;
+  bool isTesla;
+  bool isDebug;
 };
 
 extern ARC_memory arc_vm;
