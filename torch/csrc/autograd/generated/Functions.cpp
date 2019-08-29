@@ -1700,37 +1700,37 @@ Tensor svd_backward(const std::vector<torch::autograd::Variable> &grads, const T
 // http://eprints.maths.ox.ac.uk/1079/1/NA-08-01.pdf
 Tensor symeig_backward(const std::vector<torch::autograd::Variable> &grads, const Tensor& self,
                     bool eigenvectors, bool upper, const Tensor& lambda, const Tensor& v) {
-    TORCH_CHECK(eigenvectors,
-             "symeig_backward: Setting eigenvectors to false in torch.symeig doesn't compute eigenvectors ",
-             "and hence we cannot compute backward. Please use torch.symeig(eigenvectors=True)");
+  TORCH_CHECK(eigenvectors,
+      "symeig_backward: Setting eigenvectors to false in torch.symeig doesn't compute eigenvectors ",
+      "and hence we cannot compute backward. Please use torch.symeig(eigenvectors=True)");
 
-    auto glambda = grads[0];
-    auto gv = grads[1];
+  auto glambda = grads[0];
+  auto gv = grads[1];
 
-    auto vt = v.transpose(-2, -1);
+  auto vt = v.transpose(-2, -1);
 
-    Tensor result;
-    if (gv.defined()) {
-        Tensor F = lambda.unsqueeze(-2).expand_as(self).clone();
-        F.sub_(at::unsqueeze(lambda, -1));
-        F.diagonal(/*offset=*/0, /*dim1=*/-2, /*dim2=*/-1).fill_(INFINITY);
-        F.pow_(-1);
+  Tensor result;
+  if (gv.defined()) {
+    Tensor F = lambda.unsqueeze(-2).expand_as(self).clone();
+    F.sub_(at::unsqueeze(lambda, -1));
+    F.diagonal(/*offset=*/0, /*dim1=*/-2, /*dim2=*/-1).fill_(INFINITY);
+    F.pow_(-1);
 
-        F.mul_(at::matmul(vt, gv));
-        result = at::matmul(v, at::matmul(F, vt));
-    } else {
-        result = at::zeros_like(self);
-    }
+    F.mul_(at::matmul(vt, gv));
+    result = at::matmul(v, at::matmul(F, vt));
+  } else {
+    result = at::zeros_like(self);
+  }
 
-    if (glambda.defined()) {
-        result.add_(at::matmul(at::matmul(v, at::diag_embed(glambda, /*offset=*/0, /*dim1=*/-2, /*dim2=*/-1)), vt));
-    }
-    if (upper) {
-        result = at::triu(result) + at::triu(result.transpose(-2, -1), 1);
-    } else {
-        result = at::tril(result) + at::tril(result.transpose(-2, -1), -1);
-    }
-    return result;
+  if (glambda.defined()) {
+    result.add_(at::matmul(at::matmul(v, at::diag_embed(glambda, /*offset=*/0, /*dim1=*/-2, /*dim2=*/-1)), vt));
+  }
+  if (upper) {
+    result = at::triu(result) + at::triu(result.transpose(-2, -1), 1);
+  } else {
+    result = at::tril(result) + at::tril(result.transpose(-2, -1), -1);
+  }
+  return result;
 }
 
 // We refer Walter, S.F and Lehmann, L., Algorithmic Differentiation of Linear
@@ -2973,10 +2973,10 @@ variable_list DivBackward0::apply(variable_list&& grads) {
   auto& grad = grads[0];
   
   if ( at::globalContext().ARCGlobal.isBERT() ) {
-      if (at::globalContext().ARCGlobal.isOnDemand()) {
-        ARCCppEngine::preFetch(this->getOid(), Sync);
-      }
-      ARCCppEngine::preFetchSync(this->getOid());
+    if (at::globalContext().ARCGlobal.isOnDemand()) {
+      ARCCppEngine::preFetch(this->getOid(), Sync);
+    }
+    ARCCppEngine::preFetchSync(this->getOid());
   }
   auto self = self_.unpack();
   auto other = other_.unpack();
@@ -2984,7 +2984,7 @@ variable_list DivBackward0::apply(variable_list&& grads) {
     auto grad_result = -grad * self / (other * other);
     copy_range(grad_inputs, other_ix, grad_result);
     if ( at::globalContext().ARCGlobal.isBERT() )
-        ARCCppEngine::dropTensor(this->getOid(), &self_);
+      ARCCppEngine::dropTensor(this->getOid(), &self_);
   }
   if (should_compute_output({ self_ix })) {
     auto grad_result = grad / other;
@@ -2992,6 +2992,7 @@ variable_list DivBackward0::apply(variable_list&& grads) {
   }
   if ( at::globalContext().ARCGlobal.isBERT() )
     ARCCppEngine::dropTensor(this->getOid(), &other_);
+
   return grad_inputs;
 }
 variable_list DivBackward1::apply(variable_list&& grads) {
@@ -4085,8 +4086,8 @@ variable_list MmBackward::apply(variable_list&& grads) {
   if (should_compute_output({ self_ix })) {
     auto grad_result = mm_mat1_backward(grad, mat2, self, 1);
     copy_range(grad_inputs, self_ix, grad_result);
-  
   }
+
   ARCCppEngine::dropTensor(this->getOid(), &self_);
   ARCCppEngine::dropTensor(this->getOid(), &mat2_);
   return grad_inputs;
@@ -4130,7 +4131,6 @@ variable_list MulBackward0::apply(variable_list&& grads) {
     copy_range(grad_inputs, self_ix, grad_result);
     ARCCppEngine::dropTensor(this->getOid(), &other_);
   }
-
 
   return grad_inputs;
 }
@@ -5756,26 +5756,26 @@ variable_list TrilinearBackward::apply(variable_list&& grads) {
   
   ARCCppEngine::preFetchSync(this->getOid()); 
 
-   auto i1 = i1_.unpack();
+  auto i1 = i1_.unpack();
   
   auto i2 = i2_.unpack();
   auto i3 = i3_.unpack();
   if (should_compute_output({ i1_ix, i2_ix, i3_ix })) {
-      auto grad_input_mask = std::array<bool, 3>{
-        should_compute_output({ i1_ix }),
-        should_compute_output({ i2_ix }),
-        should_compute_output({ i3_ix }),
-      };
+    auto grad_input_mask = std::array<bool, 3>{
+      should_compute_output({ i1_ix }),
+      should_compute_output({ i2_ix }),
+      should_compute_output({ i3_ix }),
+    };
     auto grad_result = _trilinear_backward(grad, i1, i2, i3, expand1, expand2, expand3, sumdim, unroll_dim, grad_input_mask);
-      if (should_compute_output({ i1_ix })) {
-        copy_range(grad_inputs, i1_ix, std::get<0>(grad_result));
-      }
-      if (should_compute_output({ i2_ix })) {
-        copy_range(grad_inputs, i2_ix, std::get<1>(grad_result));
-      }
-      if (should_compute_output({ i3_ix })) {
-        copy_range(grad_inputs, i3_ix, std::get<2>(grad_result));
-      }
+    if (should_compute_output({ i1_ix })) {
+      copy_range(grad_inputs, i1_ix, std::get<0>(grad_result));
+    }
+    if (should_compute_output({ i2_ix })) {
+      copy_range(grad_inputs, i2_ix, std::get<1>(grad_result));
+    }
+    if (should_compute_output({ i3_ix })) {
+      copy_range(grad_inputs, i3_ix, std::get<2>(grad_result));
+    }
   }
   return grad_inputs;
 }
@@ -6056,7 +6056,6 @@ variable_list ReluBackward0::apply(variable_list&& grads) {
   if (at::globalContext().ARCGlobal.isOnDemand()) {
   //  ARCCppEngine::preFetch(this->getOid(), Sync);
   }
-
   
   auto self = self_.unpack();
   if (should_compute_output({ self_ix })) {
@@ -6755,21 +6754,21 @@ variable_list ConvTranspose2DBackward::apply(variable_list&& grads) {
   auto self = self_.unpack();
   auto weight = weight_.unpack();
   if (should_compute_output({ self_ix, weight_ix, bias_ix })) {
-      auto grad_input_mask = std::array<bool, 3>{
-        should_compute_output({ self_ix }),
-        should_compute_output({ weight_ix }),
-        should_compute_output({ bias_ix }),
-      };
+    auto grad_input_mask = std::array<bool, 3>{
+      should_compute_output({ self_ix }),
+      should_compute_output({ weight_ix }),
+      should_compute_output({ bias_ix }),
+    };
     auto grad_result = conv_transpose2d_backward(grad, self, weight, kernel_size, stride, padding, output_padding, dilation, empty_like(grad), empty_like(grad), grad_input_mask);
-      if (should_compute_output({ self_ix })) {
-        copy_range(grad_inputs, self_ix, std::get<0>(grad_result));
-      }
-      if (should_compute_output({ weight_ix })) {
-        copy_range(grad_inputs, weight_ix, std::get<1>(grad_result));
-      }
-      if (should_compute_output({ bias_ix })) {
-        copy_range(grad_inputs, bias_ix, std::get<2>(grad_result));
-      }
+    if (should_compute_output({ self_ix })) {
+      copy_range(grad_inputs, self_ix, std::get<0>(grad_result));
+    }
+    if (should_compute_output({ weight_ix })) {
+      copy_range(grad_inputs, weight_ix, std::get<1>(grad_result));
+    }
+    if (should_compute_output({ bias_ix })) {
+      copy_range(grad_inputs, bias_ix, std::get<2>(grad_result));
+    }
   }
 
   ARCCppEngine::dropTensor(this->getOid(), &self_);

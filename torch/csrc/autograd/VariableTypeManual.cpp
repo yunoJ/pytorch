@@ -143,6 +143,7 @@ Tensor & VariableType::copy_(Tensor & self, const Tensor & src, bool non_blockin
 }
 
 Tensor & VariableType::ARCcopy_(Tensor & self, const Tensor & src, bool non_blocking, bool is_csr) {
+  /*
   jit::Value* output = nullptr;
   if(torch::jit::tracer::isTracing()) {
     const jit::tracer::TracingState& state = *jit::tracer::getTracingState();
@@ -150,7 +151,7 @@ Tensor & VariableType::ARCcopy_(Tensor & self, const Tensor & src, bool non_bloc
     if (state.force_outplace) {
       // if you have no views of self, then an in place copy is equivalent to
       // making sure we expand src to the same size as self
-      jit::Node* node = graph->create(jit::aten::expand_as, /*num_outputs=*/1);
+      jit::Node* node = graph->create(jit::aten::expand_as, 1);
       jit::tracer::addInputs(node, "src", src);
       jit::tracer::addInputs(node, "self", self);
       graph->insertNode(node);
@@ -162,11 +163,13 @@ Tensor & VariableType::ARCcopy_(Tensor & self, const Tensor & src, bool non_bloc
           {jit::tracer::getValueTrace(self), jit::tracer::getValueTrace(src)});
     }
   }
+  */
   // TODO: once copy is exposed in Declarations.yaml we may be able to bind
   // it automatically
   auto& self_ = unpack(self, "self", 0);
   auto& src_ = unpack(src, "src", 1);
   check_inplace(self);
+  /*
   std::shared_ptr<CopyBackwards> grad_fn;
   auto requires_grad = compute_requires_grad(self, src);
   requires_grad &= isFloatingPoint(self.scalar_type());
@@ -176,15 +179,18 @@ Tensor & VariableType::ARCcopy_(Tensor & self, const Tensor & src, bool non_bloc
     grad_fn->src_type = &src.type();
     grad_fn->src_device = src.device();
   }
+  */
   {
     at::AutoNonVariableTypeMode non_var_type_mode(true);
     self_.ARCcopy_(src_, non_blocking, is_csr);
   }
   increment_version(self);
+  /*
   rebase_history(as_variable_ref( self ), std::move(grad_fn));
   if(torch::jit::tracer::isTracing()) {
     jit::tracer::setOutput(output, self);
   }
+  */
   return self;
 }
 

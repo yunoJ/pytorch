@@ -348,54 +348,60 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
   // Enable p2p access between devices. (No-op if it invovles the CPU)
   bool p2p_enabled = maybe_enable_p2p_access(dst_device, src_device);
 
+/*
   if (copy_requires_temporaries(iter, p2p_enabled)) {
-      // NB: this involves recursive calls to copy. Be careful that those copies
-      // don't require temporaries or you will cause an infinite recursion!
-      auto& dst = iter.tensor(0);
-      Tensor dst_contig;
-      Tensor src_contig;
+    // NB: this involves recursive calls to copy. Be careful that those copies
+    // don't require temporaries or you will cause an infinite recursion!
+    auto& dst = iter.tensor(0);
+    Tensor dst_contig;
+    Tensor src_contig;
 
-      // Type conversions are performed on the CPU for CPU-GPU copies and on
-      // the src device for GPU-GPU copies.
-      if (iter.device_type(0) == kCUDA) {
-          dst_contig = dst.is_contiguous() ? dst : at::empty_like(dst);
-          src_contig = iter.tensor(1).to(iter.dtype(0)).expand_as(dst).contiguous();
-      } else {
-          bool same_type = iter.dtype(0) == iter.dtype(1);
-          dst_contig = (dst.is_contiguous() && same_type) ? dst : at::empty_like(dst, iter.dtype(1));
-          src_contig = iter.tensor(1).expand_as(dst).contiguous();
-      }
+    // Type conversions are performed on the CPU for CPU-GPU copies and on
+    // the src device for GPU-GPU copies.
+    if (iter.device_type(0) == kCUDA) {
+      dst_contig = dst.is_contiguous() ? dst : at::empty_like(dst);
+      src_contig = iter.tensor(1).to(iter.dtype(0)).expand_as(dst).contiguous();
+    } else {
+      bool same_type = iter.dtype(0) == iter.dtype(1);
+      dst_contig = (dst.is_contiguous() && same_type) ? dst : at::empty_like(dst, iter.dtype(1));
+      src_contig = iter.tensor(1).expand_as(dst).contiguous();
+    }
 
-      // perform a same-dtype copy on contiguous tensors
-      TORCH_INTERNAL_ASSERT(dst_contig.sizes().equals(src_contig.sizes()));
-      TORCH_INTERNAL_ASSERT(dst_contig.scalar_type() == src_contig.scalar_type());
-      dst_contig.copy_(src_contig, non_blocking);
+    // perform a same-dtype copy on contiguous tensors
+    TORCH_INTERNAL_ASSERT(dst_contig.sizes().equals(src_contig.sizes()));
+    TORCH_INTERNAL_ASSERT(dst_contig.scalar_type() == src_contig.scalar_type());
+    dst_contig.copy_(src_contig, non_blocking);
 
-      // if necessary, copy back into dst
-      if (!dst_contig.is_same(dst)) {
-          TORCH_INTERNAL_ASSERT(dst_contig.device() == dst.device());
-          dst.copy_(dst_contig, non_blocking);
-      }
-      return;
+    // if necessary, copy back into dst
+    if (!dst_contig.is_same(dst)) {
+      TORCH_INTERNAL_ASSERT(dst_contig.device() == dst.device());
+      dst.copy_(dst_contig, non_blocking);
+    }
+    return;
   }
+*/
 
   // Copy on GPU (or between GPUs)
+/*
   if (dst_device.is_cuda() && src_device.is_cuda()) {
-      copy_device_to_device(iter, non_blocking);
-      return;
+    copy_device_to_device(iter, non_blocking);
+    return;
   }
+*/
 
   // Copy between CPU and GPU
   cuda::OptionalCUDAGuard device_guard;
   cudaMemcpyKind kind;
   if (dst_device.is_cuda() && src_device.is_cpu()) {
-      device_guard.set_device(dst_device);
-      kind = cudaMemcpyHostToDevice;
+    device_guard.set_device(dst_device);
+    kind = cudaMemcpyHostToDevice;
+    at::native::arc_vm.event_arr_h2d[tid] = true;
   } else if (dst_device.is_cpu() && src_device.is_cuda()) {
-      device_guard.set_device(src_device);
-      kind = cudaMemcpyDeviceToHost;
+    device_guard.set_device(src_device);
+    kind = cudaMemcpyDeviceToHost;
+    at::native::arc_vm.event_arr_d2h[tid] = true;
   } else {
-      TORCH_INTERNAL_ASSERT(false, "unsupported devices in GPU copy_()");
+    TORCH_INTERNAL_ASSERT(false, "unsupported devices in GPU copy_()");
   }
 
   uint64_t p2p_addr = 0, p2p_size = 0;
@@ -411,7 +417,8 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
     if (!arc_vm.mapping) {
       // [TODO] this should be called only for Tesla option enabled
       void* deviceAddr = arc_vm.get_device_addr();
-      arc_vm.Arcp2pBarMapping((uint64_t)deviceAddr, (uint64_t)4 << 30);
+      uint64_t deviceSz = arc_vm.get_device_sz();
+      arc_vm.Arcp2pBarMapping((uint64_t)deviceAddr, deviceSz);
       arc_vm.mapping = true;
     }
   }
@@ -538,7 +545,6 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
         }
       }
     } else { // Non double or float
-
       if (true == ssd_flag) {
         // TODO Need to malloc src ptr to BAR attached region
         void *fp16;
@@ -605,10 +611,12 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
         void* fp16;
         arc_vm.device_malloc(&fp16, sizeof(__half) * iter.numel());
         arc_vm.set_fp16_addr(tid, (uint64_t)fp16);
+        arc_vm.set_numel(tid, iter.numel());
+        arc_vm.set_resize(tid, 0);
 
         if (globalContext().ARCGlobal.isDebugMode()) {
           if (csr_flag) {
-            std::cout << "No CSR in h2d, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << ", fp16: " << fp16 << std::endl;
+            std::cout << "No CSR in h2d, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << ", fp16: " << fp16 << ", requested size: " << sizeof(__half) * iter.numel() << std::endl;
           } else {
             std::cout << "FP16 in h2d, original: " << iter.numel() << ", elem_size: " << iter.element_size(0) << ", tid: " << tid << ", fp16: " << fp16 << std::endl;
           }
@@ -667,8 +675,15 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
     arcp2p_cpl *p_cpl = (arcp2p_cpl *)arc_vm.get_cpl_addr(tid, dir);
 
     if (arcp2p_gputossd == dir) {
-      c10::Storage *stor = new c10::Storage;
-      *stor = iter.tensor(1).storage();
+      c10::Storage *stor = nullptr;
+      
+      if (false == fp16_flag) {
+        stor = new c10::Storage;
+        *stor = iter.tensor(1).storage();
+      }
+
+//      std::cout << "TID: " << tid << " Addr compare: iter.tensor: " << iter.tensor(1).storage().data() << ", copied stor: " << stor->data() << std::endl;
+
       arcp2p_info *info = nullptr;
 
       if (true == fp16_flag) {
@@ -677,7 +692,8 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
         info->ptr = arc_vm.get_fp16_addr(tid);
       }
 
-      arc_vm.Arcp2pSubmission(p2p_addr, p2p_size, p_offs, p_cpl, dir, stor, info);
+//      arc_vm.Arcp2pSubmission(p2p_addr, p2p_size, p_offs, p_cpl, dir, stor, info);
+      arc_vm.Arcp2pSubmission(p2p_addr, p2p_size, p_offs, p_cpl, dir, stor, info, stream.stream());
       arc_vm.Arcp2pCompletion();
     } else if (arcp2p_ssdtogpu == dir) {
       arcp2p_info *info = nullptr;
@@ -692,7 +708,8 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
         info->ptr = arc_vm.get_fp16_addr(tid);
       }
 
-      arc_vm.Arcp2pSubmission(p2p_addr, p2p_size, p_offs, p_cpl, dir, nullptr, info);
+//      arc_vm.Arcp2pSubmission(p2p_addr, p2p_size, p_offs, p_cpl, dir, nullptr, info);
+      arc_vm.Arcp2pSubmission(p2p_addr, p2p_size, p_offs, p_cpl, dir, nullptr, info, stream.stream());
       arc_vm.Arcp2pCompletion();
     }
   } else {

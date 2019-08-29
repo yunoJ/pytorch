@@ -667,6 +667,9 @@ auto Engine::execute(const edge_list& roots,
   size_t freeBytes, dummy1, dummy2;
   if (at::globalContext().ARCGlobal.isOnDemand()) {
     THCudaMemGetInfo(at::globalContext().getTHCState(), &freeBytes, &dummy1, &dummy2);
+    if (at::globalContext().ARCGlobal.isDebugMode()) {
+      std::cout << "Remaining GPU memory: " << freeBytes << std::endl;
+    }
   }
 
   std::call_once(start_threads_flag_, &Engine::start_threads, this);
@@ -750,7 +753,8 @@ auto Engine::execute(const edge_list& roots,
   if (at::globalContext().ARCGlobal.isOnDemand()) {
     double remainSize = 0;
     if (at::native::arc_vm.is_vdnn()) {
-      remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 - 1024);
+      remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 - 4096);
+//      remainSize = ARCCppEngine::checkCSR((double)0);
    
       if (remainSize > 0)  remainSize = ARCCppEngine::checkLarge(remainSize);
 

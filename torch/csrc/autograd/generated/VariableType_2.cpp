@@ -1,6 +1,7 @@
 #include "torch/csrc/autograd/VariableTypeUtils.h"
 
 #include <ATen/TypeDefault.h>
+#include <ATen/native/cuda/arc_flag.h>
 
 // @generated from tools/autograd/templates/VariableType.cpp
 
@@ -10694,6 +10695,9 @@ Tensor VariableType::tanh(Tensor & self) {
   auto result = as_variable(std::move(tmp));
   //result tid manipulation
   at::globalContext().ARCGlobal.setNewTid(result);
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "tanh RESULT TENSOR ID: " << at:: globalContext().ARCGlobal.getTid(result) << std::endl;
+  }
 
   #ifndef NDEBUG
   if (self__storage_saved.has_value())

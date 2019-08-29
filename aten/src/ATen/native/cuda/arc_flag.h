@@ -19,16 +19,13 @@
 #include <ATen/cuda/CUDAEvent.h>
 
 #define BLK_SZ ((size_t)1 << 12)
-#define DEVICE_SZ (((size_t)1 << 30)*8)
-#define MAX_DEVICE (DEVICE_SZ / BLK_SZ)
 
 using namespace std;
 namespace at { namespace native {
 
 using namespace at::cuda;
 
-typedef struct
-{
+typedef struct {
   uint64_t tid;
   uint64_t numel;
   uint64_t ntpb;
@@ -50,13 +47,15 @@ class ARC_memory {
 
   bool relu_thru;
   bool mapping;
-  CUDAEvent* event_arr;
+  bool* event_arr_d2h;
+  bool* event_arr_h2d;
   mutex m;
   mutex m2;
 
   void device_malloc(void** gpu_ptr, size_t size);
   void device_free(void* addr, size_t size);
   void* get_device_addr();
+  uint64_t get_device_sz();
 
   void* get_fp16_addr(int tid);
   void set_fp16_addr(int tid, uint64_t addr);
@@ -87,7 +86,8 @@ class ARC_memory {
   // [JS] P2P library
   void Arcp2pSetting(int flags);
   int  Arcp2pBarMapping(uint64_t, uint64_t);
-  void Arcp2pSubmission(uint64_t, uint64_t, uint64_t *, arcp2p_cpl *, arcp2p_dir, c10::Storage *, arcp2p_info *);
+//  void Arcp2pSubmission(uint64_t, uint64_t, uint64_t *, arcp2p_cpl *, arcp2p_dir, c10::Storage *, arcp2p_info *);
+  void Arcp2pSubmission(uint64_t, uint64_t, uint64_t *, arcp2p_cpl *, arcp2p_dir, c10::Storage *, arcp2p_info *, cudaStream_t);
   void Arcp2pCompletion();
   void Arcp2pSynchronize();
 
@@ -131,6 +131,8 @@ class ARC_memory {
   bool isUsingSSD;
   bool isTesla;
   bool isDebug;
+  uint64_t device_sz;
+  uint64_t max_device;
 };
 
 extern ARC_memory arc_vm;

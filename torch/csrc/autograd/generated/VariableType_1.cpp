@@ -1149,6 +1149,11 @@ std::tuple<Tensor,Tensor> VariableType::_fused_dropout(const Tensor & self, doub
   }
   at::globalContext().ARCGlobal.setNewTid(result0);
   at::globalContext().ARCGlobal.setNewTid(result1);
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "_fused_dropout result0 TENSOR ID: " << at:: globalContext().ARCGlobal.getTid(result0) << std::endl;
+    std::cout << "_fused_dropout result1 TENSOR ID: " << at:: globalContext().ARCGlobal.getTid(result1) << std::endl;
+  }
+
   if (grad_fn) {
     if (at::globalContext().ARCGlobal.isForward()) {
       ARCCppEngine::offLoad(result1, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result1_), true);

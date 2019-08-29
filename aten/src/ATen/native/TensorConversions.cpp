@@ -82,35 +82,36 @@ Tensor to(const Tensor& self, const TensorOptions& options, bool non_blocking, b
 }
 
 Tensor ARCto(const Tensor& self, const TensorOptions& options, bool non_blocking, bool copy, bool is_csr) {
-        TORCH_CHECK(options.requires_grad_opt() == c10::nullopt,
-                        "ARCto(options) expects unset requires_grad flag, but got "
-                        "options.requires_grad set as ", options.requires_grad());
+  TORCH_CHECK(options.requires_grad_opt() == c10::nullopt,
+      "ARCto(options) expects unset requires_grad flag, but got "
+      "options.requires_grad set as ", options.requires_grad());
 
-        const auto & layout_opt = options.layout_opt();
-        TORCH_CHECK(!layout_opt || self.layout() == layout_opt.value(),
-                        "ARCto(options) doesn't support converting to a different layout, "
-                        "but got self.layout being ", self.layout(),
-                        " and options.layout set as ", options.layout());
+  const auto & layout_opt = options.layout_opt();
+  TORCH_CHECK(!layout_opt || self.layout() == layout_opt.value(),
+      "ARCto(options) doesn't support converting to a different layout, "
+      "but got self.layout being ", self.layout(),
+      " and options.layout set as ", options.layout());
 
-        auto device_opt = options.device_opt();
-        if (device_opt) {
-                device_opt = ensure_has_index(device_opt.value());
-        }
-        const auto & dtype_opt = options.dtype_opt();
-        if ((!device_opt || self.device() == device_opt.value()) &&
-                        (!dtype_opt  || self.dtype()  ==  dtype_opt.value()) && !copy) {
-                return self;
-        }
-        auto specified_options = self.options();
-        if (device_opt) {
-                specified_options = specified_options.device(device_opt.value());
-        }
-        if (dtype_opt) {
-                specified_options = specified_options.dtype(dtype_opt.value());
-        }
-        if (options.has_pinned_memory())
-                specified_options = specified_options.pinned_memory(options.pinned_memory());
-        return ARCto_impl(self, specified_options, non_blocking, is_csr);
+  auto device_opt = options.device_opt();
+  if (device_opt) {
+    device_opt = ensure_has_index(device_opt.value());
+  }
+  const auto & dtype_opt = options.dtype_opt();
+  if ((!device_opt || self.device() == device_opt.value()) &&
+      (!dtype_opt  || self.dtype()  ==  dtype_opt.value()) && !copy) {
+    return self;
+  }
+  auto specified_options = self.options();
+  if (device_opt) {
+    specified_options = specified_options.device(device_opt.value());
+  }
+  if (dtype_opt) {
+    specified_options = specified_options.dtype(dtype_opt.value());
+  }
+  if (options.has_pinned_memory())
+    specified_options = specified_options.pinned_memory(options.pinned_memory());
+
+  return ARCto_impl(self, specified_options, non_blocking, is_csr);
 }
 
 Tensor to(const Tensor& self, Device device, ScalarType dtype, bool non_blocking, bool copy) {
@@ -122,11 +123,11 @@ Tensor to(const Tensor& self, Device device, ScalarType dtype, bool non_blocking
 }
 
 Tensor ARCto(const Tensor& self, Device device, ScalarType dtype, bool non_blocking, bool copy, bool is_csr) {
-        device = ensure_has_index(device);
-        if (self.device() == device && self.dtype() == dtype && !copy) {
-                return self;
-        }
-        return ARCto_impl(self, self.options().device(device).dtype(dtype), non_blocking, is_csr);
+  device = ensure_has_index(device);
+  if (self.device() == device && self.dtype() == dtype && !copy) {
+    return self;
+  }
+  return ARCto_impl(self, self.options().device(device).dtype(dtype), non_blocking, is_csr);
 }
 
 Tensor to(const Tensor& self, ScalarType dtype, bool non_blocking, bool copy) {
@@ -137,10 +138,10 @@ Tensor to(const Tensor& self, ScalarType dtype, bool non_blocking, bool copy) {
 }
 
 Tensor ARCto(const Tensor& self, ScalarType dtype, bool non_blocking, bool copy, bool is_csr) {
-        if (self.dtype() == dtype && !copy) {
-                return self;
-        }
-        return ARCto_impl(self, self.options().dtype(dtype), non_blocking, is_csr);
+  if (self.dtype() == dtype && !copy) {
+    return self;
+  }
+  return ARCto_impl(self, self.options().dtype(dtype), non_blocking, is_csr);
 }
 
 Tensor to(const Tensor& self, const Tensor& other, bool non_blocking, bool copy) {
@@ -155,14 +156,14 @@ Tensor to(const Tensor& self, const Tensor& other, bool non_blocking, bool copy)
 }
 
 Tensor ARCto(const Tensor& self, const Tensor& other, bool non_blocking, bool copy, bool is_csr) {
-        auto self_options = self.options();
-        auto options = other.options();
-        // Tensor.options() always have everything filled so we are happy and don't
-        // even need to fill in device index.
-        if (self_options == options && !copy) {
-                return self;
-        }
-        return ARCto_impl(self, options, non_blocking, is_csr);
+  auto self_options = self.options();
+  auto options = other.options();
+  // Tensor.options() always have everything filled so we are happy and don't
+  // even need to fill in device index.
+  if (self_options == options && !copy) {
+    return self;
+  }
+  return ARCto_impl(self, options, non_blocking, is_csr);
 }
 
 Tensor to_dense_backward(const Tensor& grad, const Tensor& input_) {
