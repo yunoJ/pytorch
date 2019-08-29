@@ -19,6 +19,8 @@
 #include <numeric>
 #include <functional>
 
+#include <ATen/native/cuda/arc_flag.h>
+
 // @generated from tools/autograd/templates/Functions.cpp
 
 using at::Tensor;
@@ -2213,6 +2215,11 @@ variable_list AbsBackward::apply(variable_list&& grads) {
     auto grad_result = grad * self.sign();
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list AcosBackward::apply(variable_list&& grads) {
@@ -2227,6 +2234,11 @@ variable_list AcosBackward::apply(variable_list&& grads) {
     auto grad_result = grad * -((-self * self + 1).rsqrt());
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list AddBackward0::apply(variable_list&& grads) {
@@ -2245,6 +2257,11 @@ variable_list AddBackward0::apply(variable_list&& grads) {
     auto grad_result = grad;
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list AddBackward1::apply(variable_list&& grads) {
@@ -2262,6 +2279,9 @@ variable_list AddBackward1::apply(variable_list&& grads) {
   if (should_compute_output({ self_ix })) {
     auto grad_result = grad;
     copy_range(grad_inputs, self_ix, grad_result);
+  }
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
   }
   return grad_inputs;
 }
@@ -2287,6 +2307,9 @@ variable_list AddbmmBackward::apply(variable_list&& grads) {
     auto grad_result = maybe_multiply(grad, beta);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
   return grad_inputs;
 }
 variable_list AddcdivBackward::apply(variable_list&& grads) {
@@ -2311,6 +2334,9 @@ variable_list AddcdivBackward::apply(variable_list&& grads) {
     auto grad_result = -grad * value * tensor1 / (tensor2 * tensor2);
     copy_range(grad_inputs, tensor2_ix, grad_result);
   }
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
   return grad_inputs;
 }
 variable_list AddcmulBackward::apply(variable_list&& grads) {
@@ -2334,6 +2360,9 @@ variable_list AddcmulBackward::apply(variable_list&& grads) {
   if (should_compute_output({ tensor2_ix })) {
     auto grad_result = grad * tensor1 * value;
     copy_range(grad_inputs, tensor2_ix, grad_result);
+  }
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
   }
   return grad_inputs;
 }
@@ -2367,6 +2396,11 @@ variable_list AddmmBackward::apply(variable_list&& grads) {
   }
 
   ARCCppEngine::dropTensor(this->getOid(), &mat1_);
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list SparseAddmmBackward::apply(variable_list&& grads) {
@@ -2391,6 +2425,11 @@ variable_list SparseAddmmBackward::apply(variable_list&& grads) {
     auto grad_result = _sparse_addmm_sparse_backward(grad, sparse, dense, alpha);
     copy_range(grad_inputs, sparse_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list AddmvBackward::apply(variable_list&& grads) {
@@ -2414,6 +2453,9 @@ variable_list AddmvBackward::apply(variable_list&& grads) {
   if (should_compute_output({ vec_ix })) {
     auto grad_result = mat.t().mv(grad) * alpha;
     copy_range(grad_inputs, vec_ix, grad_result);
+  }
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
   }
   return grad_inputs;
 }
@@ -2439,6 +2481,9 @@ variable_list AddrBackward::apply(variable_list&& grads) {
     auto grad_result = grad.t().mv(vec1) * alpha;
     copy_range(grad_inputs, vec2_ix, grad_result);
   }
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
   return grad_inputs;
 }
 variable_list AffineGridGeneratorBackward::apply(variable_list&& grads) {
@@ -2450,6 +2495,9 @@ variable_list AffineGridGeneratorBackward::apply(variable_list&& grads) {
   if (should_compute_output({ theta_ix })) {
     auto grad_result = affine_grid_generator_backward(grad, size);
     copy_range(grad_inputs, theta_ix, grad_result);
+  }
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
   }
   return grad_inputs;
 }
@@ -2463,6 +2511,9 @@ variable_list AliasBackward::apply(variable_list&& grads) {
     auto grad_result = grad;
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
   return grad_inputs;
 }
 variable_list AnyBackward0::apply(variable_list&& grads) {
@@ -2473,6 +2524,9 @@ variable_list AnyBackward0::apply(variable_list&& grads) {
   if (should_compute_output({ self_ix })) {
     auto grad_result = not_implemented("any");
     copy_range(grad_inputs, self_ix, grad_result);
+  }
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
   }
   return grad_inputs;
 }
@@ -2485,6 +2539,9 @@ variable_list AnyBackward1::apply(variable_list&& grads) {
     auto grad_result = not_implemented("any");
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
   return grad_inputs;
 }
 variable_list AllBackward0::apply(variable_list&& grads) {
@@ -2495,6 +2552,9 @@ variable_list AllBackward0::apply(variable_list&& grads) {
   if (should_compute_output({ self_ix })) {
     auto grad_result = not_implemented("all");
     copy_range(grad_inputs, self_ix, grad_result);
+  }
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
   }
   return grad_inputs;
 }
@@ -2507,6 +2567,9 @@ variable_list AllBackward1::apply(variable_list&& grads) {
     auto grad_result = not_implemented("all");
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
   return grad_inputs;
 }
 variable_list AsStridedBackward::apply(variable_list&& grads) {
@@ -2518,6 +2581,9 @@ variable_list AsStridedBackward::apply(variable_list&& grads) {
   if (should_compute_output({ self_ix })) {
     auto grad_result = as_strided_backward(grad, self_geometry, size, stride, storage_offset);
     copy_range(grad_inputs, self_ix, grad_result);
+  }
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
   }
   return grad_inputs;
 }
@@ -2532,6 +2598,9 @@ variable_list AsinBackward::apply(variable_list&& grads) {
     auto grad_result = grad * (-self * self + 1).rsqrt();
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
   return grad_inputs;
 }
 variable_list AtanBackward::apply(variable_list&& grads) {
@@ -2545,6 +2614,10 @@ variable_list AtanBackward::apply(variable_list&& grads) {
     auto grad_result = grad / (self * self + 1);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list Atan2Backward::apply(variable_list&& grads) {
@@ -2569,6 +2642,10 @@ variable_list Atan2Backward::apply(variable_list&& grads) {
         copy_range(grad_inputs, other_ix, std::get<1>(grad_result));
       }
   }
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list BaddbmmBackward::apply(variable_list&& grads) {
@@ -2593,6 +2670,10 @@ variable_list BaddbmmBackward::apply(variable_list&& grads) {
     auto grad_result = maybe_multiply(grad, beta);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list BernoulliBackward0::apply(variable_list&& grads) {
@@ -2605,6 +2686,10 @@ variable_list BernoulliBackward0::apply(variable_list&& grads) {
     auto grad_result = zeros_like(grad);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list BernoulliBackward1::apply(variable_list&& grads) {
@@ -2622,6 +2707,10 @@ variable_list BernoulliBackward1::apply(variable_list&& grads) {
     auto grad_result = zeros_like(grad);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list BernoulliBackward2::apply(variable_list&& grads) {
@@ -2634,6 +2723,11 @@ variable_list BernoulliBackward2::apply(variable_list&& grads) {
     auto grad_result = zeros_like(grad);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list BmmBackward::apply(variable_list&& grads) {
@@ -2653,6 +2747,10 @@ variable_list BmmBackward::apply(variable_list&& grads) {
     auto grad_result = grad.bmm(mat2.transpose(1, 2));
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list CatBackward::apply(variable_list&& grads) {
@@ -2665,6 +2763,11 @@ variable_list CatBackward::apply(variable_list&& grads) {
     auto grad_result = cat_tensors_backward(grad, tensors_args_sizes, dim);
     copy_range(grad_inputs, tensors_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list CauchyBackward::apply(variable_list&& grads) {
@@ -2677,6 +2780,10 @@ variable_list CauchyBackward::apply(variable_list&& grads) {
     auto grad_result = zeros_like(grad);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list CeilBackward::apply(variable_list&& grads) {
@@ -2689,6 +2796,10 @@ variable_list CeilBackward::apply(variable_list&& grads) {
     auto grad_result = zeros_like(grad);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list CholeskyBackward::apply(variable_list&& grads) {
@@ -2702,6 +2813,10 @@ variable_list CholeskyBackward::apply(variable_list&& grads) {
     auto grad_result = cholesky_backward(grad, upper, result);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list CholeskySolveBackward::apply(variable_list&& grads) {
@@ -2718,6 +2833,10 @@ variable_list CholeskySolveBackward::apply(variable_list&& grads) {
     auto grad_result = not_implemented("cholesky_solve");
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list CholeskyInverseBackward::apply(variable_list&& grads) {
@@ -2729,6 +2848,11 @@ variable_list CholeskyInverseBackward::apply(variable_list&& grads) {
     auto grad_result = not_implemented("cholesky_inverse");
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list ClampBackward::apply(variable_list&& grads) {
@@ -2742,6 +2866,11 @@ variable_list ClampBackward::apply(variable_list&& grads) {
     auto grad_result = clamp_backward(grad, self, min, max);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list ClampMinBackward::apply(variable_list&& grads) {
@@ -2755,6 +2884,11 @@ variable_list ClampMinBackward::apply(variable_list&& grads) {
     auto grad_result = grad * (self >= min).to(grad.dtype());
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list ClampMaxBackward::apply(variable_list&& grads) {
@@ -2768,6 +2902,11 @@ variable_list ClampMaxBackward::apply(variable_list&& grads) {
     auto grad_result = grad * (self <= max).to(grad.dtype());
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list CloneBackward::apply(variable_list&& grads) {
@@ -2780,6 +2919,11 @@ variable_list CloneBackward::apply(variable_list&& grads) {
     auto grad_result = grad;
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list CoalesceBackward::apply(variable_list&& grads) {
@@ -2792,6 +2936,11 @@ variable_list CoalesceBackward::apply(variable_list&& grads) {
     auto grad_result = grad;
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list CosBackward::apply(variable_list&& grads) {
@@ -2805,6 +2954,11 @@ variable_list CosBackward::apply(variable_list&& grads) {
     auto grad_result = grad * -self.sin();
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list CoshBackward::apply(variable_list&& grads) {
@@ -2818,6 +2972,11 @@ variable_list CoshBackward::apply(variable_list&& grads) {
     auto grad_result = grad * self.sinh();
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list CrossBackward::apply(variable_list&& grads) {
@@ -2837,6 +2996,11 @@ variable_list CrossBackward::apply(variable_list&& grads) {
     auto grad_result = other.cross(grad, dim);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list CumprodBackward::apply(variable_list&& grads) {
@@ -2850,6 +3014,11 @@ variable_list CumprodBackward::apply(variable_list&& grads) {
     auto grad_result = cumprod_backward(grad.to(self_scalar_type), self, dim);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list CumsumBackward::apply(variable_list&& grads) {
@@ -2862,6 +3031,11 @@ variable_list CumsumBackward::apply(variable_list&& grads) {
     auto grad_result = cumsum_backward(grad.to(self_scalar_type), dim);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list ConvTbcBackward::apply(variable_list&& grads) {
@@ -2888,6 +3062,11 @@ variable_list ConvTbcBackward::apply(variable_list&& grads) {
         copy_range(grad_inputs, bias_ix, std::get<2>(grad_result));
       }
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list CtcLossBackward::apply(variable_list&& grads) {
@@ -2904,6 +3083,11 @@ variable_list CtcLossBackward::apply(variable_list&& grads) {
     auto grad_result = _ctc_loss_backward(grad, log_probs, targets, input_lengths, target_lengths, result0, result1, blank, zero_infinity);
     copy_range(grad_inputs, log_probs_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list DetBackward::apply(variable_list&& grads) {
@@ -2918,6 +3102,11 @@ variable_list DetBackward::apply(variable_list&& grads) {
     auto grad_result = det_backward(grad, self, result);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list DiagBackward::apply(variable_list&& grads) {
@@ -2930,6 +3119,11 @@ variable_list DiagBackward::apply(variable_list&& grads) {
     auto grad_result = diag_backward(grad, self_sizes, diagonal);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list DiagonalBackward::apply(variable_list&& grads) {
@@ -2942,6 +3136,11 @@ variable_list DiagonalBackward::apply(variable_list&& grads) {
     auto grad_result = diagonal_backward(grad, self_sizes, offset, dim1, dim2);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list DistBackward::apply(variable_list&& grads) {
@@ -2962,6 +3161,11 @@ variable_list DistBackward::apply(variable_list&& grads) {
     auto grad_result = norm_backward(grad, self - other, p, result);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list DivBackward0::apply(variable_list&& grads) {
@@ -2990,8 +3194,13 @@ variable_list DivBackward0::apply(variable_list&& grads) {
     auto grad_result = grad / other;
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
   if ( at::globalContext().ARCGlobal.isBERT() )
     ARCCppEngine::dropTensor(this->getOid(), &other_);
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
 
   return grad_inputs;
 }
@@ -3005,6 +3214,11 @@ variable_list DivBackward1::apply(variable_list&& grads) {
     auto grad_result = grad / other;
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list DotBackward::apply(variable_list&& grads) {
@@ -3024,6 +3238,11 @@ variable_list DotBackward::apply(variable_list&& grads) {
     auto grad_result = grad * self;
     copy_range(grad_inputs, tensor_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list FusedDropoutBackward::apply(variable_list&& grads) {
@@ -3044,6 +3263,11 @@ variable_list FusedDropoutBackward::apply(variable_list&& grads) {
     copy_range(grad_inputs, self_ix, grad_result);
   }
   ARCCppEngine::dropTensor(this->getOid(), &result1_);
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list EigBackward::apply(variable_list&& grads) {
@@ -3055,6 +3279,11 @@ variable_list EigBackward::apply(variable_list&& grads) {
     auto grad_result = not_implemented("eig");
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list EqBackward0::apply(variable_list&& grads) {
@@ -3066,6 +3295,11 @@ variable_list EqBackward0::apply(variable_list&& grads) {
     auto grad_result = self_info.zeros();
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list EqBackward1::apply(variable_list&& grads) {
@@ -3082,6 +3316,11 @@ variable_list EqBackward1::apply(variable_list&& grads) {
     auto grad_result = self_info.zeros();
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list ErfBackward::apply(variable_list&& grads) {
@@ -3102,6 +3341,11 @@ variable_list ErfBackward::apply(variable_list&& grads) {
     copy_range(grad_inputs, self_ix, grad_result);
   }
   ARCCppEngine::dropTensor(this->getOid(), &self_);
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list ErfcBackward::apply(variable_list&& grads) {
@@ -3115,6 +3359,11 @@ variable_list ErfcBackward::apply(variable_list&& grads) {
     auto grad_result = -2.0 / sqrt(M_PI) * exp(-(self.pow(2))) * grad;
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list ErfinvBackward::apply(variable_list&& grads) {
@@ -3128,6 +3377,11 @@ variable_list ErfinvBackward::apply(variable_list&& grads) {
     auto grad_result = 0.5 * sqrt(M_PI) * exp(self.erfinv().pow(2)) * grad;
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list ExpBackward::apply(variable_list&& grads) {
@@ -3141,6 +3395,11 @@ variable_list ExpBackward::apply(variable_list&& grads) {
     auto grad_result = grad * result;
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list Expm1Backward::apply(variable_list&& grads) {
@@ -3154,6 +3413,11 @@ variable_list Expm1Backward::apply(variable_list&& grads) {
     auto grad_result = grad * (result + 1);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list ExpandBackward::apply(variable_list&& grads) {
@@ -3166,6 +3430,11 @@ variable_list ExpandBackward::apply(variable_list&& grads) {
     auto grad_result = at::sum_to(grad, self_sizes);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list ExponentialBackward::apply(variable_list&& grads) {
@@ -3178,6 +3447,11 @@ variable_list ExponentialBackward::apply(variable_list&& grads) {
     auto grad_result = zeros_like(grad);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list FakeQuantizePerTensorAffineBackward::apply(variable_list&& grads) {
@@ -3191,6 +3465,11 @@ variable_list FakeQuantizePerTensorAffineBackward::apply(variable_list&& grads) 
     auto grad_result = fake_quantize_per_tensor_affine_backward(grad, self, scale, zero_point, quant_min, quant_max);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list FillBackward0::apply(variable_list&& grads) {
@@ -3203,6 +3482,11 @@ variable_list FillBackward0::apply(variable_list&& grads) {
     auto grad_result = zeros_like(grad);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list FillBackward1::apply(variable_list&& grads) {
@@ -3220,6 +3504,11 @@ variable_list FillBackward1::apply(variable_list&& grads) {
     auto grad_result = grad.sum();
     copy_range(grad_inputs, value_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list FloorBackward::apply(variable_list&& grads) {
@@ -3232,6 +3521,11 @@ variable_list FloorBackward::apply(variable_list&& grads) {
     auto grad_result = zeros_like(grad);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list FmodBackward0::apply(variable_list&& grads) {
@@ -3244,6 +3538,11 @@ variable_list FmodBackward0::apply(variable_list&& grads) {
     auto grad_result = grad;
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list FmodBackward1::apply(variable_list&& grads) {
@@ -3262,6 +3561,11 @@ variable_list FmodBackward1::apply(variable_list&& grads) {
     auto grad_result = grad;
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list FracBackward::apply(variable_list&& grads) {
@@ -3274,6 +3578,11 @@ variable_list FracBackward::apply(variable_list&& grads) {
     auto grad_result = grad;
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list GatherBackward::apply(variable_list&& grads) {
@@ -3288,6 +3597,11 @@ variable_list GatherBackward::apply(variable_list&& grads) {
     auto grad_result = sparse_grad ? at::_gather_sparse_backward(self, dim, index, grad) : at::zeros(self_sizes, grad.options()).scatter_add_(dim, index, grad);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list GeBackward0::apply(variable_list&& grads) {
@@ -3299,6 +3613,11 @@ variable_list GeBackward0::apply(variable_list&& grads) {
     auto grad_result = self_info.zeros();
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list GeBackward1::apply(variable_list&& grads) {
@@ -3315,6 +3634,11 @@ variable_list GeBackward1::apply(variable_list&& grads) {
     auto grad_result = self_info.zeros();
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list GelsBackward::apply(variable_list&& grads) {
@@ -4090,6 +4414,11 @@ variable_list MmBackward::apply(variable_list&& grads) {
 
   ARCCppEngine::dropTensor(this->getOid(), &self_);
   ARCCppEngine::dropTensor(this->getOid(), &mat2_);
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list ModeBackward::apply(variable_list&& grads) {
@@ -4130,6 +4459,10 @@ variable_list MulBackward0::apply(variable_list&& grads) {
     auto grad_result = grad * other;
     copy_range(grad_inputs, self_ix, grad_result);
     ARCCppEngine::dropTensor(this->getOid(), &other_);
+  }
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
   }
 
   return grad_inputs;
@@ -4218,6 +4551,10 @@ variable_list NativeBatchNormBackward::apply(variable_list&& grads) {
   }
 
   ARCCppEngine::dropTensor(this->getOid(), &input_);
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
 
   return grad_inputs;
 }
@@ -4634,6 +4971,11 @@ variable_list PowBackward0::apply(variable_list&& grads) {
   }
 
   ARCCppEngine::dropTensor(this->getOid(), &self_);
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list PowBackward1::apply(variable_list&& grads) {
@@ -5070,6 +5412,11 @@ variable_list SqrtBackward::apply(variable_list&& grads) {
   }
 
   ARCCppEngine::dropTensor(this->getOid(), &result_);
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list SqueezeBackward0::apply(variable_list&& grads) {
@@ -5352,6 +5699,10 @@ variable_list TanhBackward::apply(variable_list&& grads) {
   }
 
   ARCCppEngine::dropTensor(this->getOid(), &result_);
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
 
   return grad_inputs;
 }
@@ -5848,6 +6199,10 @@ variable_list EmbeddingBackward::apply(variable_list&& grads) {
   }
 
   ARCCppEngine::dropTensor(this->getOid(), &indices_);
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
  
   return grad_inputs;
 }
@@ -5938,6 +6293,10 @@ variable_list L1LossBackward::apply(variable_list&& grads) {
   }
 
   ARCCppEngine::dropTensor(this->getOid(), &self_);
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
 
   return grad_inputs;
 }
@@ -6084,6 +6443,10 @@ variable_list ReluBackward1::apply(variable_list&& grads) {
   }
   
   ARCCppEngine::dropTensor(this->getOid(), &result_);
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
   
   return grad_inputs;
 }
@@ -6215,6 +6578,10 @@ variable_list LeakyReluBackward1::apply(variable_list&& grads) {
   }
 
   ARCCppEngine::dropTensor(this->getOid(), &result_);
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
 
   return grad_inputs;
 }
@@ -6419,6 +6786,10 @@ variable_list ReflectionPad2DBackward::apply(variable_list&& grads) {
   }
 
   ARCCppEngine::dropTensor(this->getOid(), &self_);
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
 
   return grad_inputs;
 }
@@ -6627,6 +6998,11 @@ variable_list AvgPool2DBackward::apply(variable_list&& grads) {
   }
   
   ARCCppEngine::dropTensor(this->getOid(), &self_);
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list AvgPool3DBackward::apply(variable_list&& grads) {
@@ -6691,6 +7067,10 @@ variable_list MaxPool2DWithIndicesBackward::apply(variable_list&& grads) {
   }
   
   ARCCppEngine::dropTensor(this->getOid(), &self_);
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
 
   return grad_inputs;
 }
@@ -6772,6 +7152,10 @@ variable_list ConvTranspose2DBackward::apply(variable_list&& grads) {
   }
 
   ARCCppEngine::dropTensor(this->getOid(), &self_);
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
 
   return grad_inputs;
 }
@@ -6898,6 +7282,11 @@ variable_list ThnnConv2DBackward::apply(variable_list&& grads) {
       }
   }
   ARCCppEngine::dropTensor(this->getOid(), &self_);
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list ThnnConv2DBackwardBackward::apply(variable_list&& grads) {
@@ -8048,6 +8437,10 @@ variable_list CudnnConvolutionBackward::apply(variable_list&& grads) {
   }
 
   ARCCppEngine::dropTensor(this->getOid(), &self_);
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
   
   return grad_inputs;
 }
@@ -8153,7 +8546,11 @@ variable_list CudnnBatchNormBackward::apply(variable_list&& grads) {
   }
   //ARCCppEngine::dropTensor(this->getOid()); 
   ARCCppEngine::dropTensor(this->getOid(), &input_);
-  
+
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
   return grad_inputs;
 }
 variable_list CudnnBatchNormBackwardBackward::apply(variable_list&& grads) {

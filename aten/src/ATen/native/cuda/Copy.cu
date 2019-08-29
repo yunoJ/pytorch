@@ -682,8 +682,6 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
         *stor = iter.tensor(1).storage();
       }
 
-//      std::cout << "TID: " << tid << " Addr compare: iter.tensor: " << iter.tensor(1).storage().data() << ", copied stor: " << stor->data() << std::endl;
-
       arcp2p_info *info = nullptr;
 
       if (true == fp16_flag) {
@@ -694,7 +692,7 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
 
 //      arc_vm.Arcp2pSubmission(p2p_addr, p2p_size, p_offs, p_cpl, dir, stor, info);
       arc_vm.Arcp2pSubmission(p2p_addr, p2p_size, p_offs, p_cpl, dir, stor, info, stream.stream());
-      arc_vm.Arcp2pCompletion();
+      arc_vm.Arcp2pCompletion(false);
     } else if (arcp2p_ssdtogpu == dir) {
       arcp2p_info *info = nullptr;
 
@@ -710,7 +708,7 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
 
 //      arc_vm.Arcp2pSubmission(p2p_addr, p2p_size, p_offs, p_cpl, dir, nullptr, info);
       arc_vm.Arcp2pSubmission(p2p_addr, p2p_size, p_offs, p_cpl, dir, nullptr, info, stream.stream());
-      arc_vm.Arcp2pCompletion();
+      arc_vm.Arcp2pCompletion(false);
     }
   } else {
     if (non_blocking) {

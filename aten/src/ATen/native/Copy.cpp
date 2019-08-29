@@ -123,7 +123,6 @@ Tensor & copy_(Tensor & self, const Tensor & src, bool non_blocking) {
   // tid copy in to
   self.unsafeGetIntrusivePtr()->tensor_id = src.getIntrusivePtr()->tensor_id; 
 
-
   auto builder = TensorIterator::Builder();
   builder.add_output(self);
   builder.add_input(src);

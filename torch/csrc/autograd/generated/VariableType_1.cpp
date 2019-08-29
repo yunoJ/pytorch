@@ -2,6 +2,8 @@
 
 #include <ATen/TypeDefault.h>
 
+#include <ATen/native/cuda/arc_flag.h>
+
 // @generated from tools/autograd/templates/VariableType.cpp
 
 // NOTE [Sharded File]: on this file's split-into-shards state
@@ -213,6 +215,9 @@ Tensor VariableType::_adaptive_avg_pool2d(Tensor & self, IntArrayRef output_size
     else {
       grad_fn->self_ = SavedVariable(self, false);
     }
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
   }
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
@@ -1160,6 +1165,9 @@ std::tuple<Tensor,Tensor> VariableType::_fused_dropout(const Tensor & self, doub
       grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
     }
     grad_fn->result1_ = SavedVariable(result1, true);
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
   }
   return std::make_tuple(std::move(result0), std::move(result1));
 }
@@ -6099,6 +6107,9 @@ Tensor VariableType::l1_loss(Tensor & self, const Tensor & target, int64_t reduc
     }
     grad_fn->target_ = SavedVariable(target, false);
     grad_fn->reduction = reduction;
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
   }
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
@@ -9923,6 +9934,9 @@ Tensor VariableType::reflection_pad2d(Tensor & self, IntArrayRef padding) {
     }
 
     grad_fn->padding = padding.vec();
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
   }
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;

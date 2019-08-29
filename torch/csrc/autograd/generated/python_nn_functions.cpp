@@ -85,7 +85,7 @@ static PyObject * THPVariable_adaptive_avg_pool2d(PyObject* self_, PyObject* arg
   at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
 
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "ADAPTIVE AVGPOOL2D OUTPUT TENSOR ID: " << at:: globalContext().ARCGlobal.getTid(output) << std::endl;
@@ -199,7 +199,7 @@ static PyObject * THPVariable_avg_pool2d(PyObject* self_, PyObject* args, PyObje
   at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
 
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "AVGPOOL2D OUTPUT TENSOR ID: " << at:: globalContext().ARCGlobal.getTid(output) << std::endl;
@@ -553,7 +553,7 @@ static PyObject * THPVariable_l1_loss(PyObject* self_, PyObject* args, PyObject*
   at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
 
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "L1LOSS OUTPUT TENSOR ID: " << at:: globalContext().ARCGlobal.getTid(output) << std::endl;
@@ -624,7 +624,7 @@ static PyObject * THPVariable_leaky_relu_(PyObject* self_, PyObject* args, PyObj
   //at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
 
   if (at::globalContext().ARCGlobal.isOnDemand()) {
     ARCPyEngine::offLoad(input);
@@ -823,7 +823,7 @@ static PyObject * THPVariable_mse_loss(PyObject* self_, PyObject* args, PyObject
   at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
 
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "MSELOSS OUTPUT TENSOR ID: " << at:: globalContext().ARCGlobal.getTid(output) << std::endl;
@@ -916,7 +916,7 @@ static PyObject * THPVariable_nll_loss(PyObject* self_, PyObject* args, PyObject
   at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
      
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "NLL OUTPUT TENSOR ID: " << at:: globalContext().ARCGlobal.getTid(output) << std::endl;
@@ -1024,7 +1024,7 @@ static PyObject * THPVariable_reflection_pad2d(PyObject* self_, PyObject* args, 
   at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
 
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "REFLECTION PAD2D OUTPUT TENSOR ID: " << at:: globalContext().ARCGlobal.getTid(output) << std::endl;

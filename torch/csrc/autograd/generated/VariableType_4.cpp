@@ -2,6 +2,8 @@
 
 #include <ATen/TypeDefault.h>
 
+#include <ATen/native/cuda/arc_flag.h>
+
 // @generated from tools/autograd/templates/VariableType.cpp
 
 // NOTE [Sharded File]: on this file's split-into-shards state
@@ -3263,6 +3265,9 @@ Tensor VariableType::conv_transpose2d(Tensor & self, const Tensor & weight, IntA
     grad_fn->padding = padding.vec();
     grad_fn->output_padding = output_padding.vec();
     grad_fn->dilation = dilation.vec();
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
   }
   #ifndef NDEBUG
   c10::optional<Storage> self__storage_saved =
@@ -3726,6 +3731,9 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::cudnn_batch_norm(Tensor & input, 
     grad_fn->running_var_ = SavedVariable(running_var, false);
     grad_fn->training = training;
     grad_fn->epsilon = epsilon;
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
   }
   Tensor result0;
   Tensor result1;
@@ -6567,6 +6575,9 @@ Tensor & VariableType::leaky_relu_(Tensor & self, Scalar negative_slope) {
     else {
       grad_fn->result_ = SavedVariable(self, true);
     }
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
   }
   return self;
 }
@@ -8027,6 +8038,9 @@ Tensor VariableType::mul(Tensor & self, Tensor & other) {
         grad_fn->other_ = SavedVariable(other, false);
       }
     }
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
   }
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;

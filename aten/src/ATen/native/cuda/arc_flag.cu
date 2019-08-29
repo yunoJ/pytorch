@@ -228,7 +228,7 @@ void ARC_memory::device_malloc(void** gpu_ptr, size_t size) {
       for (int i = 0; i < max_device; i++) {
         occupancy += (int)deviceTable[i];
       }
-      std::cout << "Out-of-memory in device: " << size << ", occupance: " << occupancy << std::endl;
+      std::cout << "Out-of-memory in device: " << size << ", occupancy: " << (double)occupancy/(double)max_device << std::endl;
       exit(1);
     }
   }
@@ -530,15 +530,22 @@ void ARC_memory::Arcp2pSubmission(uint64_t addr, uint64_t size, uint64_t *p_offs
 }
 
 // completion
-void ARC_memory::Arcp2pCompletion() {
-  m2.lock();
+void ARC_memory::Arcp2pCompletion(bool prefCall) {
+
+  // Automatically prefetch
+  if(!at::globalContext().ARCGlobal.isOnDemand()) {
+    if (pref_end >= 0 && prefCall) {
+      torch::autograd::ARCCppEngine::preFetchAsync(pref_it[pref_end]);
+      pref_end--;
+    }
+  }
 
   // if req_list empty, nothing to do
   if (req_queue.empty()) {
-    m2.unlock();
     return;
   }
 
+  m2.lock();
   // first, run completer of arcp2p, this will update cpl.issued
   arcp2p_completion(arc_handle);
 

@@ -656,12 +656,15 @@ auto Engine::execute(const edge_list& roots,
   // ends forward
 
   // TODO Wait until all SSD commands are finished
-  at::native::arc_vm.Arcp2pCompletion();
-
   at::globalContext().ARCGlobal.endForward();
-  ARCCppEngine::joinOffloadThread();
-  if (!at::globalContext().ARCGlobal.isOnDemand())
-    ARCCppEngine::startPrefetchThread();
+  ARCCppEngine::joinOffload();
+
+  if (!at::globalContext().ARCGlobal.isOnDemand()) {
+    at::native::arc_vm.pref_it = at::globalContext().ARCGlobal.getBackPath();
+    at::native::arc_vm.pref_end = at::globalContext().ARCGlobal.getLastIdx();
+
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
   // by sam end
   
   size_t freeBytes, dummy1, dummy2;
@@ -747,13 +750,13 @@ auto Engine::execute(const edge_list& roots,
 
   // by sam SNU-ARC
   // end of backward path
-  if (!at::globalContext().ARCGlobal.isOnDemand())
-    ARCCppEngine::joinPrefetchThread();
+//  if (!at::globalContext().ARCGlobal.isOnDemand())
+//    ARCCppEngine::joinPrefetchThread();
 
   if (at::globalContext().ARCGlobal.isOnDemand()) {
     double remainSize = 0;
     if (at::native::arc_vm.is_vdnn()) {
-      remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 - 4096);
+      remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 - 2048);
 //      remainSize = ARCCppEngine::checkCSR((double)0);
    
       if (remainSize > 0)  remainSize = ARCCppEngine::checkLarge(remainSize);

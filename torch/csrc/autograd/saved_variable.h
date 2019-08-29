@@ -12,8 +12,6 @@
 #include <vector>
 #include <utility>
 
-
-
 namespace torch { namespace autograd {
 
 struct Variable;
@@ -83,42 +81,21 @@ public:
   static void explicitAllSync();
   // prefetching at curOid
   static void preFetch(Oid curOid, ARCSync sync);
+  static void preFetchAsync(Oid curOid);
   static void preFetchSync(Oid curOid, bool isOutput=false);
 
-  static void startPrefetchThread();
-  static void joinPrefetchThread();
   static void resetCppEngine();
 
   static void dropTensor(Oid oid, SavedVariable* fetch_loc);
-    
-  static void startOffloadThread();
-  static void joinOffloadThread();
+ 
+  static void joinOffload();
 
 private:
-  static void default_offload_();
-  // worker function for fetching/offloaidng
-  //static void htod_(at::Tensor t, Oid oid, SavedVariable* fetch_loc);
-  //static void dtoh_(at::Tensor t, Oid oid, SavedVariable* fetch_loc);
- 
-  // Sync!
-  //static void offLoadSync_(Oid oid, int required_tensor_num); // Are all tensors required for oid's back prop offloaded?  
-
-  //static void fetch_(at::Tensor& t, Oid oid, ARCSync sync, SavedVariable* fetch_loc);
-
-  //static void insertToPFSyncDict_(Oid oid);
-  //static void insertToTensorDict_(at::Tensor& backup);
+  static void offLoadAsync(at::Tensor tensor);
   static void insertToPFDict_(Oid oid, SavedVariable* loc, Tid tid);
- 
-  //prefetch workers
-  static void default_prefetch_();
-
-
-
  
   // internal function implementing prefetching
   static void fetchRequiredTensors_(Oid oid, ARCSync sync); 
-  static Oid whoWillPrefetched_(Oid curOid); //output is subject to change according to the prefetching policy
-
 };
 
 // end ARC

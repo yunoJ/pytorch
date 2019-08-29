@@ -44,6 +44,7 @@ static inline Tensor ARCto_impl(const Tensor& self, const TensorOptions& options
   auto tid = self.getIntrusivePtr().get()->tensor_id;
   r = at::empty(self.sizes(), options);
   //}
+
   r.ARCcopy_(self, non_blocking, is_csr);
   r.unsafeGetTensorImpl()->tensor_id = tid;
   return r;

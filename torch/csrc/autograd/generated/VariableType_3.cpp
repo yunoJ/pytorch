@@ -2,6 +2,8 @@
 
 #include <ATen/TypeDefault.h>
 
+#include <ATen/native/cuda/arc_flag.h>
+
 // @generated from tools/autograd/templates/VariableType.cpp
 
 // NOTE [Sharded File]: on this file's split-into-shards state
@@ -3178,6 +3180,9 @@ Tensor VariableType::div(Tensor & self, Tensor & other) {
     }
     else
       grad_fn->other_ = SavedVariable(other, false);
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
   }
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
@@ -6757,6 +6762,9 @@ Tensor VariableType::mm(Tensor & self, Tensor & mat2) {
       grad_fn->mat2_sizes = mat2.sizes().vec();
       grad_fn->mat2_ = SavedVariable(mat2, false);
     }
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
   }
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
@@ -9363,6 +9371,9 @@ Tensor VariableType::sqrt(const Tensor & self) {
       grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
     }
     grad_fn->result_ = SavedVariable(result, true);
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
   }
   return result;
 }

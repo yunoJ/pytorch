@@ -123,7 +123,8 @@ class CAFFE2_API Context {
     void resetGlobalOid();
     // dictionary, vector manipulation API
     void pushBackOid(Oid oid); // must be called only in on-demand mode
-    std::vector<Oid> getBackPath(); 
+    int* getBackPath(); 
+    int getLastIdx();
   
     // set flags
     void startForward();
@@ -259,11 +260,6 @@ static inline void manual_seed(uint64_t seed) {
       }
     }
   }
-}
-
-
-namespace native {
-  void ARC_copy_(Tensor & self, const Tensor & src, bool non_blocking);
 }
 
 } // namespace at

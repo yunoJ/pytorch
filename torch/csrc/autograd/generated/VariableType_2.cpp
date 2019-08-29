@@ -3165,6 +3165,9 @@ Tensor VariableType::cudnn_convolution(Tensor & self, const Tensor & weight, con
     grad_fn->groups = groups;
     grad_fn->benchmark = benchmark;
     grad_fn->deterministic = deterministic;
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
   }
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
@@ -3671,6 +3674,9 @@ Tensor VariableType::embedding(const Tensor & weight, Tensor & indices, int64_t 
     grad_fn->padding_idx = padding_idx;
     grad_fn->scale_grad_by_freq = scale_grad_by_freq;
     grad_fn->sparse = sparse;
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
   }
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
@@ -3760,6 +3766,9 @@ Tensor VariableType::erf(const Tensor & self) {
     }
     else
       grad_fn->self_ = SavedVariable(self, false);
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
   }
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
@@ -6449,6 +6458,9 @@ std::tuple<Tensor,Tensor> VariableType::max_pool2d_with_indices(Tensor & self, I
     grad_fn->padding = padding.vec();
     grad_fn->dilation = dilation.vec();
     grad_fn->ceil_mode = ceil_mode;
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
   }
   Tensor result0;
   Tensor result1;
@@ -8049,6 +8061,9 @@ Tensor VariableType::pow(Tensor & self, Scalar exponent) {
     else
       grad_fn->self_ = SavedVariable(self, false);
     grad_fn->exponent = exponent;
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
   }
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
@@ -10719,6 +10734,9 @@ Tensor VariableType::tanh(Tensor & self) {
     else {
       grad_fn->result_ = SavedVariable(result, true);
     }
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
   }
   return result;
 }

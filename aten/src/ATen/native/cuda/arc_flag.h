@@ -17,6 +17,7 @@
 #include <c10/cuda/CUDAStream.h>
 #include <mutex>
 #include <ATen/cuda/CUDAEvent.h>
+#include <torch/csrc/autograd/saved_variable.h>
 
 #define BLK_SZ ((size_t)1 << 12)
 
@@ -88,7 +89,8 @@ class ARC_memory {
   int  Arcp2pBarMapping(uint64_t, uint64_t);
 //  void Arcp2pSubmission(uint64_t, uint64_t, uint64_t *, arcp2p_cpl *, arcp2p_dir, c10::Storage *, arcp2p_info *);
   void Arcp2pSubmission(uint64_t, uint64_t, uint64_t *, arcp2p_cpl *, arcp2p_dir, c10::Storage *, arcp2p_info *, cudaStream_t);
-  void Arcp2pCompletion();
+//  void Arcp2pCompletion();
+  void Arcp2pCompletion(bool prefCall);
   void Arcp2pSynchronize();
 
   // [JS] flag check
@@ -96,6 +98,9 @@ class ARC_memory {
   bool is_fp16();
   bool is_csr();
   bool is_using_ssd();
+
+  int* pref_it;
+  int pref_end;
 
  private:
   void* deviceAddr;

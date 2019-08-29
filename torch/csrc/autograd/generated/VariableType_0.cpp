@@ -2895,6 +2895,9 @@ Tensor VariableType::addmm(Tensor & self, Tensor & mat1, Tensor & mat2, Scalar b
     grad_fn->alpha = alpha;
     grad_fn->mat2_sizes = mat2.sizes().vec();
     grad_fn->beta = beta;
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
   }
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
@@ -3395,6 +3398,9 @@ Tensor VariableType::avg_pool2d(Tensor & self, IntArrayRef kernel_size, IntArray
     grad_fn->ceil_mode = ceil_mode;
     grad_fn->count_include_pad = count_include_pad;
     grad_fn->divisor_override = divisor_override;
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
   }
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
@@ -8319,6 +8325,9 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::native_batch_norm(Tensor & input,
     grad_fn->running_var_ = SavedVariable(running_var, false);
     grad_fn->training = training;
     grad_fn->eps = eps;
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
   }
   Tensor result0;
   Tensor result1;
@@ -9771,6 +9780,10 @@ Tensor & VariableType::relu_(Tensor & self) {
     else
       grad_fn->result_ = SavedVariable(self, true);
   }
+
+  if (at::native::arc_vm.is_using_ssd())
+    at::native::arc_vm.Arcp2pCompletion(false);
+
   return self;
 }
 Tensor & VariableType::remainder_out(Tensor & out, const Tensor & self, Scalar other) {
@@ -11371,6 +11384,9 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::thnn_conv2d_forward(Tensor & self
     grad_fn->kernel_size = kernel_size.vec();
     grad_fn->stride = stride.vec();
     grad_fn->padding = padding.vec();
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
   }
   Tensor output;
   Tensor finput;

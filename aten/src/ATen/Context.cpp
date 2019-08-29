@@ -135,7 +135,10 @@ static bool on_demand_mode_ = 1; // default 1. Set 0 after first iteration(Profi
 static bool on_forwarding_ = 1; // 1 in forwarding phase. 0 in backprop. phase
 // vector for prefetching
 //Note: C++ standard containers are thread-safe.
-static std::vector<Oid> back_path_[BP_NUM_PER_ITER]; 
+//static std::vector<Oid> back_path_[BP_NUM_PER_ITER];
+static Oid back_path_[BP_NUM_PER_ITER][2048] = {0};
+static int back_path_idx[BP_NUM_PER_ITER] = {-1};
+
 static int cur_back_num = 0;
 //offload prefetch stream
 static auto offload_stream = c10::cuda::getStreamFromPool(false, 0);
@@ -183,14 +186,18 @@ void Context::ARCGlobalContext::turnOnDebugMode() { on_debug_mode_ = 1; }
 
 void Context::ARCGlobalContext::pushBackOid(Oid oid) { 
   if (!on_demand_mode_) std::cerr << "Illegal call: not on-demand mode" << std::endl;
-  back_path_[cur_back_num].push_back(oid); 
+
+  int idx = ++back_path_idx[cur_back_num];
+  back_path_[cur_back_num][idx] = oid;
 }
 
-std::vector<Oid> Context::ARCGlobalContext::getBackPath() { 
-//    std::cout << "cur_back_num: " << cur_back_num << std::endl;
-//  std::cout << back_path_[cur_back_num].size() << std::endl;
-  std::vector<Oid> copy(back_path_[cur_back_num]);
-  return copy; 
+//std::vector<Oid> Context::ARCGlobalContext::getBackPath() {
+int* Context::ARCGlobalContext::getBackPath() {
+  return back_path_[cur_back_num];
 }; 
+
+int Context::ARCGlobalContext::getLastIdx() {
+  return back_path_idx[cur_back_num];
+};
 
 }

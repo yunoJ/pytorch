@@ -192,7 +192,7 @@ static PyObject * THPVariable_arange(PyObject* self, PyObject* args, PyObject* k
   at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
 
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "ARAANGE OUPUT TENSOR ID: " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
@@ -1224,7 +1224,7 @@ static PyObject * THPVariable__fused_dropout(PyObject* self_, PyObject* args, Py
   at::globalContext().ARCGlobal.setNewTid(std::get<1>(output));
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
 
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "_fused_dropout output0 TENSOR ID: " << at::globalContext().ARCGlobal.getTid(std::get<0>(output)) << std::endl;
@@ -2085,7 +2085,7 @@ static PyObject * THPVariable_add(PyObject* self_, PyObject* args, PyObject* kwa
   at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
 
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "add output TENSOR ID: " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
@@ -2241,7 +2241,7 @@ static PyObject * THPVariable_addmm(PyObject* self_, PyObject* args, PyObject* k
   at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
 
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "addmm output TENSOR ID: " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
@@ -2750,7 +2750,7 @@ static PyObject * THPVariable_batch_norm(PyObject* self_, PyObject* args, PyObje
   at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
 
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "batch_norm output TENSOR ID: " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
@@ -3049,7 +3049,7 @@ static PyObject * THPVariable_broadcast_tensors(PyObject* self_, PyObject* args,
   }
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
 
   return wrap(outputs);
 
@@ -3100,7 +3100,7 @@ static PyObject * THPVariable_cat(PyObject* self_, PyObject* args, PyObject* kwa
   at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
 
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "CAT output TENSOR ID: " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
@@ -3494,7 +3494,7 @@ static PyObject * THPVariable_conv2d(PyObject* self_, PyObject* args, PyObject* 
   at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
           
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "conv2d output TENSOR ID: " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
@@ -3598,7 +3598,7 @@ static PyObject * THPVariable_conv_transpose2d(PyObject* self_, PyObject* args, 
   at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
 
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "conv_transpose2d output TENSOR ID: " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
@@ -4169,7 +4169,7 @@ static PyObject * THPVariable_dropout(PyObject* self_, PyObject* args, PyObject*
   }
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
 
   auto otid = at::globalContext().ARCGlobal.getTid(output);
   if (at::globalContext().ARCGlobal.isDebugMode()) {
@@ -4299,7 +4299,7 @@ static PyObject * THPVariable_embedding(PyObject* self_, PyObject* args, PyObjec
   at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
 
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "embedding output TENSOR ID: " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
@@ -4522,7 +4522,7 @@ static PyObject * THPVariable_erf(PyObject* self_, PyObject* args, PyObject* kwa
   at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
 
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "ERF OUPUT TENSOR ID: " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
@@ -4976,7 +4976,7 @@ static PyObject * THPVariable_flatten(PyObject* self_, PyObject* args, PyObject*
   at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
           
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "flatten output TENSOR ID: " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
@@ -5845,7 +5845,7 @@ static PyObject * THPVariable_instance_norm(PyObject* self_, PyObject* args, PyO
   at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
 
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "instance_norm output TENSOR ID: " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
@@ -6791,7 +6791,7 @@ static PyObject * THPVariable_max_pool2d(PyObject* self_, PyObject* args, PyObje
   at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
 
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "max_pool2d output TENSOR ID: " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
@@ -7609,7 +7609,7 @@ static PyObject * THPVariable_ones_like(PyObject* self_, PyObject* args, PyObjec
   at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
 
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "ONES LIKE TENSOR ID: " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
@@ -8412,8 +8412,7 @@ static PyObject * THPVariable_relu(PyObject* self_, PyObject* args, PyObject* kw
 
   auto oid = at::globalContext().ARCGlobal.getNewOid();
   if (at::globalContext().ARCGlobal.isDebugMode()) {
-    std::cout << "OPERATOIN ReLU, OPID: ";
-    std::cout << at::globalContext().ARCGlobal.getNewOid() << std::endl;
+    std::cout << "OPERATOIN ReLU, OPID: " << oid << std::endl;
   }
   Tensor input = r.tensor(0);
 
@@ -8428,7 +8427,7 @@ static PyObject * THPVariable_relu(PyObject* self_, PyObject* args, PyObject* kw
   at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
 
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "relu output TENSOR ID: " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
@@ -8474,7 +8473,7 @@ static PyObject * THPVariable_relu_(PyObject* self_, PyObject* args, PyObject* k
   //at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
 
   if (at::globalContext().ARCGlobal.isOnDemand()) {
     ARCPyEngine::offLoad(input);
@@ -9325,7 +9324,7 @@ static PyObject * THPVariable_sqrt(PyObject* self_, PyObject* args, PyObject* kw
   at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
 
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "SQRT OUTPUT TENSOR ID: " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
@@ -9740,7 +9739,7 @@ static PyObject * THPVariable_tanh(PyObject* self_, PyObject* args, PyObject* kw
   //at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
 
   // DEBUG: print output tid
   //std::cout << "OUTPUT TENSOR ID: ";
@@ -9752,11 +9751,6 @@ static PyObject * THPVariable_tanh(PyObject* self_, PyObject* args, PyObject* kw
   }
   
   return wrap(output);
-
-
-
-
-
 
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
@@ -10197,7 +10191,7 @@ static PyObject * THPVariable_unsqueeze(PyObject* self_, PyObject* args, PyObjec
   at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion();
+    at::native::arc_vm.Arcp2pCompletion(false);
 
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "unsqueeze output TENSOR ID: " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
@@ -10351,7 +10345,7 @@ static PyObject * THPVariable_zeros_like(PyObject* self_, PyObject* args, PyObje
     at::globalContext().ARCGlobal.setNewTid(output);
 
     if (at::native::arc_vm.is_using_ssd())
-      at::native::arc_vm.Arcp2pCompletion();
+      at::native::arc_vm.Arcp2pCompletion(false);
 
     if (at::globalContext().ARCGlobal.isDebugMode()) {
       std::cout << "zeros_like output TENSOR ID: " << at::globalContext().ARCGlobal.getTid(output) << std::endl;
