@@ -222,6 +222,7 @@ void ARC_memory::device_malloc(void** gpu_ptr, size_t size) {
     deviceStartBlk = 0;  blkCheck = 0;
 
     if (retryCnt++ > 2) {
+      dev.unlock();
       *gpu_ptr = NULL;
       return;
     }
@@ -426,6 +427,10 @@ bool ARC_memory::is_using_ssd(void) {
   return isUsingSSD;
 }
 
+bool ARC_memory::is_debug(void) {
+  return isDebug;
+}
+
 void ARC_memory::Arcp2pSetting(int flags) {
   printf("Arcp2pSetting : 0x%x\n", flags);
 
@@ -543,7 +548,6 @@ void ARC_memory::Arcp2pSetting(int flags) {
   } else {
     isDebug = false;
   }
-
 }
 
 // bar attach

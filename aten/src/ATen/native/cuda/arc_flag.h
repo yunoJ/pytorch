@@ -103,6 +103,7 @@ class ARC_memory {
   bool is_fp16();
   bool is_csr();
   bool is_using_ssd();
+  bool is_debug();
 
   int* pref_it;
   int pref_end;

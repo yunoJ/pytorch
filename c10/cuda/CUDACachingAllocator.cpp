@@ -474,10 +474,19 @@ struct THCCachingAllocator
     // and retries.
     if (at::native::arc_vm.is_vdnn()) {
       at::native::arc_vm.device_malloc(devPtr, size);
-      std::cout << "device_malloc addr: " << *devPtr << ", size: " << size << std::endl;
+
+      if (at::native::arc_vm.is_debug()) {
+        std::cout << "device_malloc addr: " << *devPtr << ", size: " << size << std::endl;
+      }
+
       if (*devPtr == NULL) {
         free_cached_blocks(device);
         at::native::arc_vm.device_malloc(devPtr, size);
+
+        if (at::native::arc_vm.is_debug()) {
+          std::cout << "device_malloc retry addr: " << *devPtr << ", size: " << size << std::endl;
+        }
+
         if (*devPtr == NULL) {
           return cudaErrorMemoryAllocation;
         }
@@ -525,7 +534,10 @@ struct THCCachingAllocator
       Block* block = *it;
       if (!block->prev && !block->next) {
         if (at::native::arc_vm.is_vdnn()) {
-          std::cout << "device_free addr: " << (void*)block->ptr << ", size: " << block->size << std::endl;
+          if (at::native::arc_vm.is_debug()) {
+            std::cout << "device_free addr: " << (void*)block->ptr << ", size: " << block->size << std::endl;
+          }
+
           at::native::arc_vm.device_free((void *)block->ptr, block->size);
         } else {
           C10_CUDA_CHECK(cudaFree((void*)block->ptr));
