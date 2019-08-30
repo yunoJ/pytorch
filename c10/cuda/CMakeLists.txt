@@ -23,7 +23,7 @@ set(C10_CUDA_SRCS
     CUDAStream.cpp
     CUDACachingAllocator.cpp
     impl/CUDAGuardImpl.cpp
-    impl/CUDATest.cpp
+#    impl/CUDATest.cpp
 )
 set(C10_CUDA_HEADERS
     CUDAException.h
@@ -32,7 +32,7 @@ set(C10_CUDA_HEADERS
     CUDAMathCompat.h
     CUDAStream.h
     impl/CUDAGuardImpl.h
-    impl/CUDATest.h
+#    impl/CUDATest.h
 )
 set(CUDA_LINK_LIBRARIES_KEYWORD PRIVATE)
 torch_cuda_based_add_library(c10_cuda ${C10_CUDA_SRCS} ${C10_CUDA_HEADERS})
@@ -55,7 +55,7 @@ target_include_directories(
     $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
     $<INSTALL_INTERFACE:include>)
 
-add_subdirectory(test)
+#add_subdirectory(test)
 
 # ---[ Installation
 # Note: for now, we will put all export path into one single Caffe2Targets group

@@ -16,6 +16,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include <ATen/native/cuda/arc_flag.h>
+
 namespace c10 {
 
 C10_DEFINE_REGISTRY(FreeCudaMemoryCallbacksRegistry, FreeMemoryCallback);
@@ -470,15 +472,28 @@ struct THCCachingAllocator
   {
     // Try cudaMalloc. If cudaMalloc fails, frees all non-split cached blocks
     // and retries.
-    cudaError_t err = cudaMalloc(devPtr, size);
-    if (err != cudaSuccess) {
-      cudaGetLastError();  // reset the last CUDA error
-      free_cached_blocks(device);
-      err = cudaMalloc(devPtr, size);
+    if (at::native::arc_vm.is_vdnn()) {
+      at::native::arc_vm.device_malloc(devPtr, size);
+      std::cout << "device_malloc addr: " << *devPtr << ", size: " << size << std::endl;
+      if (*devPtr == NULL) {
+        free_cached_blocks(device);
+        at::native::arc_vm.device_malloc(devPtr, size);
+        if (*devPtr == NULL) {
+          return cudaErrorMemoryAllocation;
+        }
+      }
+    } else {
+      cudaError_t err = cudaMalloc(devPtr, size);
       if (err != cudaSuccess) {
-        return err;
+        cudaGetLastError();  // reset the last CUDA error
+        free_cached_blocks(device);
+        err = cudaMalloc(devPtr, size);
+        if (err != cudaSuccess) {
+          return err;
+        }
       }
     }
+
     return cudaSuccess;
   }
 
@@ -509,7 +524,12 @@ struct THCCachingAllocator
     while (it != end) {
       Block* block = *it;
       if (!block->prev && !block->next) {
-        C10_CUDA_CHECK(cudaFree((void*)block->ptr));
+        if (at::native::arc_vm.is_vdnn()) {
+          std::cout << "device_free addr: " << (void*)block->ptr << ", size: " << block->size << std::endl;
+          at::native::arc_vm.device_free((void *)block->ptr, block->size);
+        } else {
+          C10_CUDA_CHECK(cudaFree((void*)block->ptr));
+        }
         get_stats_for_device(block->device).decreaseCached(block->size);
         auto cur = it;
         ++it;

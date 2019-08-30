@@ -11,7 +11,6 @@
 
 // [JS] P2P define
 #include <queue>
-#include <c10/cuda/CUDACachingAllocator.h>
 #include <ATen/cuda/CUDAEvent.h>
 
 // Half precision
@@ -30,8 +29,10 @@
 #define ARC_FLAG_TESLA (1U << 4)
 #define ARC_FLAG_RAID0 (1U << 5)
 #define ARC_FLAG_DEBUG (1U << 6)
-// [JS] 7~11 bit will be used for arc_vm cudamalloc size
+// [JS] 7~11 bit will be used for arc_vm (device) cudamalloc size
 #define ARC_MEMSIZE_MASK  (0x00000F80)
+// 12~16 bit will be used for arc_vm (p2p) cudamalloc size
+#define ARC_P2PSIZE_MASK  (0x0001F000)
 #define ARC_MEMSIZE_SHIFT (7)
 
 using namespace at::cuda;
@@ -118,7 +119,9 @@ typedef struct {
 
 std::queue<req_element> req_queue;
 
-ARC_memory::ARC_memory(): relu_thru(false), mapping(false), deviceStartBlk(0) {
+ARC_memory::ARC_memory(): relu_thru(false), mapping(false),
+    isVDNN(false), isFP16(false), isCSR(false), isUsingSSD(false), isTesla(false), isDebug(false),
+    deviceStartBlk(0), p2pStartBlk(0), device_sz(0), max_device(0), p2p_sz(0), max_p2p(0) {
   fp16_ptr_arr = new uint64_t[NUM_TENSOR];
   bit_ptr_arr = new uint64_t[NUM_TENSOR];
   pos_ptr_arr = new uint64_t[NUM_TENSOR];
@@ -139,14 +142,6 @@ ARC_memory::ARC_memory(): relu_thru(false), mapping(false), deviceStartBlk(0) {
   }
 
   memset(dir_arr, 0, sizeof(arcp2p_dir) * NUM_TENSOR);
-
-  isTesla = false;
-  isUsingSSD = false;
-  isFP16 = false;
-  isCSR = false;
-
-  device_sz = 0;
-  max_device = 0;
 }
 
 ARC_memory::~ARC_memory() {
@@ -154,6 +149,12 @@ ARC_memory::~ARC_memory() {
     cudaFree(deviceAddr);
     delete[] deviceTable;
     delete[] device_page_map;
+  }
+
+  if (p2p_sz > 0) {
+    cudaFree(p2pAddr);
+    delete[] p2pTable;
+    delete[] p2p_page_map;
   }
 
   delete[] fp16_ptr_arr;
@@ -190,7 +191,7 @@ void ARC_memory::device_malloc(void** gpu_ptr, size_t size) {
 
   if (reqBlk == 0) return;
 
-  m.lock();
+  dev.lock();
 
   while (true) {
     for (int i = deviceStartBlk; i < max_device; i++) {
@@ -214,22 +215,15 @@ void ARC_memory::device_malloc(void** gpu_ptr, size_t size) {
 
         deviceStartBlk += reqBlk;
 
-        m.unlock();
+        dev.unlock();
         return;
       }
     }
     deviceStartBlk = 0;  blkCheck = 0;
-    if (retryCnt++ % 10 == 0) {
-      LOG(INFO) << "retryCnt " << retryCnt << ", " << size << std::endl;
-    }
 
-    if (retryCnt > 1000) {
-      int occupancy = 0;
-      for (int i = 0; i < max_device; i++) {
-        occupancy += (int)deviceTable[i];
-      }
-      std::cout << "Out-of-memory in device: " << size << ", occupancy: " << (double)occupancy/(double)max_device << std::endl;
-      exit(1);
+    if (retryCnt++ > 2) {
+      *gpu_ptr = NULL;
+      return;
     }
   }
 }
@@ -240,7 +234,7 @@ void ARC_memory::device_free(void* addr, size_t size) {
 
   if (device_sz == 0) return;
 
-  m.lock();
+  dev.lock();
 
   device_page_map[startBlk] = 0;
 
@@ -250,7 +244,84 @@ void ARC_memory::device_free(void* addr, size_t size) {
 
   deviceStartBlk = std::min((unsigned int)deviceStartBlk, startBlk);
 
-  m.unlock();
+  dev.unlock();
+}
+
+int ARC_memory::device_occupancy() {
+  int occupancy;
+  dev.lock();
+
+  for(int i = 0; i < max_device; i++) {
+    occupancy += device_page_map[i];
+  }
+
+  dev.unlock();
+  return occupancy;
+}
+
+void ARC_memory::p2p_malloc(void** gpu_ptr, size_t size) {
+  int reqBlk = std::ceil((double)size / (double)BLK_SZ);
+  int blkCheck = 0;
+  int retryCnt = 0;
+
+  if (p2p_sz == 0) return;
+
+  if (reqBlk == 0) return;
+
+  p2p.lock();
+
+  while (true) {
+    for (int i = p2pStartBlk; i < max_p2p; i++) {
+      blkCheck += 1;
+      if (p2pTable[i]) {
+        if (p2p_page_map[i] == 0) {
+          LOG(FATAL) << "p2p_page_map[" << i << "] is zero, size: " << size << ", " << blkCheck << ", " << reqBlk;
+        }
+        i += p2p_page_map[i] - 1;
+        blkCheck = 0; p2pStartBlk = i + 1;
+        continue;
+      }
+
+      if (blkCheck == reqBlk) {
+        p2p_page_map[p2pStartBlk] = reqBlk;
+        *gpu_ptr = (void* )((size_t)p2pAddr + (p2pStartBlk * BLK_SZ));
+
+        for (int i = p2pStartBlk; i < p2pStartBlk + reqBlk; i++) {
+          p2pTable[i] = true;
+        }
+
+        p2pStartBlk += reqBlk;
+
+        p2p.unlock();
+        return;
+      }
+    }
+    p2pStartBlk = 0;  blkCheck = 0;
+
+    if (retryCnt++ > 2) {
+      *gpu_ptr = NULL;
+      return;
+    }
+  }
+}
+
+void ARC_memory::p2p_free(void* addr, size_t size) {
+  unsigned int startBlk = ((size_t)addr - (size_t)p2pAddr) / BLK_SZ;
+  unsigned int reqBlk = std::ceil((double)size / (double)BLK_SZ);
+
+  if (p2p_sz == 0) return;
+
+  p2p.lock();
+
+  p2p_page_map[startBlk] = 0;
+
+  for (unsigned int i = startBlk; i < startBlk + reqBlk; i++) {
+    p2pTable[i] = false;
+  }
+
+  p2pStartBlk = std::min((unsigned int)p2pStartBlk, startBlk);
+
+  p2p.unlock();
 }
 
 void* ARC_memory::get_fp16_addr(int tid) {
@@ -262,11 +333,11 @@ void ARC_memory::set_fp16_addr(int tid, uint64_t addr) {
 }
 
 void* ARC_memory::get_device_addr() {
-  return deviceAddr;
+  return p2pAddr;
 }
 
 uint64_t ARC_memory::get_device_sz() {
-  return device_sz;
+  return p2p_sz;
 }
 
 void* ARC_memory::get_bit_addr(int tid) {
@@ -363,7 +434,13 @@ void ARC_memory::Arcp2pSetting(int flags) {
   device_sz = device_in_gb << 30;
   max_device = device_sz / BLK_SZ;
 
+  uint64_t p2p_in_gb;
+  p2p_in_gb = (flags & ARC_P2PSIZE_MASK) >> 12;
+  p2p_sz = p2p_in_gb << 30;
+  max_p2p = p2p_sz / BLK_SZ;
+
   printf("Device memory size = %ld GB\n", device_in_gb);
+  printf("P2P memory size = %ld GB\n", p2p_in_gb);
 
   if (device_in_gb > 0) {
     cudaMalloc(&deviceAddr, device_sz);
@@ -373,6 +450,17 @@ void ARC_memory::Arcp2pSetting(int flags) {
     device_page_map = new unsigned int[max_device];
     for (int i = 0; i < max_device; i++) {
       device_page_map[i] = 0;
+    }
+  }
+
+  if (p2p_in_gb > 0) {
+    cudaMalloc(&p2pAddr, p2p_sz);
+    p2pTable = new bool[max_p2p];
+    memset(p2pTable, 0, sizeof(bool) * max_p2p);
+
+    p2p_page_map = new unsigned int[max_p2p];
+    for (int i = 0; i < max_p2p; i++) {
+      p2p_page_map[i] = 0;
     }
   }
 
@@ -436,7 +524,7 @@ void ARC_memory::Arcp2pSetting(int flags) {
     arcp2p_completion = (arcp2p_type2_fn)dlsym(lib_handle, "ARCP2P_completion");
     if(dlerror()) { fprintf(stderr, "Error linking\n"); return; }
 
-    arcp2p_synchronize= (arcp2p_type2_fn)dlsym(lib_handle, "ARCP2P_synchronize");
+    arcp2p_synchronize = (arcp2p_type2_fn)dlsym(lib_handle, "ARCP2P_synchronize");
     if(dlerror()) { fprintf(stderr, "Error linking\n"); return; }
 
     if (true == isTesla) {
@@ -534,135 +622,140 @@ void ARC_memory::Arcp2pCompletion(bool prefCall) {
 
   // Automatically prefetch
   if(!at::globalContext().ARCGlobal.isOnDemand()) {
-    if (pref_end >= 0 && prefCall) {
-      torch::autograd::ARCCppEngine::preFetchAsync(pref_it[pref_end]);
-      pref_end--;
+    if (pref_end >= pref_idx && prefCall) {
+      if (isDebug) {
+        std::cout << "Prefetching oid call: " << pref_it[pref_idx] << std::endl;
+      }
+      torch::autograd::ARCCppEngine::preFetchAsync(pref_it[pref_idx]);
+      pref_idx++;
     }
   }
 
-  // if req_list empty, nothing to do
-  if (req_queue.empty()) {
-    return;
-  }
-
-  m2.lock();
-  // first, run completer of arcp2p, this will update cpl.issued
-  arcp2p_completion(arc_handle);
-
-  // we only concern command completion sequentially
-  req_element req = req_queue.front();
-
-  if (true == req.p_cpl->issued) {
-    // if completed request is ssdtogpu
-    // 1. we need to update fetch_loc
-    // 2. we should remove loc_element
-
-    if (arcp2p_gputossd == req.dir) {
-      size_t numel = get_numel(req.info->tid);
-      int resize = get_resize(req.info->tid);
-      if (isFP16 && (resize > 0)) {
-        if (isDebug)
-          std::cout << "CSR FP16 mem free tid: " << req.info->tid << ", size: " << sizeof(__half) * resize << ", fp16: " << req.info->ptr << std::endl;
-
-        device_free(req.info->ptr, sizeof(__half) * resize);
-      } else if (isFP16 && (resize == 0)) {
-        if (isDebug)
-          std::cout << "No CSR FP16 mem free tid: " << req.info->tid << ", size: " << sizeof(__half) * numel << ", fp16: " << req.info->ptr << std::endl;
-
-        device_free(req.info->ptr, sizeof(__half) * numel);
-      } else {
-        if (isDebug)
-          std::cout << "TODO: Duplicated FP16 mem free tid: " << req.info->tid << ", size: " << req.size << ", fp16: " << req.info->ptr << std::endl;
-
-        device_free(req.info->ptr, req.size);
-      }
-
-      event_arr_d2h[req.info->tid] = false;
-      delete req.info;
-
-      if (false == isFP16)
-        delete req.stor;
-
-    } else if (arcp2p_ssdtogpu == req.dir) {
-      // [TODO] backend job needed for read done case (ex. notify backward operation that data is ready)
-      // [TODO] arcp2p_data would be freed here? or after?
-
-      // FP16 & CSR handling
-      int resize = get_resize(req.info->tid);
-
-      if (isFP16 && (resize > 0)) {
-        uint64_t nTPB = req.info->ntpb;
-        uint64_t numel = req.info->numel;
-
-        size_t bit_elements, pos_elements, pos_elements_before;
-        bit_elements = (size_t)((numel + 1024 - 1) / 1024) * 32;
-        pos_elements_before = (size_t)((numel + 32 - 1) / 32);
-        int count = 0;
-        while (pos_elements_before != 0) {
-          pos_elements_before = pos_elements_before >> 1;  count++;
-        }
-        pos_elements = 1 << count;
-        
-        void* bit = arc_vm.get_bit_addr(req.info->tid);
-        void* pos = arc_vm.get_pos_addr(req.info->tid);
-        float *nz_dst;
-        device_malloc((void **)&nz_dst, resize * sizeof(float));
-        cudaMemsetAsync((void *)nz_dst, 0, resize * sizeof(float), req.str);
-
-        float_scale<<<(numel + nTPB - 1) / nTPB, nTPB, 0, req.str>>>((__half *)req.info->ptr, nz_dst, resize);
-
-        if (arc_vm.get_elem(req.info->tid) == 8) {
-          zero_insert_double<<<(numel + nTPB - 1) / nTPB, nTPB, 0, req.str>>>((unsigned int*)bit, (unsigned int*)pos, nz_dst, (double *)req.info->dst, numel);
-        } else {
-          zero_insert_float<<<(numel + nTPB - 1) / nTPB, nTPB, 0, req.str>>>((unsigned int*)bit, (unsigned int*)pos, nz_dst, (float *)req.info->dst, numel);
-        }
-
-        device_free((void *)nz_dst, resize * sizeof(float));
-      } else if (isFP16 && (resize == 0)) {
-        uint64_t nTPB = req.info->ntpb;
-        uint64_t numel = req.info->numel;
-
-        if (arc_vm.get_elem(req.info->tid) == 8) {
-          double_scale<<<(numel + nTPB - 1) / nTPB, nTPB, 0, req.str>>>((__half* )req.info->ptr, (double* )req.info->dst, numel);
-        } else {
-          float_scale<<<(numel + nTPB - 1) / nTPB, nTPB, 0, req.str>>>((__half* )req.info->ptr, (float* )req.info->dst, numel);
-        }
-      } else {
-        cudaMemcpyAsync(req.info->dst, req.info->ptr, req.size, cudaMemcpyDeviceToDevice, req.str);
-      }
-
-      event_arr_h2d[req.info->tid] = false;
-      delete req.info;
+  if(isUsingSSD) {
+    // if req_list empty, nothing to do
+    if (req_queue.empty()) {
+      return;
     }
 
-    req.p_cpl->requested = false;
+    m2.lock();
+    // first, run completer of arcp2p, this will update cpl.issued
+    arcp2p_completion(arc_handle);
 
-    // remove current element
-    req_queue.pop();
+    // we only concern command completion sequentially
+    req_element req = req_queue.front();
 
-    if (false == isTesla) {
-      arcp2p_bar_detach(arc_handle);
-
-      // check if next event is pending
-      if (!req_queue.empty()) {
-        req = req_queue.front();
-        printf("schedule next one. quadro only\n");
-        //arcp2p_bar_attach(arc_handle, req.addr, req.size);
-        // debug code. retry 10 times
-        int retrycnt = 0;
-        while(ARCP2P_NO_ERROR != arcp2p_bar_attach(arc_handle, req.addr, req.size)) {
-          retrycnt ++;
-          printf("Bar attach failed, retry %d/10\n", retrycnt);
-          if (retrycnt >= 10) {
-            break;
+    if (true == req.p_cpl->issued) {
+      // if completed request is ssdtogpu
+      // 1. we need to update fetch_loc
+      // 2. we should remove loc_element
+  
+      if (arcp2p_gputossd == req.dir) {
+        size_t numel = get_numel(req.info->tid);
+        int resize = get_resize(req.info->tid);
+        if (isFP16 && (resize > 0)) {
+          if (isDebug)
+            std::cout << "CSR FP16 mem free tid: " << req.info->tid << ", size: " << sizeof(__half) * resize << ", fp16: " << req.info->ptr << std::endl;
+  
+          device_free(req.info->ptr, sizeof(__half) * resize);
+        } else if (isFP16 && (resize == 0)) {
+          if (isDebug)
+            std::cout << "No CSR FP16 mem free tid: " << req.info->tid << ", size: " << sizeof(__half) * numel << ", fp16: " << req.info->ptr << std::endl;
+  
+          device_free(req.info->ptr, sizeof(__half) * numel);
+        } else {
+          if (isDebug)
+            std::cout << "TODO: Duplicated FP16 mem free tid: " << req.info->tid << ", size: " << req.size << ", fp16: " << req.info->ptr << std::endl;
+  
+          device_free(req.info->ptr, req.size);
+        }
+  
+        event_arr_d2h[req.info->tid] = false;
+        delete req.info;
+  
+        if (false == isFP16)
+          delete req.stor;
+  
+      } else if (arcp2p_ssdtogpu == req.dir) {
+        // [TODO] backend job needed for read done case (ex. notify backward operation that data is ready)
+        // [TODO] arcp2p_data would be freed here? or after?
+  
+        // FP16 & CSR handling
+        int resize = get_resize(req.info->tid);
+  
+        if (isFP16 && (resize > 0)) {
+          uint64_t nTPB = req.info->ntpb;
+          uint64_t numel = req.info->numel;
+  
+          size_t bit_elements, pos_elements, pos_elements_before;
+          bit_elements = (size_t)((numel + 1024 - 1) / 1024) * 32;
+          pos_elements_before = (size_t)((numel + 32 - 1) / 32);
+          int count = 0;
+          while (pos_elements_before != 0) {
+            pos_elements_before = pos_elements_before >> 1;  count++;
           }
-          arcp2p_bar_detach(arc_handle);
+          pos_elements = 1 << count;
+          
+          void* bit = arc_vm.get_bit_addr(req.info->tid);
+          void* pos = arc_vm.get_pos_addr(req.info->tid);
+          float *nz_dst;
+          device_malloc((void **)&nz_dst, resize * sizeof(float));
+          cudaMemsetAsync((void *)nz_dst, 0, resize * sizeof(float), req.str);
+  
+          float_scale<<<(numel + nTPB - 1) / nTPB, nTPB, 0, req.str>>>((__half *)req.info->ptr, nz_dst, resize);
+  
+          if (arc_vm.get_elem(req.info->tid) == 8) {
+            zero_insert_double<<<(numel + nTPB - 1) / nTPB, nTPB, 0, req.str>>>((unsigned int*)bit, (unsigned int*)pos, nz_dst, (double *)req.info->dst, numel);
+          } else {
+            zero_insert_float<<<(numel + nTPB - 1) / nTPB, nTPB, 0, req.str>>>((unsigned int*)bit, (unsigned int*)pos, nz_dst, (float *)req.info->dst, numel);
+          }
+  
+          device_free((void *)nz_dst, resize * sizeof(float));
+        } else if (isFP16 && (resize == 0)) {
+          uint64_t nTPB = req.info->ntpb;
+          uint64_t numel = req.info->numel;
+  
+          if (arc_vm.get_elem(req.info->tid) == 8) {
+            double_scale<<<(numel + nTPB - 1) / nTPB, nTPB, 0, req.str>>>((__half* )req.info->ptr, (double* )req.info->dst, numel);
+          } else {
+            float_scale<<<(numel + nTPB - 1) / nTPB, nTPB, 0, req.str>>>((__half* )req.info->ptr, (float* )req.info->dst, numel);
+          }
+        } else {
+          cudaMemcpyAsync(req.info->dst, req.info->ptr, req.size, cudaMemcpyDeviceToDevice, req.str);
         }
-        arcp2p_transfer(arc_handle, req.addr, req.offs, req.size, req.p_cpl, req.dir);
+  
+        event_arr_h2d[req.info->tid] = false;
+        delete req.info;
+      }
+  
+      req.p_cpl->requested = false;
+  
+      // remove current element
+      req_queue.pop();
+  
+      if (false == isTesla) {
+        arcp2p_bar_detach(arc_handle);
+  
+        // check if next event is pending
+        if (!req_queue.empty()) {
+          req = req_queue.front();
+          printf("schedule next one. quadro only\n");
+          //arcp2p_bar_attach(arc_handle, req.addr, req.size);
+          // debug code. retry 10 times
+          int retrycnt = 0;
+          while(ARCP2P_NO_ERROR != arcp2p_bar_attach(arc_handle, req.addr, req.size)) {
+            retrycnt ++;
+            printf("Bar attach failed, retry %d/10\n", retrycnt);
+            if (retrycnt >= 10) {
+              break;
+            }
+            arcp2p_bar_detach(arc_handle);
+          }
+          arcp2p_transfer(arc_handle, req.addr, req.offs, req.size, req.p_cpl, req.dir);
+        }
       }
     }
+    m2.unlock();
   }
-  m2.unlock();
 }
 
 void ARC_memory::Arcp2pSynchronize() {

@@ -272,7 +272,7 @@ void ARCCppEngine::joinOffload() {
 
 void ARCCppEngine::offLoadAsync(at::Tensor tensor) {
   auto str = c10::cuda::getStreamFromPool(false, 0);
-  str.synchronize();
+//  str.synchronize();
   c10::cuda::CUDAStreamGuard csg(str);
   c10::TensorOptions opt = c10::TensorOptions();
   opt = opt.device(c10::Device(c10::DeviceType::CPU));
@@ -407,20 +407,20 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
             void* bit = at::native::arc_vm.get_bit_addr(tid);
             void* pos = at::native::arc_vm.get_pos_addr(tid);
 
-            at::native::arc_vm.device_free(fp16, sizeof(__half) * resize);
-            at::native::arc_vm.device_free(bit, sizeof(unsigned int) * bit_elements);
-            at::native::arc_vm.device_free(pos, sizeof(unsigned int) * pos_elements);
+            at::native::arc_vm.p2p_free(fp16, sizeof(__half) * resize);
+            at::native::arc_vm.p2p_free(bit, sizeof(unsigned int) * bit_elements);
+            at::native::arc_vm.p2p_free(pos, sizeof(unsigned int) * pos_elements);
           } else if (at::native::arc_vm.is_fp16() && resize == 0) {
             // TODO arcp2p without any comprression (fp16 == false, is_csr == false)
             if (at::globalContext().ARCGlobal.isDebugMode())
               std::cout << "No CSR h2d mem free tid: " << tid << ", size: " << sizeof(__half) * numel << ", fp16: " << fp16 << std::endl;
 
-            at::native::arc_vm.device_free(fp16, sizeof(__half) * numel);
+            at::native::arc_vm.p2p_free(fp16, sizeof(__half) * numel);
           } else {
             if (at::globalContext().ARCGlobal.isDebugMode())
               std::cout << "No float/double h2d mem free tid: " << tid << ", size: " << numel << ", fp16: " << fp16 << std::endl;
 
-            at::native::arc_vm.device_free(fp16, numel);
+            at::native::arc_vm.p2p_free(fp16, numel);
           }
 
           delete p_flu_cpl;
@@ -451,14 +451,28 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
               void* pos = at::native::arc_vm.get_pos_addr(tid);
               unsigned int resize = at::native::arc_vm.get_resize(tid);
 
-              at::native::arc_vm.device_free(fp16, sizeof(__half) * resize);
-              at::native::arc_vm.device_free(bit, sizeof(unsigned int) * bit_elements);
-              at::native::arc_vm.device_free(pos, sizeof(unsigned int) * pos_elements);
+              if (at::globalContext().ARCGlobal.isDebugMode()) {
+                std::cout << "CSR h2d mem free tid: " << tid << ", size: " << sizeof(__half) * resize << std::endl;
+              }
+
+              at::native::arc_vm.p2p_free(fp16, sizeof(__half) * resize);
+              at::native::arc_vm.p2p_free(bit, sizeof(unsigned int) * bit_elements);
+              at::native::arc_vm.p2p_free(pos, sizeof(unsigned int) * pos_elements);
             } else if (at::native::arc_vm.is_fp16() && resize == 0) {
-              at::native::arc_vm.device_free(fp16, sizeof(__half) * numel);
+              if (at::globalContext().ARCGlobal.isDebugMode()) {
+                std::cout << "No CSR h2d mem free tid: " << tid << ", size: " << sizeof(__half) * numel << std::endl;
+              }
+
+              at::native::arc_vm.p2p_free(fp16, sizeof(__half) * numel);
+            }
+          } else {
+            if (at::globalContext().ARCGlobal.isDebugMode()) {
+              std::cout << "No float/double h2d mem free tid: " << tid << std::endl;
             }
           }
 
+          tensor_pf_sync_dict_[tid] = true;
+          at::native::arc_vm.event_arr_h2d[tid] = false;
           break;
         }
       }
@@ -500,12 +514,11 @@ void ARCCppEngine::dropTensor(Oid oid, SavedVariable* fetch_loc) {
       //opt = opt.dtype(c10::ScalarType::Half); 
       opt = opt.pinned_memory(true); 
 
-      if (at::native::arc_vm.is_using_ssd()) {
-        while (at::native::arc_vm.event_arr_h2d[tid]) {
+      while (at::native::arc_vm.event_arr_h2d[tid]) {
+        if (at::native::arc_vm.is_using_ssd()) {
           at::native::arc_vm.Arcp2pCompletion(false);
         }
       }
-
 
       // [JS] p2p setting if ssd mode is on
       if (at::native::arc_vm.is_using_ssd()) {
@@ -515,9 +528,10 @@ void ARCCppEngine::dropTensor(Oid oid, SavedVariable* fetch_loc) {
       }
 
       tref = tref.ARCto(opt, false, true, false);
+      tensor_pf_sync_dict_[tid] = false;
 
-      if (at::native::arc_vm.is_using_ssd()) {
-        while (at::native::arc_vm.event_arr_d2h[tid]) {
+      while (at::native::arc_vm.event_arr_d2h[tid]) {
+        if (at::native::arc_vm.is_using_ssd()) {
           at::native::arc_vm.Arcp2pCompletion(false);
         }
       }
@@ -565,10 +579,8 @@ void ARCCppEngine::fetchRequiredTensors_(Oid oid, ARCSync sync) {
       // [JS] p2p
       if (at::native::arc_vm.is_using_ssd()) {
         if (at::globalContext().ARCGlobal.isOnDemand()) {
-          if (at::native::arc_vm.is_using_ssd()) {
-            while (at::native::arc_vm.event_arr_d2h[tid]) {
-              at::native::arc_vm.Arcp2pCompletion(false);
-            }
+          while (at::native::arc_vm.event_arr_d2h[tid]) {
+            at::native::arc_vm.Arcp2pCompletion(false);
           }
         }
         at::native::arc_vm.set_dir(tid, at::native::arcp2p_ssdtogpu);
@@ -619,12 +631,8 @@ void ARCCppEngine::resetCppEngine() {
     }
   }
 
-//  tensor_dict_.clear();
-//  memset(tensor_dict_bool_, 0, sizeof(bool) * 2048);
   memset(tensor_dict_check_, 0, sizeof(bool) * 2048);
   memset(tensor_sync_dict_, 0, sizeof(bool) * 2048);
-//  tensor_sync_dict_.clear();
-//  tensor_pf_sync_dict_.clear();
   memset(tensor_pf_sync_dict_, 0, sizeof(bool) * 2048);
   pf_dict_.clear();
   pf_sync_dict_.clear();

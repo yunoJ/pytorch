@@ -662,14 +662,17 @@ auto Engine::execute(const edge_list& roots,
   if (!at::globalContext().ARCGlobal.isOnDemand()) {
     at::native::arc_vm.pref_it = at::globalContext().ARCGlobal.getBackPath();
     at::native::arc_vm.pref_end = at::globalContext().ARCGlobal.getLastIdx();
+    at::native::arc_vm.pref_idx = 0;
 
     at::native::arc_vm.Arcp2pCompletion(true);
   }
   // by sam end
   
-  size_t freeBytes, dummy1, dummy2;
+//  size_t freeBytes, dummy1, dummy2;
+  int freeBytes;
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    THCudaMemGetInfo(at::globalContext().getTHCState(), &freeBytes, &dummy1, &dummy2);
+//    THCudaMemGetInfo(at::globalContext().getTHCState(), &freeBytes, &dummy1, &dummy2);
+    freeBytes = at::native::arc_vm.device_occupancy();
     if (at::globalContext().ARCGlobal.isDebugMode()) {
       std::cout << "Remaining GPU memory: " << freeBytes << std::endl;
     }
@@ -756,7 +759,8 @@ auto Engine::execute(const edge_list& roots,
   if (at::globalContext().ARCGlobal.isOnDemand()) {
     double remainSize = 0;
     if (at::native::arc_vm.is_vdnn()) {
-      remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 - 2048);
+      remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024);
+//      remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 - 2048);
 //      remainSize = ARCCppEngine::checkCSR((double)0);
    
       if (remainSize > 0)  remainSize = ARCCppEngine::checkLarge(remainSize);

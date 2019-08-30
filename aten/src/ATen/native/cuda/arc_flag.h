@@ -7,7 +7,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <mutex>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -50,11 +49,17 @@ class ARC_memory {
   bool mapping;
   bool* event_arr_d2h;
   bool* event_arr_h2d;
-  mutex m;
+  mutex dev;
+  mutex p2p;
   mutex m2;
 
   void device_malloc(void** gpu_ptr, size_t size);
   void device_free(void* addr, size_t size);
+  int device_occupancy();
+
+  void p2p_malloc(void** gpu_ptr, size_t size);
+  void p2p_free(void* addr, size_t size);
+
   void* get_device_addr();
   uint64_t get_device_sz();
 
@@ -101,12 +106,18 @@ class ARC_memory {
 
   int* pref_it;
   int pref_end;
+  int pref_idx;
 
  private:
   void* deviceAddr;
   bool* deviceTable;
   int deviceStartBlk;
   unsigned int* device_page_map;
+
+  void* p2pAddr;
+  bool* p2pTable;
+  int p2pStartBlk;
+  unsigned int* p2p_page_map;
 
   uint64_t* fp16_ptr_arr;
   uint64_t* bit_ptr_arr;
@@ -130,14 +141,19 @@ class ARC_memory {
 
   arcp2p *arc_handle;
   uint64_t last_allocated_offset;
+
   bool isVDNN;
   bool isFP16;
   bool isCSR;
   bool isUsingSSD;
   bool isTesla;
   bool isDebug;
+
   uint64_t device_sz;
   uint64_t max_device;
+
+  uint64_t p2p_sz;
+  uint64_t max_p2p;
 };
 
 extern ARC_memory arc_vm;
