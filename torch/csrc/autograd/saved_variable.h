@@ -81,7 +81,7 @@ public:
   static void explicitAllSync();
   // prefetching at curOid
   static void preFetch(Oid curOid, ARCSync sync);
-  static void preFetchAsync(Oid curOid);
+  static bool preFetchAsync(Oid curOid);
   static void preFetchSync(Oid curOid, bool isOutput=false);
 
   static void resetCppEngine();
@@ -95,7 +95,7 @@ private:
   static void insertToPFDict_(Oid oid, SavedVariable* loc, Tid tid);
  
   // internal function implementing prefetching
-  static void fetchRequiredTensors_(Oid oid, ARCSync sync); 
+  static bool fetchRequiredTensors_(Oid oid, ARCSync sync); 
 };
 
 // end ARC

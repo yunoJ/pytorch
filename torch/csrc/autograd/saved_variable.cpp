@@ -24,6 +24,7 @@
 #include <c10/core/ScalarType.h>
 
 #include <ATen/native/cuda/arc_flag.h>
+#include <sys/time.h>
 
 namespace torch { namespace autograd {
 
@@ -132,7 +133,7 @@ static bool tensor_dict_check_[2048] = {false};
 static bool tensor_pf_sync_dict_[2048] = {false};
 
 static bool tensor_sync_dict_[2048] = {false};
-static std::map<Tid,Oid> last_op_dict_;
+static std::map<Tid, Oid> last_op_dict_;
 
 static std::map<Tid, std::pair<double, bool>> liveness_temp;
 
@@ -254,6 +255,7 @@ void ARCCppEngine::joinOffload() {
   if (at::globalContext().ARCGlobal.isDebugMode())
     std::cout << "Wait until all offloading is done" << std::endl;
 
+/*
   if (at::native::arc_vm.is_using_ssd()) {
     at::native::arc_vm.Arcp2pSynchronize();
     int count = 1;
@@ -265,6 +267,7 @@ void ARCCppEngine::joinOffload() {
       }
     }
   }
+*/
 
   if (at::globalContext().ARCGlobal.isDebugMode())
     std::cout << "Wait end" << std::endl;
@@ -321,19 +324,12 @@ void ARCCppEngine::preFetch(Oid curOid, ARCSync sync) {//int required_tensor_num
 
 //  at::globalContext().ARCGlobal.globalOffloadStream().synchronize();   
   
-  fetchRequiredTensors_(curOid, sync); 
+  bool notused = fetchRequiredTensors_(curOid, sync); 
 }
 
-void ARCCppEngine::preFetchAsync(Oid curOid) {//int required_tensor_num, ARCSync sync) {
-  if (curOid == 0)
-    return;
-
-  if (!at::native::arc_vm.is_vdnn()) {
-    return;
-  }
-
+bool ARCCppEngine::preFetchAsync(Oid curOid) {//int required_tensor_num, ARCSync sync) {
   //if (target < 0) std::cerr << "There is no more operation to need prefetch." << std::endl;
-  fetchRequiredTensors_(curOid, Sync); 
+  return fetchRequiredTensors_(curOid, Sync); 
 }
 
 void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) { 
@@ -544,11 +540,11 @@ void ARCCppEngine::dropTensor(Oid oid, SavedVariable* fetch_loc) {
   }
 }
 
-void ARCCppEngine::fetchRequiredTensors_(Oid oid, ARCSync sync) {
+bool ARCCppEngine::fetchRequiredTensors_(Oid oid, ARCSync sync) {
   //this operation has nothing to prefetch 
   if (pf_dict_.find(oid) == pf_dict_.end()) {
     //std::cerr << oid << " Prefetching dictionary lookup miss" << std::endl;
-    return;
+    return true;
   }
 
   if (at::globalContext().ARCGlobal.isOnDemand()) {
@@ -566,7 +562,7 @@ void ARCCppEngine::fetchRequiredTensors_(Oid oid, ARCSync sync) {
 
     if (tensor_dict_check_[tid] == false) {
       //std::cerr << "tensor dictionary lookup miss" << std::endl;
-      return;
+      return true;
     }
 
     at::Tensor& tref = tensor_dict_[tid];
@@ -576,11 +572,16 @@ void ARCCppEngine::fetchRequiredTensors_(Oid oid, ARCSync sync) {
     //opt = opt.dtype(c10::ScalarType::Float);
  
     if (tref.device().type() == c10::DeviceType::CPU) {
+
       // [JS] p2p
       if (at::native::arc_vm.is_using_ssd()) {
         if (at::globalContext().ARCGlobal.isOnDemand()) {
           while (at::native::arc_vm.event_arr_d2h[tid]) {
             at::native::arc_vm.Arcp2pCompletion(false);
+          }
+        } else {
+          if (at::native::arc_vm.event_arr_d2h[tid]) {
+            return false;
           }
         }
         at::native::arc_vm.set_dir(tid, at::native::arcp2p_ssdtogpu);
@@ -607,7 +608,7 @@ void ARCCppEngine::fetchRequiredTensors_(Oid oid, ARCSync sync) {
         std::cout << tid << ": This tensor is already fetched" << std::endl;
     }
   }
-
+  return true;
 }
 
 void ARCCppEngine::resetCppEngine() {

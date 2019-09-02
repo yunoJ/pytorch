@@ -55,7 +55,7 @@ class ARC_memory {
 
   void device_malloc(void** gpu_ptr, size_t size);
   void device_free(void* addr, size_t size);
-  int device_occupancy();
+  size_t device_occupancy();
 
   void p2p_malloc(void** gpu_ptr, size_t size);
   void p2p_free(void* addr, size_t size);

@@ -198,7 +198,8 @@ void ARC_memory::device_malloc(void** gpu_ptr, size_t size) {
       blkCheck += 1;
       if (deviceTable[i]) {
         if (device_page_map[i] == 0) {
-          LOG(FATAL) << "device_page_map[" << i << "] is zero, size: " << size << ", " << blkCheck << ", " << reqBlk;
+          std::cout << "device_page_map[" << i << "] is zero, size: " << size << ", " << blkCheck << ", " << reqBlk << std::endl;
+          exit(1);
         }
         i += device_page_map[i] - 1;
         blkCheck = 0; deviceStartBlk = i + 1;
@@ -248,8 +249,8 @@ void ARC_memory::device_free(void* addr, size_t size) {
   dev.unlock();
 }
 
-int ARC_memory::device_occupancy() {
-  int occupancy;
+size_t ARC_memory::device_occupancy() {
+  int occupancy = 0;
   dev.lock();
 
   for(int i = 0; i < max_device; i++) {
@@ -257,7 +258,7 @@ int ARC_memory::device_occupancy() {
   }
 
   dev.unlock();
-  return occupancy;
+  return occupancy * BLK_SZ;
 }
 
 void ARC_memory::p2p_malloc(void** gpu_ptr, size_t size) {
@@ -276,7 +277,8 @@ void ARC_memory::p2p_malloc(void** gpu_ptr, size_t size) {
       blkCheck += 1;
       if (p2pTable[i]) {
         if (p2p_page_map[i] == 0) {
-          LOG(FATAL) << "p2p_page_map[" << i << "] is zero, size: " << size << ", " << blkCheck << ", " << reqBlk;
+          std::cout << "p2p_page_map[" << i << "] is zero, size: " << size << ", " << blkCheck << ", " << reqBlk << std::endl;
+          exit(1);
         }
         i += p2p_page_map[i] - 1;
         blkCheck = 0; p2pStartBlk = i + 1;
@@ -300,6 +302,7 @@ void ARC_memory::p2p_malloc(void** gpu_ptr, size_t size) {
     p2pStartBlk = 0;  blkCheck = 0;
 
     if (retryCnt++ > 2) {
+      p2p.unlock();
       *gpu_ptr = NULL;
       return;
     }
@@ -630,8 +633,10 @@ void ARC_memory::Arcp2pCompletion(bool prefCall) {
       if (isDebug) {
         std::cout << "Prefetching oid call: " << pref_it[pref_idx] << std::endl;
       }
-      torch::autograd::ARCCppEngine::preFetchAsync(pref_it[pref_idx]);
-      pref_idx++;
+      bool d2h_finish = torch::autograd::ARCCppEngine::preFetchAsync(pref_it[pref_idx]);
+      if (d2h_finish) {
+        pref_idx++;
+      }
     }
   }
 
@@ -660,17 +665,17 @@ void ARC_memory::Arcp2pCompletion(bool prefCall) {
           if (isDebug)
             std::cout << "CSR FP16 mem free tid: " << req.info->tid << ", size: " << sizeof(__half) * resize << ", fp16: " << req.info->ptr << std::endl;
   
-          device_free(req.info->ptr, sizeof(__half) * resize);
+          p2p_free(req.info->ptr, sizeof(__half) * resize);
         } else if (isFP16 && (resize == 0)) {
           if (isDebug)
             std::cout << "No CSR FP16 mem free tid: " << req.info->tid << ", size: " << sizeof(__half) * numel << ", fp16: " << req.info->ptr << std::endl;
   
-          device_free(req.info->ptr, sizeof(__half) * numel);
+          p2p_free(req.info->ptr, sizeof(__half) * numel);
         } else {
           if (isDebug)
             std::cout << "TODO: Duplicated FP16 mem free tid: " << req.info->tid << ", size: " << req.size << ", fp16: " << req.info->ptr << std::endl;
   
-          device_free(req.info->ptr, req.size);
+          p2p_free(req.info->ptr, req.size);
         }
   
         event_arr_d2h[req.info->tid] = false;

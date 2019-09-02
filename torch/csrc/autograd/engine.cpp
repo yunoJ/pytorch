@@ -31,6 +31,7 @@
 #include <THC/THCGeneral.h>
 
 #include <ATen/native/cuda/arc_flag.h>
+#include <sys/time.h>
 
 namespace torch { namespace autograd {
 
@@ -669,7 +670,7 @@ auto Engine::execute(const edge_list& roots,
   // by sam end
   
 //  size_t freeBytes, dummy1, dummy2;
-  int freeBytes;
+  size_t freeBytes;
   if (at::globalContext().ARCGlobal.isOnDemand()) {
 //    THCudaMemGetInfo(at::globalContext().getTHCState(), &freeBytes, &dummy1, &dummy2);
     freeBytes = at::native::arc_vm.device_occupancy();
@@ -759,8 +760,7 @@ auto Engine::execute(const edge_list& roots,
   if (at::globalContext().ARCGlobal.isOnDemand()) {
     double remainSize = 0;
     if (at::native::arc_vm.is_vdnn()) {
-      remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024);
-//      remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 - 2048);
+      remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 / 1.8);
 //      remainSize = ARCCppEngine::checkCSR((double)0);
    
       if (remainSize > 0)  remainSize = ARCCppEngine::checkLarge(remainSize);
