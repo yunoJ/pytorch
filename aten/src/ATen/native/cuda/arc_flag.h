@@ -19,6 +19,8 @@
 #include <torch/csrc/autograd/saved_variable.h>
 
 #define BLK_SZ ((size_t)1 << 12)
+#define NUM_TENSOR 4096
+#define NUM_OP 8192
 
 using namespace std;
 namespace at { namespace native {
@@ -56,6 +58,7 @@ class ARC_memory {
   void device_malloc(void** gpu_ptr, size_t size);
   void device_free(void* addr, size_t size);
   size_t device_occupancy();
+  size_t p2p_occupancy();
 
   void p2p_malloc(void** gpu_ptr, size_t size);
   void p2p_free(void* addr, size_t size);

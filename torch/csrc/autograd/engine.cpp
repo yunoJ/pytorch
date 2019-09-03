@@ -32,6 +32,7 @@
 
 #include <ATen/native/cuda/arc_flag.h>
 #include <sys/time.h>
+#include <c10/cuda/CUDACachingAllocator.h>
 
 namespace torch { namespace autograd {
 
@@ -669,14 +670,14 @@ auto Engine::execute(const edge_list& roots,
   }
   // by sam end
   
-//  size_t freeBytes, dummy1, dummy2;
   size_t freeBytes;
+  size_t p2pfreeBytes;
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-//    THCudaMemGetInfo(at::globalContext().getTHCState(), &freeBytes, &dummy1, &dummy2);
     freeBytes = at::native::arc_vm.device_occupancy();
-    if (at::globalContext().ARCGlobal.isDebugMode()) {
-      std::cout << "Remaining GPU memory: " << freeBytes << std::endl;
-    }
+    p2pfreeBytes = at::native::arc_vm.p2p_occupancy();
+
+    std::cout << "Remaining GPU memory: " << (double)freeBytes/1024/1024 << std::endl;
+    std::cout << "Remaining GPU memory p2p: " << (double)p2pfreeBytes/1024/1024 << std::endl;
   }
 
   std::call_once(start_threads_flag_, &Engine::start_threads, this);
@@ -760,15 +761,15 @@ auto Engine::execute(const edge_list& roots,
   if (at::globalContext().ARCGlobal.isOnDemand()) {
     double remainSize = 0;
     if (at::native::arc_vm.is_vdnn()) {
-      remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 / 1.8);
-//      remainSize = ARCCppEngine::checkCSR((double)0);
+//      remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 / 1.8);
+      remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 / 1.2);
    
       if (remainSize > 0)  remainSize = ARCCppEngine::checkLarge(remainSize);
 
       if (remainSize > 0)  remainSize = ARCCppEngine::checkFirst(remainSize);
 
       if (remainSize > 0) {
-        std::cout << "We cannot operate this model because it is too large" << std::endl;
+        std::cout << "We cannot operate this model because it is too large: remaining " << remainSize << "MB" << std::endl;
         exit(1);
       }
     }

@@ -14,6 +14,7 @@
 #include <ATen/cpu/FlushDenormal.h>
 
 #include <TH/TH.h>  // for USE_LAPACK
+#include <ATen/native/cuda/arc_flag.h>
 
 namespace at {
 
@@ -118,7 +119,7 @@ REGISTER_LEGACY_TYPE_INIT(LegacyDeviceTypeInit);
 
 // network
 static bool cycle_gan = 0;
-static bool bert = 1;
+static bool bert = 0;
 
 bool Context::ARCGlobalContext::isCycleGAN() {return cycle_gan;}
 bool Context::ARCGlobalContext::isBERT() {return bert;}
@@ -136,7 +137,7 @@ static bool on_forwarding_ = 1; // 1 in forwarding phase. 0 in backprop. phase
 // vector for prefetching
 //Note: C++ standard containers are thread-safe.
 //static std::vector<Oid> back_path_[BP_NUM_PER_ITER];
-static Oid back_path_[BP_NUM_PER_ITER][2048] = {0};
+static Oid back_path_[BP_NUM_PER_ITER][NUM_OP] = {0};
 static int back_path_idx[BP_NUM_PER_ITER] = {-1};
 
 static int cur_back_num = 0;
@@ -176,7 +177,7 @@ void Context::ARCGlobalContext::endOnDemand() {
     static int remaining_backward_in_first_iter = BP_NUM_PER_ITER;
     --remaining_backward_in_first_iter;
     if (remaining_backward_in_first_iter == 0)
-        on_demand_mode_ = 0; 
+        on_demand_mode_ = 0;
 }
 // flag checks 
 bool Context::ARCGlobalContext::isForward() { return on_forwarding_; }

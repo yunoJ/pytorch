@@ -7,7 +7,6 @@
 
 #include <ATen/native/cuda/arc_flag.h>
 #include <ATen/Context.h>
-#define NUM_TENSOR 2048
 
 // [JS] P2P define
 #include <queue>
@@ -191,7 +190,7 @@ void ARC_memory::device_malloc(void** gpu_ptr, size_t size) {
 
   if (reqBlk == 0) return;
 
-  dev.lock();
+//  dev.lock();
 
   while (true) {
     for (int i = deviceStartBlk; i < max_device; i++) {
@@ -216,14 +215,14 @@ void ARC_memory::device_malloc(void** gpu_ptr, size_t size) {
 
         deviceStartBlk += reqBlk;
 
-        dev.unlock();
+//        dev.unlock();
         return;
       }
     }
     deviceStartBlk = 0;  blkCheck = 0;
 
     if (retryCnt++ > 2) {
-      dev.unlock();
+//      dev.unlock();
       *gpu_ptr = NULL;
       return;
     }
@@ -236,7 +235,7 @@ void ARC_memory::device_free(void* addr, size_t size) {
 
   if (device_sz == 0) return;
 
-  dev.lock();
+//  dev.lock();
 
   device_page_map[startBlk] = 0;
 
@@ -246,19 +245,28 @@ void ARC_memory::device_free(void* addr, size_t size) {
 
   deviceStartBlk = std::min((unsigned int)deviceStartBlk, startBlk);
 
-  dev.unlock();
+//  dev.unlock();
 }
 
 size_t ARC_memory::device_occupancy() {
   int occupancy = 0;
-  dev.lock();
+//  dev.lock();
 
   for(int i = 0; i < max_device; i++) {
     occupancy += device_page_map[i];
   }
 
-  dev.unlock();
-  return occupancy * BLK_SZ;
+  return (max_device - occupancy) * BLK_SZ;
+}
+
+size_t ARC_memory::p2p_occupancy() {
+  int occupancy = 0;
+
+  for(int i = 0; i < max_p2p; i++) {
+    occupancy += p2p_page_map[i];
+  }
+
+  return (max_p2p - occupancy) * BLK_SZ;
 }
 
 void ARC_memory::p2p_malloc(void** gpu_ptr, size_t size) {
@@ -270,7 +278,7 @@ void ARC_memory::p2p_malloc(void** gpu_ptr, size_t size) {
 
   if (reqBlk == 0) return;
 
-  p2p.lock();
+//  p2p.lock();
 
   while (true) {
     for (int i = p2pStartBlk; i < max_p2p; i++) {
@@ -295,14 +303,14 @@ void ARC_memory::p2p_malloc(void** gpu_ptr, size_t size) {
 
         p2pStartBlk += reqBlk;
 
-        p2p.unlock();
+//        p2p.unlock();
         return;
       }
     }
     p2pStartBlk = 0;  blkCheck = 0;
 
     if (retryCnt++ > 2) {
-      p2p.unlock();
+//      p2p.unlock();
       *gpu_ptr = NULL;
       return;
     }
@@ -315,7 +323,7 @@ void ARC_memory::p2p_free(void* addr, size_t size) {
 
   if (p2p_sz == 0) return;
 
-  p2p.lock();
+//  p2p.lock();
 
   p2p_page_map[startBlk] = 0;
 
@@ -325,7 +333,7 @@ void ARC_memory::p2p_free(void* addr, size_t size) {
 
   p2pStartBlk = std::min((unsigned int)p2pStartBlk, startBlk);
 
-  p2p.unlock();
+//  p2p.unlock();
 }
 
 void* ARC_memory::get_fp16_addr(int tid) {
@@ -646,7 +654,7 @@ void ARC_memory::Arcp2pCompletion(bool prefCall) {
       return;
     }
 
-    m2.lock();
+//    m2.lock();
     // first, run completer of arcp2p, this will update cpl.issued
     arcp2p_completion(arc_handle);
 
@@ -707,7 +715,7 @@ void ARC_memory::Arcp2pCompletion(bool prefCall) {
           void* bit = arc_vm.get_bit_addr(req.info->tid);
           void* pos = arc_vm.get_pos_addr(req.info->tid);
           float *nz_dst;
-          device_malloc((void **)&nz_dst, resize * sizeof(float));
+          p2p_malloc((void **)&nz_dst, resize * sizeof(float));
           cudaMemsetAsync((void *)nz_dst, 0, resize * sizeof(float), req.str);
   
           float_scale<<<(numel + nTPB - 1) / nTPB, nTPB, 0, req.str>>>((__half *)req.info->ptr, nz_dst, resize);
@@ -718,7 +726,7 @@ void ARC_memory::Arcp2pCompletion(bool prefCall) {
             zero_insert_float<<<(numel + nTPB - 1) / nTPB, nTPB, 0, req.str>>>((unsigned int*)bit, (unsigned int*)pos, nz_dst, (float *)req.info->dst, numel);
           }
   
-          device_free((void *)nz_dst, resize * sizeof(float));
+          p2p_free((void *)nz_dst, resize * sizeof(float));
         } else if (isFP16 && (resize == 0)) {
           uint64_t nTPB = req.info->ntpb;
           uint64_t numel = req.info->numel;
@@ -763,7 +771,7 @@ void ARC_memory::Arcp2pCompletion(bool prefCall) {
         }
       }
     }
-    m2.unlock();
+//    m2.unlock();
   }
 }
 

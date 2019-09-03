@@ -2869,26 +2869,25 @@ Tensor VariableType::addmm(Tensor & self, Tensor & mat1, Tensor & mat2, Scalar b
   if (compute_requires_grad( self, mat1, mat2 )) {
     grad_fn = std::shared_ptr<AddmmBackward>(new AddmmBackward(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self, mat1, mat2 ));
-    if (at::globalContext().ARCGlobal.isForward()){
+    if (at::globalContext().ARCGlobal.isForward()) {
       if (m1id != 0) {
         ARCCppEngine::offLoad(mat1, /*(TraceableFunction*)(grad_fn.get()), Async,*/ oid, &(grad_fn->mat1_), false);
         grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
-      }
-      else
+      } else {
         grad_fn->mat1_ = SavedVariable(mat1, false);
-    }
-    else {
+      }
+    } else {
       grad_fn->mat1_ = SavedVariable(mat1, false);
     }
+
     if (at::globalContext().ARCGlobal.isForward()) {
       if (m2id != 0) {
         ARCCppEngine::offLoad(mat2, oid, &(grad_fn->mat2_), false);
         grad_fn->mat2_ = SavedVariable(mat2, false);
-      }
-      else
+      } else {
         grad_fn->mat2_ = SavedVariable(mat2, false);
-    }
-    else {
+      }
+    } else {
       grad_fn->mat2_ = SavedVariable(mat2, false);
     }
       
@@ -9680,6 +9679,7 @@ Tensor VariableType::relu(const Tensor & self) {
     grad_fn->set_next_edges(collect_next_edges( self ));
     grad_fn->self_ = SavedVariable(self, false);
   }
+
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
   if (jit::tracer::isTracing()) {
@@ -9710,7 +9710,7 @@ Tensor VariableType::relu(const Tensor & self) {
   if (self__impl_saved) AT_ASSERT(self__impl_saved == self_.getIntrusivePtr());
   #endif
   if (grad_fn) {
-      set_history(flatten_tensor_args( result ), grad_fn);
+    set_history(flatten_tensor_args( result ), grad_fn);
   }
   if (tracer_state) {
     jit::tracer::setTracingState(std::move(tracer_state));
@@ -9772,10 +9772,10 @@ Tensor & VariableType::relu_(Tensor & self) {
   }
   if (grad_fn) {
     if (at::globalContext().ARCGlobal.isForward()){
-      ARCCppEngine::offLoad(self, /* (TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result_), true);
-
       // ARC check flag if relu is computed
       at::native::arc_vm.relu_thru = true;
+
+      ARCCppEngine::offLoad(self, /* (TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result_), true);
     }
     else
       grad_fn->result_ = SavedVariable(self, true);

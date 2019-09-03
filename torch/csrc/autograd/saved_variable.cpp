@@ -127,18 +127,17 @@ static std::vector<std::thread> memcpy_threads_;
 static std::map<Oid,std::vector<PFInfo>> pf_dict_;
 static std::map<Oid, c10::StreamId> pf_sync_dict_;
 
-static at::Tensor tensor_dict_[2048];
-static bool tensor_dict_check_[2048] = {false};
-//static bool tensor_dict_bool_[2048] = {false};
-static bool tensor_pf_sync_dict_[2048] = {false};
+static at::Tensor tensor_dict_[NUM_TENSOR];
+static bool tensor_dict_check_[NUM_TENSOR] = {false};
+static bool tensor_pf_sync_dict_[NUM_TENSOR] = {false};
 
-static bool tensor_sync_dict_[2048] = {false};
+static bool tensor_sync_dict_[NUM_TENSOR] = {false};
 static std::map<Tid, Oid> last_op_dict_;
 
 static std::map<Tid, std::pair<double, bool>> liveness_temp;
 
-static bool liveness_result[2048] = {false};
-static bool liveness_result_csr[2048] = {false};
+static bool liveness_result[NUM_TENSOR] = {false};
+static bool liveness_result_csr[NUM_TENSOR] = {false};
 
 // thread for prefetch
 //static std::thread prefetch_thread_;
@@ -232,6 +231,8 @@ void ARCCppEngine::offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync s
   if (tensor_sync_dict_[tid]) {// this tensor is alredy offloaded
     if (at::globalContext().ARCGlobal.isDebugMode())
       std::cout << tid <<  ": this tensor is already offloaded" << std::endl;
+
+    at::native::arc_vm.relu_thru = false;
     return;
   }
 
@@ -261,7 +262,7 @@ void ARCCppEngine::joinOffload() {
     int count = 1;
     while(count > 0) {
       count = 0;
-      for (int i = 0; i < 2048; i++) {
+      for (int i = 0; i < NUM_TENSOR; i++) {
         count += (int)at::native::arc_vm.event_arr_d2h[i];
         at::native::arc_vm.Arcp2pCompletion(false);
       }
@@ -428,7 +429,7 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
           tensor_pf_sync_dict_[tid] = true;
           break;
         }
-        at::native::arc_vm.Arcp2pCompletion(false);
+        at::native::arc_vm.Arcp2pCompletion(true);
       } else {
         if (tensor_dict_[tid].device().type() == c10::DeviceType::CUDA) {
           int resize = at::native::arc_vm.get_resize(tid);
@@ -626,15 +627,15 @@ void ARCCppEngine::resetCppEngine() {
   }
   
 
-  for(auto i = 0; i < 2048; i ++) {
+  for(auto i = 0; i < NUM_TENSOR; i ++) {
     if (tensor_pf_sync_dict_[i] == true) {
       tensor_dict_[i].reset();
     }
   }
 
-  memset(tensor_dict_check_, 0, sizeof(bool) * 2048);
-  memset(tensor_sync_dict_, 0, sizeof(bool) * 2048);
-  memset(tensor_pf_sync_dict_, 0, sizeof(bool) * 2048);
+  memset(tensor_dict_check_, 0, sizeof(bool) * NUM_TENSOR);
+  memset(tensor_sync_dict_, 0, sizeof(bool) * NUM_TENSOR);
+  memset(tensor_pf_sync_dict_, 0, sizeof(bool) * NUM_TENSOR);
   pf_dict_.clear();
   pf_sync_dict_.clear();
 
