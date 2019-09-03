@@ -761,8 +761,9 @@ auto Engine::execute(const edge_list& roots,
   if (at::globalContext().ARCGlobal.isOnDemand()) {
     double remainSize = 0;
     if (at::native::arc_vm.is_vdnn()) {
-//      remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 / 1.8);
-      remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 / 1.2);
+      remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 / 4);
+//      remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 / 2);
+//      remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 / 1.2);
    
       if (remainSize > 0)  remainSize = ARCCppEngine::checkLarge(remainSize);
 

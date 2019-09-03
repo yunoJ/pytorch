@@ -9771,7 +9771,7 @@ Tensor & VariableType::relu_(Tensor & self) {
     jit::tracer::addOutput(node, self);
   }
   if (grad_fn) {
-    if (at::globalContext().ARCGlobal.isForward()){
+    if (at::globalContext().ARCGlobal.isForward()) {
       // ARC check flag if relu is computed
       at::native::arc_vm.relu_thru = true;
 

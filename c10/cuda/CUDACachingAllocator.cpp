@@ -488,6 +488,10 @@ struct THCCachingAllocator
         }
 
         if (*devPtr == NULL) {
+//          std::cout << "Remained size: " << (double)at::native::arc_vm.device_occupancy()/1024/1024 << std::endl;
+          if (at::native::arc_vm.is_debug()) {
+            std::cout << "arc_vm.device_malloc() failed" << std::endl;
+          }
           return cudaErrorMemoryAllocation;
         }
       }

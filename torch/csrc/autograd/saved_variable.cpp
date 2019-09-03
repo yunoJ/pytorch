@@ -121,6 +121,7 @@ const char* ERR_BACKWARD_TWICE =
 // //////////////////////////////////////////////////
 
 // thread vector(it may cause system slower. Need an optimization such as pooling) 
+
 static std::vector<std::thread> memcpy_threads_;
 // dictionaries for prefetching
 // Note: C++ standard containers are thread-safe.
@@ -136,8 +137,8 @@ static std::map<Tid, Oid> last_op_dict_;
 
 static std::map<Tid, std::pair<double, bool>> liveness_temp;
 
-static bool liveness_result[NUM_TENSOR] = {false};
-static bool liveness_result_csr[NUM_TENSOR] = {false};
+static bool liveness_result[3][NUM_TENSOR] = {false};
+static bool liveness_result_csr[3][NUM_TENSOR] = {false};
 
 // thread for prefetch
 //static std::thread prefetch_thread_;
@@ -146,7 +147,8 @@ static double accumSize = 0;
 
 double ARCCppEngine::checkCSR(double freeSize) {
   double remainSize = accumSize - freeSize;
-  std::cout << "checkCSR" << std::endl;
+  accumSize = 0;
+  int cur_back_num = at::globalContext().ARCGlobal.curBackNum();
 
   if (remainSize <= 0) {
     return 0;
@@ -158,8 +160,8 @@ double ARCCppEngine::checkCSR(double freeSize) {
         std::cout << "\tcheckCSR tid: " << it->first << ", size: " << (it->second).first << std::endl;
       }
       remainSize -= (it->second).first;
-      liveness_result[it->first] = true;
-      liveness_result_csr[it->first] = (it->second).second;
+      liveness_result[cur_back_num][it->first] = true;
+      liveness_result_csr[cur_back_num][it->first] = (it->second).second;
     }
 
     if (remainSize <= 0) {
@@ -171,15 +173,16 @@ double ARCCppEngine::checkCSR(double freeSize) {
 }
 
 double ARCCppEngine::checkLarge(double remainSize) {
+  int cur_back_num = at::globalContext().ARCGlobal.curBackNum();
   for (auto it = liveness_temp.begin(); it != liveness_temp.end(); ++it) {
-    if (liveness_result[it->first] == false) {
+    if (liveness_result[cur_back_num][it->first] == false) {
       if ((it->second).first > 12) {
         if (at::globalContext().ARCGlobal.isDebugMode()) {
           std::cout << "\tcheckLarge tid: " << it->first << ", size: " << (it->second).first << std::endl;
         }
         remainSize -= (it->second).first;
-        liveness_result[it->first] = true;
-        liveness_result_csr[it->first] = (it->second).second;
+        liveness_result[cur_back_num][it->first] = true;
+        liveness_result_csr[cur_back_num][it->first] = (it->second).second;
       }
     }
 
@@ -190,14 +193,15 @@ double ARCCppEngine::checkLarge(double remainSize) {
 }
 
 double ARCCppEngine::checkFirst(double remainSize) {
+  int cur_back_num = at::globalContext().ARCGlobal.curBackNum();
   for (auto it = liveness_temp.begin(); it != liveness_temp.end(); ++it) {
-    if (liveness_result[it->first] == false) {
+    if (liveness_result[cur_back_num][it->first] == false) {
       if (at::globalContext().ARCGlobal.isDebugMode()) {
         std::cout << "\tcheckFirst tid: " << it->first << ", size: " << (it->second).first << std::endl;
       }
       remainSize -= (it->second).first;
-      liveness_result[it->first] = true;
-      liveness_result_csr[it->first] = (it->second).second;
+      liveness_result[cur_back_num][it->first] = true;
+      liveness_result_csr[cur_back_num][it->first] = (it->second).second;
     }
 
     if (remainSize <= 0)  break;
@@ -215,8 +219,9 @@ void ARCCppEngine::offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync s
 
   // partial offloading
   auto tid =  t.unsafeGetIntrusivePtr()->tensor_id;
+  int cur_back_num = at::globalContext().ARCGlobal.curBackNum();
 
-  if (liveness_result[tid] == false && !at::globalContext().ARCGlobal.isOnDemand()) {
+  if (liveness_result[cur_back_num][tid] == false && !at::globalContext().ARCGlobal.isOnDemand()) {
     *fetch_loc = SavedVariable(t, isOutput);
     return;
   }
@@ -275,6 +280,7 @@ void ARCCppEngine::joinOffload() {
 }
 
 void ARCCppEngine::offLoadAsync(at::Tensor tensor) {
+  int cur_back_num = at::globalContext().ARCGlobal.curBackNum();
   auto str = c10::cuda::getStreamFromPool(false, 0);
 //  str.synchronize();
   c10::cuda::CUDAStreamGuard csg(str);
@@ -296,7 +302,7 @@ void ARCCppEngine::offLoadAsync(at::Tensor tensor) {
     tensor_dict_[tid] = tensor.ARCto(opt, false, true, false);
     tensor_dict_check_[tid] = true;
   } else {
-    tensor_dict_[tid] = tensor.ARCto(opt, false, true, liveness_result_csr[tid]);
+    tensor_dict_[tid] = tensor.ARCto(opt, false, true, liveness_result_csr[cur_back_num][tid]);
     tensor_dict_check_[tid] = true;
   }
 
@@ -553,6 +559,7 @@ bool ARCCppEngine::fetchRequiredTensors_(Oid oid, ARCSync sync) {
   }
   
   auto fetch_vec = pf_dict_[oid];
+  int cur_back_num = at::globalContext().ARCGlobal.curBackNum();
 
   auto str = c10::cuda::getStreamFromPool(false, 0);
   c10::cuda::CUDAStreamGuard csg(str);
@@ -602,7 +609,7 @@ bool ARCCppEngine::fetchRequiredTensors_(Oid oid, ARCSync sync) {
       if (at::globalContext().ARCGlobal.isOnDemand()) {
         tref = tref.ARCto(opt, false, true, false);
       } else {
-        tref = tref.ARCto(opt, false, true, liveness_result_csr[tid]);
+        tref = tref.ARCto(opt, false, true, liveness_result_csr[cur_back_num][tid]);
       }
     } else {
       if (at::globalContext().ARCGlobal.isDebugMode())
@@ -638,6 +645,7 @@ void ARCCppEngine::resetCppEngine() {
   memset(tensor_pf_sync_dict_, 0, sizeof(bool) * NUM_TENSOR);
   pf_dict_.clear();
   pf_sync_dict_.clear();
+  liveness_temp.clear();
 
   --remaining_backward;
   if (remaining_backward == 0) {
