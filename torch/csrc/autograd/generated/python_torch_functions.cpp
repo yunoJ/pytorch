@@ -29,7 +29,7 @@
 #include <initializer_list>
 #include <stdexcept>
 #include <utility>
-
+#include <tuple>
 #include <ATen/native/cuda/arc_flag.h>
 
 using at::Tensor;
@@ -2050,9 +2050,43 @@ static PyObject * THPVariable_adaptive_max_pool1d(PyObject* self_, PyObject* arg
   ParsedArgs<2> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
-  if (r.idx == 0) {
-    return wrap(dispatch_adaptive_max_pool1d(r.tensor(0), r.intlist(1)));
+  // Get Oid
+  auto oid = at::globalContext().ARCGlobal.getNewOid();
+  // DEBUG: print operation type, oid
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION ADAPTIVE_MAX_POOL1D, OPID: ";
+    std::cout << oid << std::endl;
   }
+
+  Tensor input = r.tensor(0);
+
+  // ON_DEMAND_MODE: fetch input from host if it lies in host memory
+  if(at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
+    ARCPyEngine::fetch(input);
+
+  std::tuple<Tensor,Tensor> outputs;
+  if (r.idx == 0) {
+    outputs = dispatch_adaptive_max_pool1d(input, r.intlist(1));
+  }
+   
+  // Give new tensor id to the output
+  at::globalContext().ARCGlobal.setNewTid(std::get<0>(outputs));
+  at::globalContext().ARCGlobal.setNewTid(std::get<1>(outputs));
+
+  if (at::native::arc_vm.is_using_ssd())
+    at::native::arc_vm.Arcp2pCompletion(false);
+  // DEBUG: print output tid
+  //std::cout << "OUTPUT TENSOR ID: ";
+  //std::cout << at::globalContext().ARCGlobal.getTid(output) << std::endl;
+  
+  // ON_DEMAND_MODE: offloads output to host memory
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCPyEngine::offLoad(std::get<0>(outputs));
+    ARCPyEngine::offLoad(std::get<1>(outputs));
+  }
+  
+  return wrap(outputs);
+  
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }
@@ -6475,11 +6509,42 @@ static PyObject * THPVariable_lstm(PyObject* self_, PyObject* args, PyObject* kw
   ParsedArgs<9> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
-  if (r.idx == 0) {
-    return wrap(dispatch_lstm(r.tensor(0), r.tensor(1), r.tensorlist(2), r.tensorlist(3), r.toBool(4), r.toInt64(5), r.toDouble(6), r.toBool(7), r.toBool(8)));
-  } else if (r.idx == 1) {
-    return wrap(dispatch_lstm(r.tensor(0), r.tensorlist(1), r.tensorlist(2), r.toBool(3), r.toInt64(4), r.toDouble(5), r.toBool(6), r.toBool(7), r.toBool(8)));
+  auto oid = at::globalContext().ARCGlobal.getNewOid();
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION LSTM, OPID: ";
+    std::cout << oid << std::endl;
   }
+  Tensor input = r.tensor(0);
+
+  if(at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
+    ARCPyEngine::fetch(input);
+
+  std::tuple<Tensor,Tensor,Tensor> outputs;
+  //Tensor output;
+  if (r.idx == 0) {
+    outputs = dispatch_lstm(input, r.tensor(1), r.tensorlist(2), r.tensorlist(3), r.toBool(4), r.toInt64(5), r.toDouble(6), r.toBool(7), r.toBool(8));
+  } else if (r.idx == 1) {
+    outputs = dispatch_lstm(input, r.tensorlist(1), r.tensorlist(2), r.toBool(3), r.toInt64(4), r.toDouble(5), r.toBool(6), r.toBool(7), r.toBool(8));
+  }
+
+  at::globalContext().ARCGlobal.setNewTid(std::get<0>(outputs));
+  at::globalContext().ARCGlobal.setNewTid(std::get<1>(outputs));
+  at::globalContext().ARCGlobal.setNewTid(std::get<2>(outputs));
+  if (at::native::arc_vm.is_using_ssd())
+    at::native::arc_vm.Arcp2pCompletion(false);
+
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCPyEngine::offLoad(std::get<0>(outputs));
+    ARCPyEngine::offLoad(std::get<1>(outputs));
+    ARCPyEngine::offLoad(std::get<2>(outputs));
+  }
+  
+  return wrap(outputs);
+  
+
+
+
+
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }

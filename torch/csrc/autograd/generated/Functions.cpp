@@ -6411,16 +6411,25 @@ variable_list ReluBackward0::apply(variable_list&& grads) {
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
   
-  //SNU-ARC
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-  //  ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid(), Sync);
   }
+  ARCCppEngine::preFetchSync(this->getOid(), true);
+
+
   
   auto self = self_.unpack();
   if (should_compute_output({ self_ix })) {
     auto grad_result = threshold_backward(grad, self, 0);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  
+  ARCCppEngine::dropTensor(this->getOid(), &self_);
+
+  if (at::native::arc_vm.is_vdnn()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+  
   return grad_inputs;
 }
 variable_list ReluBackward1::apply(variable_list&& grads) {
@@ -6552,11 +6561,27 @@ variable_list LeakyReluBackward0::apply(variable_list&& grads) {
   auto self_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
+ 
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCCppEngine::preFetch(this->getOid(), Sync);
+  }
+  ARCCppEngine::preFetchSync(this->getOid()); 
+
   auto self = self_.unpack();
+  
   if (should_compute_output({ self_ix })) {
     auto grad_result = leaky_relu_backward(grad, self, negative_slope);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  ARCCppEngine::dropTensor(this->getOid(), &self_);
+
+  if (at::native::arc_vm.is_vdnn()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+
+
+  
   return grad_inputs;
 }
 variable_list LeakyReluBackward1::apply(variable_list&& grads) {
@@ -8628,6 +8653,14 @@ variable_list CudnnRnnBackward::apply(variable_list&& grads) {
   auto hx_ix = gen.range(1);
   auto cx_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
+
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCCppEngine::preFetch(this->getOid(), Sync);
+  }
+  ARCCppEngine::preFetchSync(this->getOid());
+  
+
+
   auto input = input_.unpack();
   auto weight = unpack_list(weight_);
   auto hx = hx_.unpack();
@@ -8656,6 +8689,16 @@ variable_list CudnnRnnBackward::apply(variable_list&& grads) {
       if (should_compute_output({ weight_ix })) {
         copy_range(grad_inputs, weight_ix, std::get<3>(grad_result));
       }
+  }
+  
+  ARCCppEngine::dropTensor(this->getOid(), &input_);
+  ARCCppEngine::dropTensor(this->getOid(), &hx_);
+  ARCCppEngine::dropTensor(this->getOid(), &cx_);
+  ARCCppEngine::dropTensor(this->getOid(), &result0_);
+  ARCCppEngine::dropTensor(this->getOid(), &result3_);
+  ARCCppEngine::dropTensor(this->getOid(), &result4_);
+  if (at::native::arc_vm.is_vdnn()) {
+    at::native::arc_vm.Arcp2pCompletion(true);
   }
   return grad_inputs;
 }

@@ -579,13 +579,42 @@ static PyObject * THPVariable_leaky_relu(PyObject* self_, PyObject* args, PyObje
   ParsedArgs<3> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
 
+  auto oid = at::globalContext().ARCGlobal.getNewOid();
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION LEAKY_RELU(INPLACE), OPID: ";
+    std::cout << oid << std::endl;
+  }
+  Tensor input = r.tensor(0);
+  //std::cout << "leaky relu in: " << input[0][0][0][0].item().toFloat() << std::endl;
+
+  //std::cout << "INPUT TENSOR ID: ";
+  //auto itid = at::globalContext().ARCGlobal.getTid(input);
+  //std::cout << itid << std::endl;
+
+  if (at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
+    ARCPyEngine::fetch(input);
+
+  Tensor output;
   if (r.idx == 0) {
     if (r.isNone(2)) {
-      return wrap(dispatch_leaky_relu(r.tensor(0), r.scalar(1)));
+      output = dispatch_leaky_relu(input, r.scalar(1));
     } else {
-      return wrap(dispatch_leaky_relu(r.tensor(0), r.scalar(1), r.tensor(2)));
+      output = dispatch_leaky_relu(input, r.scalar(1), r.tensor(2));
     }
   }
+
+  at::globalContext().ARCGlobal.setNewTid(output);
+
+  if (at::native::arc_vm.is_using_ssd())
+    at::native::arc_vm.Arcp2pCompletion(false);
+
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCPyEngine::offLoad(output);
+  }
+
+  return wrap(output);
+  
+
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }

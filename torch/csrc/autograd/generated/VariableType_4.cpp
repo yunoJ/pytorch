@@ -6473,7 +6473,18 @@ Tensor VariableType::leaky_relu(const Tensor & self, Scalar negative_slope) {
   if (compute_requires_grad( self )) {
     grad_fn = std::shared_ptr<LeakyReluBackward0>(new LeakyReluBackward0(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self ));
-    grad_fn->self_ = SavedVariable(self, false);
+    
+    if (at::globalContext().ARCGlobal.isForward()){
+      ARCCppEngine::offLoad(self, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else {
+      grad_fn->self_ = SavedVariable(self, false);
+    }
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
+
     grad_fn->negative_slope = negative_slope;
   }
   torch::jit::Node* node = nullptr;

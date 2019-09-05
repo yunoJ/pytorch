@@ -848,11 +848,21 @@ std::tuple<Tensor,Tensor,Tensor,Tensor,Tensor> VariableType::_cudnn_rnn(const Te
   if (compute_requires_grad( input, weight, hx, cx )) {
     grad_fn = std::shared_ptr<CudnnRnnBackward>(new CudnnRnnBackward(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( input, weight, hx, cx ));
-    grad_fn->input_ = SavedVariable(input, false);
+    if (at::globalContext().ARCGlobal.isForward()) {
+      ARCCppEngine::offLoad(input, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->input_), false);
+      ARCCppEngine::offLoad(hx, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->hx_), false);
+      ARCCppEngine::offLoad(cx, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->cx_), false);
+      
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else {
+      grad_fn->input_ = SavedVariable(input, false);
+      grad_fn->hx_ = SavedVariable(hx, false);
+      grad_fn->cx_ = SavedVariable(cx, false);
+    }
+ 
     grad_fn->weight_ = make_saved_variable_list(weight);
-    grad_fn->weight_stride0 = weight_stride0;
-    grad_fn->hx_ = SavedVariable(hx, false);
-    grad_fn->cx_ = SavedVariable(cx, false);
+    grad_fn->weight_stride0 = weight_stride0; 
     grad_fn->mode = mode;
     grad_fn->hidden_size = hidden_size;
     grad_fn->num_layers = num_layers;
@@ -863,6 +873,8 @@ std::tuple<Tensor,Tensor,Tensor,Tensor,Tensor> VariableType::_cudnn_rnn(const Te
     grad_fn->batch_sizes = batch_sizes.vec();
     grad_fn->dropout_state_ = SavedVariable(dropout_state, false);
     grad_fn->weight_size_ = weight.size();
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
   }
   Tensor result0;
   Tensor result1;
@@ -967,9 +979,22 @@ std::tuple<Tensor,Tensor,Tensor,Tensor,Tensor> VariableType::_cudnn_rnn(const Te
     jit::tracer::addOutput(node, result4);
   }
   if (grad_fn) {
-    grad_fn->result0_ = SavedVariable(result0, true);
-    grad_fn->result3_ = SavedVariable(result3, true);
-    grad_fn->result4_ = SavedVariable(result4, true);
+    if (at::globalContext().ARCGlobal.isForward()) {
+      ARCCppEngine::offLoad(result0, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result0_), true);
+      ARCCppEngine::offLoad(result3, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result3_), true);
+      ARCCppEngine::offLoad(result4, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result4_), true);
+      
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else {   
+        grad_fn->result0_ = SavedVariable(result0, true);
+        grad_fn->result3_ = SavedVariable(result3, true);
+        grad_fn->result4_ = SavedVariable(result4, true);
+    }
+ 
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
+
   }
   return std::make_tuple(std::move(result0), std::move(result1), std::move(result2), std::move(result3), std::move(result4));
 }
@@ -9677,7 +9702,15 @@ Tensor VariableType::relu(const Tensor & self) {
   if (compute_requires_grad( self )) {
     grad_fn = std::shared_ptr<ReluBackward0>(new ReluBackward0(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self ));
-    grad_fn->self_ = SavedVariable(self, false);
+
+    if (at::globalContext().ARCGlobal.isForward()) {
+      ARCCppEngine::offLoad(self, /* (TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
+    }
+    else
+      grad_fn->self_ = SavedVariable(self, false);
+
+    if (at::native::arc_vm.is_using_ssd())
+        at::native::arc_vm.Arcp2pCompletion(false);
   }
 
   torch::jit::Node* node = nullptr;
