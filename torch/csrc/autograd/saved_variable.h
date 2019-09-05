@@ -71,6 +71,8 @@ enum ARCSync {Sync, Async};
 // support async prefetching, offloading operation 
 struct ARCCppEngine{
 public:
+  static void checkTest(double freeSize);
+
   // Select tensors for efficient movement
   static double checkCSR(double freeSize); // First priority
   static double checkLarge(double remainSize); // Second priority

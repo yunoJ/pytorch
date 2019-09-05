@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <sys/time.h>
 
 // [JS] for p2p library
 #include <c10/core/Storage.h>
@@ -54,6 +55,8 @@ class ARC_memory {
   mutex dev;
   mutex p2p;
   mutex m2;
+
+  int on_the_fly;
 
   void device_malloc(void** gpu_ptr, size_t size);
   void device_free(void* addr, size_t size);
@@ -112,6 +115,14 @@ class ARC_memory {
   int pref_end;
   int pref_idx;
 
+  size_t init_4m;
+  size_t init_8m;
+  size_t init_16m;
+  size_t init_32m;
+  size_t init_64m;
+
+  struct timeval tv1, tv2;
+
  private:
   void* deviceAddr;
   bool* deviceTable;
@@ -120,8 +131,17 @@ class ARC_memory {
 
   void* p2pAddr;
   bool* p2pTable;
-  int p2pStartBlk;
+  int* p2pStartBlk;
   unsigned int* p2p_page_map;
+
+  int p2pMaxBlk;
+
+  int p2pBlk_0_4;
+  int p2pBlk_4_8;
+  int p2pBlk_8_16;
+  int p2pBlk_16_32;
+  int p2pBlk_32_64;
+  int p2pBlk_64;
 
   uint64_t* fp16_ptr_arr;
   uint64_t* bit_ptr_arr;

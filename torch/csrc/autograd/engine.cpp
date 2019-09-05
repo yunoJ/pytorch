@@ -660,6 +660,8 @@ auto Engine::execute(const edge_list& roots,
   // TODO Wait until all SSD commands are finished
   at::globalContext().ARCGlobal.endForward();
   ARCCppEngine::joinOffload();
+  c10::cuda::CUDACachingAllocator::emptyCache();
+//  std::cout << "================Forward end: " << at::globalContext().ARCGlobal.curBackNum() << " ===================" << std::endl;
 
   if (!at::globalContext().ARCGlobal.isOnDemand()) {
     at::native::arc_vm.pref_it = at::globalContext().ARCGlobal.getBackPath();
@@ -758,12 +760,18 @@ auto Engine::execute(const edge_list& roots,
 //  if (!at::globalContext().ARCGlobal.isOnDemand())
 //    ARCCppEngine::joinPrefetchThread();
 
+  c10::cuda::CUDACachingAllocator::emptyCache();
+//  std::cout << "================Backward end: " << at::globalContext().ARCGlobal.curBackNum() << " ===================" << std::endl;
+
   if (at::globalContext().ARCGlobal.isOnDemand()) {
+    if (at::native::arc_vm.is_vdnn()) {
+      ARCCppEngine::checkTest((double)freeBytes / 1024 / 1024 / 1.2);
+    }
+
     double remainSize = 0;
     if (at::native::arc_vm.is_vdnn()) {
-      remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 / 4);
-//      remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 / 2);
-//      remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 / 1.2);
+      std::cout << "Flush scheduling start" << std::endl;
+      remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 / 8);
    
       if (remainSize > 0)  remainSize = ARCCppEngine::checkLarge(remainSize);
 
