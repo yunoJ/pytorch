@@ -1139,6 +1139,10 @@ std::tuple<Tensor,Tensor> VariableType::_fused_dropout(const Tensor & self, doub
     return at::_fused_dropout(self_, p, generator);
   })();
   std::tie(result0, result1) = as_variable(std::move(tmp));
+  
+  at::globalContext().ARCGlobal.setNewTid(result0);
+  at::globalContext().ARCGlobal.setNewTid(result1);
+
   #ifndef NDEBUG
   if (self__storage_saved.has_value())
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));

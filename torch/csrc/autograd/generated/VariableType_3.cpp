@@ -9353,6 +9353,9 @@ Tensor VariableType::sqrt(const Tensor & self) {
     return at::sqrt(self_);
   })();
   auto result = as_variable(std::move(tmp));
+  
+  at::globalContext().ARCGlobal.setNewTid(result);
+
   #ifndef NDEBUG
   if (self__storage_saved.has_value())
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));

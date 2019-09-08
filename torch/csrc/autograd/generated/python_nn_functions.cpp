@@ -91,7 +91,7 @@ static PyObject * THPVariable_adaptive_avg_pool2d(PyObject* self_, PyObject* arg
     std::cout << "ADAPTIVE AVGPOOL2D OUTPUT TENSOR ID: " << at:: globalContext().ARCGlobal.getTid(output) << std::endl;
   }
 
-  if (at::globalContext().ARCGlobal.isOnDemand()) {
+  if (at::globalContext().ARCGlobal.isOnDemand() && output.device().type() == at::DeviceType::CPU) {
     ARCPyEngine::offLoad(output);
   }
 
@@ -205,7 +205,7 @@ static PyObject * THPVariable_avg_pool2d(PyObject* self_, PyObject* args, PyObje
     std::cout << "AVGPOOL2D OUTPUT TENSOR ID: " << at:: globalContext().ARCGlobal.getTid(output) << std::endl;
   }
 
-  if (at::globalContext().ARCGlobal.isOnDemand()) {
+  if (at::globalContext().ARCGlobal.isOnDemand() && output.device().type() == at::DeviceType::CPU) {
     ARCPyEngine::offLoad(output);
   }
 
@@ -608,7 +608,7 @@ static PyObject * THPVariable_leaky_relu(PyObject* self_, PyObject* args, PyObje
   if (at::native::arc_vm.is_using_ssd())
     at::native::arc_vm.Arcp2pCompletion(false);
 
-  if (at::globalContext().ARCGlobal.isOnDemand()) {
+  if (at::globalContext().ARCGlobal.isOnDemand() && output.device().type() == at::DeviceType::CPU) {
     ARCPyEngine::offLoad(output);
   }
 
@@ -655,7 +655,7 @@ static PyObject * THPVariable_leaky_relu_(PyObject* self_, PyObject* args, PyObj
   if (at::native::arc_vm.is_using_ssd())
     at::native::arc_vm.Arcp2pCompletion(false);
 
-  if (at::globalContext().ARCGlobal.isOnDemand()) {
+  if (at::globalContext().ARCGlobal.isOnDemand() && input.device().type() == at::DeviceType::CPU) {
     ARCPyEngine::offLoad(input);
   }
 
@@ -952,7 +952,7 @@ static PyObject * THPVariable_nll_loss(PyObject* self_, PyObject* args, PyObject
   }
 
 
-  if (at::globalContext().ARCGlobal.isOnDemand()) {
+  if (at::globalContext().ARCGlobal.isOnDemand() && output.device().type() == at::DeviceType::CPU) {
     ARCPyEngine::offLoad(output);
   }
 
@@ -1060,7 +1060,7 @@ static PyObject * THPVariable_reflection_pad2d(PyObject* self_, PyObject* args, 
   }
 
 
-  if (at::globalContext().ARCGlobal.isOnDemand()) {
+  if (at::globalContext().ARCGlobal.isOnDemand() && output.device().type() == at::DeviceType::CPU) {
     ARCPyEngine::offLoad(output);
   }
 

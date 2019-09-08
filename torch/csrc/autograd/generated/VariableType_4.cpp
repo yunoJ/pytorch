@@ -3785,6 +3785,11 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::cudnn_batch_norm(Tensor & input, 
     return at::cudnn_batch_norm(input_, weight_, bias_, running_mean_, running_var_, training, exponential_average_factor, epsilon);
   })();
   std::tie(result0, result1, result2) = as_variable(std::move(tmp));
+  
+  at::globalContext().ARCGlobal.setNewTid(result0);
+  at::globalContext().ARCGlobal.setNewTid(result1);
+  at::globalContext().ARCGlobal.setNewTid(result2);
+
   #ifndef NDEBUG
   if (input__storage_saved.has_value())
     AT_ASSERT(input__storage_saved.value().is_alias_of(input_.storage()));
@@ -3812,8 +3817,17 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::cudnn_batch_norm(Tensor & input, 
     jit::tracer::addOutput(node, result2);
   }
   if (grad_fn) {
-    grad_fn->result1_ = SavedVariable(result1, true);
-    grad_fn->result2_ = SavedVariable(result2, true);
+    if (at::globalContext().ARCGlobal.isForward()) {
+      ARCCppEngine::offLoad(result1, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result1_), true);
+      ARCCppEngine::offLoad(result2, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result2_), true);
+    }
+    else {
+      grad_fn->result1_ = SavedVariable(result1, true);
+      grad_fn->result2_ = SavedVariable(result2, true);
+    }
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);  
   }
   return std::make_tuple(std::move(result0), std::move(result1), std::move(result2));
 }

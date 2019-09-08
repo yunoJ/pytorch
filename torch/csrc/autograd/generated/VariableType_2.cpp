@@ -6493,6 +6493,10 @@ std::tuple<Tensor,Tensor> VariableType::max_pool2d_with_indices(Tensor & self, I
     return at::max_pool2d_with_indices(self_, kernel_size, stride, padding, dilation, ceil_mode);
   })();
   std::tie(result0, result1) = as_variable(std::move(tmp));
+
+  at::globalContext().ARCGlobal.setNewTid(result0);
+  at::globalContext().ARCGlobal.setNewTid(result1);
+
   #ifndef NDEBUG
   if (self__storage_saved.has_value())
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));
@@ -6507,7 +6511,16 @@ std::tuple<Tensor,Tensor> VariableType::max_pool2d_with_indices(Tensor & self, I
     jit::tracer::addOutput(node, result1);
   }
   if (grad_fn) {
-    grad_fn->result1_ = SavedVariable(result1, true);
+    if (at::globalContext().ARCGlobal.isForward()){
+      ARCCppEngine::offLoad(result1, /*(TraceableFunction *)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result1_), false);
+    }
+    else {
+      grad_fn->result1_ = SavedVariable(result1, true);
+    }
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
+
   }
   return std::make_tuple(std::move(result0), std::move(result1));
 }
