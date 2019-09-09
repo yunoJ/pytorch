@@ -12,6 +12,8 @@
 #include <vector>
 #include <utility>
 
+#include <ATen/native/cuda/arc_flag.h>
+
 namespace torch { namespace autograd {
 
 struct Variable;
@@ -67,16 +69,20 @@ using Oid=int; // operation id
 using PFInfo=std::pair<SavedVariable*, Tid>; // information required in prefetching
 enum ARCSync {Sync, Async};
 
+enum tensorMap {feature_map, gradient_map, weight, misc};
+
 // ARCEngine for libtorch.so
 // support async prefetching, offloading operation 
 struct ARCCppEngine{
 public:
-  static void checkTest(double freeSize);
+  static void checkTest2(double freeSize);
 
   // Select tensors for efficient movement
   static double checkCSR(double freeSize); // First priority
   static double checkLarge(double remainSize); // Second priority
   static double checkFirst(double remainSize); // Third priority
+
+  static void mapStack(at::Tensor t, tensorMap mtype);
 
   // basic fetch/offload operation
   static void offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync sync,*/ Oid curOid, SavedVariable* fetch_loc, bool isOutput);

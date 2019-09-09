@@ -899,7 +899,8 @@ Tensor cudnn_convolution_forward(
   checkAllSameType(c, {input, weight});
   checkAllSameGPU(c, {input, weight});
 
-  auto output_t = at::empty(
+//  auto output_t = at::empty(
+  auto output_t = at::ARCempty(
                     conv_output_size(input->sizes(), weight->sizes(),
                                      padding, stride, dilation, groups),
                     input->options());

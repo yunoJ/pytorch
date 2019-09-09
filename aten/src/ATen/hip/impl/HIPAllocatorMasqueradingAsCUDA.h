@@ -20,6 +20,12 @@ public:
     r.unsafe_set_device(Device(DeviceType::CUDA, r.device().index()));
     return r;
   }
+  DataPtr ARCallocate(size_t size) const override {
+    DataPtr r = allocator_->allocate(size);
+    r.unsafe_set_device(Device(DeviceType::CUDA, r.device().index()));
+    return r;
+  }
+
   DeleterFnPtr raw_deleter() const override {
     return allocator_->raw_deleter();
   }

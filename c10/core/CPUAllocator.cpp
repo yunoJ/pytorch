@@ -120,6 +120,15 @@ struct C10_API DefaultCPUAllocator final : at::Allocator {
     return {data, data, &free_cpu, at::Device(at::DeviceType::CPU)};
   }
 
+  at::DataPtr ARCallocate(size_t nbytes) const override {
+    void* data = alloc_cpu(nbytes);
+    if (FLAGS_caffe2_report_cpu_memory_usage && nbytes > 0) {
+      getMemoryAllocationReporter().New(data, nbytes);
+      return {data, data, &ReportAndDelete, at::Device(at::DeviceType::CPU)};
+    }
+    return {data, data, &free_cpu, at::Device(at::DeviceType::CPU)};
+  }
+
   static void ReportAndDelete(void* ptr) {
     if (!ptr) {
       return;

@@ -3,6 +3,8 @@
 #include <ATen/Config.h>
 #include <ATen/cuda/CUDAConfig.h>
 
+#include <ATen/native/cuda/arc_flag.h>
+
 #if !AT_CUDNN_ENABLED()
 
 namespace at { namespace native {
@@ -94,7 +96,7 @@ std::tuple<Tensor, Tensor, Tensor> cudnn_batch_norm(
     // video R(2+1)D. We will fall back to the normal CUDNN_BATCHNORM_SPATIAL
   }
 
-  auto output_t = at::empty(input->sizes(), input->options());
+  auto output_t = at::ARCempty(input->sizes(), input->options());
   TensorArg output{ output_t, "output", 0 };
 
   auto handle = getCudnnHandle();
@@ -108,8 +110,11 @@ std::tuple<Tensor, Tensor, Tensor> cudnn_batch_norm(
 
   if (training) {
     int64_t num_features = input_t.size(1);
-    save_mean = at::empty({ num_features }, weight_t.options());
-    save_var = at::empty({ num_features }, weight_t.options());
+//    save_mean = at::empty({ num_features }, weight_t.options());
+//    save_var = at::empty({ num_features }, weight_t.options());
+    save_mean = at::ARCempty({ num_features }, weight_t.options());
+    save_var = at::ARCempty({ num_features }, weight_t.options());
+
     AT_CUDNN_CHECK(cudnnBatchNormalizationForwardTraining(
       handle, mode, &one, &zero,
       idesc.desc(), input->data_ptr(),

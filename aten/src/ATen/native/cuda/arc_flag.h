@@ -15,7 +15,6 @@
 #include <c10/core/Storage.h>
 #include <dlfcn.h>
 #include <c10/cuda/CUDAStream.h>
-#include <mutex>
 #include <ATen/cuda/CUDAEvent.h>
 #include <torch/csrc/autograd/saved_variable.h>
 
@@ -24,6 +23,8 @@
 #define NUM_OP 8192
 
 using namespace std;
+
+
 namespace at { namespace native {
 
 using namespace at::cuda;
@@ -52,16 +53,18 @@ class ARC_memory {
   bool mapping;
   bool* event_arr_d2h;
   bool* event_arr_h2d;
-  mutex dev;
-  mutex p2p;
-  mutex m2;
-
-  int on_the_fly;
 
   void device_malloc(void** gpu_ptr, size_t size);
+  void device_malloc_reverse(void** gpu_ptr, size_t size);
+
   void device_free(void* addr, size_t size);
-  size_t device_occupancy();
-  size_t p2p_occupancy();
+
+  size_t device_occupancy_size();
+  size_t p2p_occupancy_size();
+
+  double device_occupancy();
+  double device_occupancy_future(size_t size);
+  double p2p_occupancy();
 
   void p2p_malloc(void** gpu_ptr, size_t size);
   void p2p_free(void* addr, size_t size);
@@ -101,6 +104,7 @@ class ARC_memory {
 //  void Arcp2pSubmission(uint64_t, uint64_t, uint64_t *, arcp2p_cpl *, arcp2p_dir, c10::Storage *, arcp2p_info *);
   void Arcp2pSubmission(uint64_t, uint64_t, uint64_t *, arcp2p_cpl *, arcp2p_dir, c10::Storage *, arcp2p_info *, cudaStream_t);
 //  void Arcp2pCompletion();
+  bool Arcp2pReqEmpty();
   void Arcp2pCompletion(bool prefCall);
   void Arcp2pSynchronize();
 
@@ -115,26 +119,58 @@ class ARC_memory {
   int pref_end;
   int pref_idx;
 
+  int on_the_fly;
+
+  double dev_freeBlk;
+  double p2p_freeBlk;
+
+  double feature_map_accum;
+  double gradient_map_accum;
+  double weight_accum;
+  double misc_accum;
+
   size_t init_4m;
   size_t init_8m;
   size_t init_16m;
   size_t init_32m;
   size_t init_64m;
+  size_t init_128m;
+
+  size_t pinit_4m;
+  size_t pinit_8m;
+  size_t pinit_16m;
+  size_t pinit_32m;
+  size_t pinit_64m;
 
   struct timeval tv1, tv2;
 
  private:
   void* deviceAddr;
-  bool* deviceTable;
-  int deviceStartBlk;
+//  bool* deviceTable;
+  short* deviceTable;
+  int* devStartBlk;
+  int* devStartBlk_rev;
   unsigned int* device_page_map;
+  unsigned int* device_page_map_rev;
+  int devMaxBlk;
 
   void* p2pAddr;
   bool* p2pTable;
   int* p2pStartBlk;
   unsigned int* p2p_page_map;
-
   int p2pMaxBlk;
+
+  int devBlk_0_4;
+  int devBlk_4_16;
+  int devBlk_16_64;
+  int devBlk_64_128;
+  int devBlk_128;
+
+  int devBlk_0_4_rev;
+  int devBlk_4_16_rev;
+  int devBlk_16_64_rev;
+  int devBlk_64_128_rev;
+  int devBlk_128_rev;
 
   int p2pBlk_0_4;
   int p2pBlk_4_8;

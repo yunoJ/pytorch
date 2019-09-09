@@ -3175,7 +3175,7 @@ variable_list DivBackward0::apply(variable_list&& grads) {
   auto other_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
-  
+
   if ( at::globalContext().ARCGlobal.isBERT() ) {
     if (at::globalContext().ARCGlobal.isOnDemand()) {
       ARCCppEngine::preFetch(this->getOid(), Sync);
@@ -8658,8 +8658,6 @@ variable_list CudnnRnnBackward::apply(variable_list&& grads) {
     ARCCppEngine::preFetch(this->getOid(), Sync);
   }
   ARCCppEngine::preFetchSync(this->getOid());
-  
-
 
   auto input = input_.unpack();
   auto weight = unpack_list(weight_);

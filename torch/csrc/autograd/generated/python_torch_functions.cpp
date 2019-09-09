@@ -137,9 +137,9 @@ static PyObject * THPVariable_arange(PyObject* self, PyObject* args, PyObject* k
   }
   
   if (at::globalContext().ARCGlobal.isDebugMode()) {
-    std::cout << "OPERATION ARANGE, OPID: " << oid << std::endl;
+    std::cout << "OPERATION ARRANGE, OPID: " << oid << std::endl;
     if (inputNone == false)
-      std::cout << "ARANGE INPUT TENSOR ID: " << at::globalContext().ARCGlobal.getTid(input) << std::endl;
+      std::cout << "ARRANGE INPUT TENSOR ID: " << at::globalContext().ARCGlobal.getTid(input) << std::endl;
   }
 
   if (at::globalContext().ARCGlobal.isOnDemand() && inputNone == false) {
@@ -147,8 +147,6 @@ static PyObject * THPVariable_arange(PyObject* self, PyObject* args, PyObject* k
       ARCPyEngine::fetch(input);
     }
   }
-
-  
 
   Tensor output;
   if (r.idx == 0) {
@@ -6563,12 +6561,8 @@ static PyObject * THPVariable_lstm(PyObject* self_, PyObject* args, PyObject* kw
     ARCPyEngine::offLoad(std::get<1>(outputs));
     ARCPyEngine::offLoad(std::get<2>(outputs));
   }
-  
+
   return wrap(outputs);
-  
-
-
-
 
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS

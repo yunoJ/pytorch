@@ -326,6 +326,30 @@ struct CAFFE2_CUDA_API PinnedCPUAllocator final : public at::Allocator {
     memset(data, 0, nbytes);
     return data_ptr;
   }
+  at::DataPtr ARCallocate(size_t nbytes) const override {
+    if (nbytes == 0) {
+      // replicate c10::alloc_cpu behavior - return nullptr
+      return {nullptr, nullptr, &Delete, at::Device(CPU)};
+    }
+    void* data;
+    at::DataPtr data_ptr;
+    std::lock_guard<std::mutex> lock(CUDAContext::mutex());
+    if (IsNUMAEnabled()) {
+      at::DeleterFnPtr expected_deleter = baseAllocator_->raw_deleter();
+      data_ptr = baseAllocator_->allocate(nbytes);
+      data = data_ptr.get();
+      CAFFE_ENFORCE(data);
+      CUDA_ENFORCE(cudaHostRegister(data, nbytes, cudaHostRegisterDefault));
+      CAFFE_ENFORCE(
+          data_ptr.compare_exchange_deleter(expected_deleter, &Delete),
+          "Failed to swap deleter (already swapped?)");
+    } else {
+      CUDA_ENFORCE(cudaMallocHost(&data, nbytes));
+      data_ptr = {data, data, &Delete, at::Device(CPU)};
+    }
+    memset(data, 0, nbytes);
+    return data_ptr;
+  }
 
   at::DeleterFnPtr raw_deleter() const override {
     return &Delete;
@@ -481,6 +505,73 @@ struct DefaultCUDAAllocator final : public at::Allocator {
   DefaultCUDAAllocator() {}
   ~DefaultCUDAAllocator() override {}
   at::DataPtr allocate(size_t nbytes) const override {
+    // Lock the mutex
+    std::lock_guard<std::mutex> lock(CUDAContext::mutex());
+    // A one-time caffe2 cuda initializer.
+    static Caffe2CudaInitializerHelper g_cuda_initializer_;
+    void* ptr = nullptr;
+
+    if (FLAGS_caffe2_gpu_memory_tracking) {
+      TrackMemoryAlloc(nbytes);
+    }
+    switch (g_cuda_memory_pool_type) {
+      case CudaMemoryPoolType::NONE:
+        if (nbytes != 0) {
+          CUDA_ENFORCE(cudaMalloc(&ptr, nbytes));
+        }
+        if (FLAGS_caffe2_gpu_memory_tracking) {
+          g_size_map[ptr] = nbytes;
+          g_cuda_device_affiliation[ptr] = CaffeCudaGetDevice();
+        }
+        return {ptr, ptr, &Delete, at::Device(CUDA, CaffeCudaGetDevice())};
+      case CudaMemoryPoolType::CUB:
+        if (nbytes != 0) {
+          CUDA_ENFORCE(g_cub_allocator->DeviceAllocate(&ptr, nbytes));
+        }
+        g_cuda_device_affiliation[ptr] = CaffeCudaGetDevice();
+        VLOG(2) << "CUB allocating pointer " << ptr << " on device "
+                << CaffeCudaGetDevice();
+        if (FLAGS_caffe2_gpu_memory_tracking) {
+          g_size_map[ptr] = nbytes;
+        }
+        return {ptr, ptr, &Delete, at::Device(CUDA, CaffeCudaGetDevice())};
+      case CudaMemoryPoolType::THC:
+        {
+          // The reason we have this stream guard here is to preserve
+          // the historical behavior of the 'thc' allocator in Caffe2,
+          // which is to put all allocations on the same (default)
+          // stream.  This behavior is morally wrong (since passing
+          // allocations between streams allows for the possibility
+          // of you handing out some memory that an old stream
+          // is still working on), but it doesn't seem to cause issues
+          // in Caffe2 today.  Our hypothesis for why this is the case
+          // is that Caffe2 doesn't really do very many allocations
+          // on the fly; instead they allocate once and then reuse
+          // the allocations for the whole program.  In this case,
+          // the hazard is avoided.
+          //
+          // We intend to remove this stream guard, but the benefit
+          // to putting all allocations on the same stream is it
+          // reduces per-stream fragmentation, and this helps
+          // some models that are currently running with the thc
+          // allocator fit in memory.  We will need to find some
+          // way of resolving this problem.
+          cuda::CUDAStreamGuard g(
+            Stream(
+              Stream::DEFAULT,
+              Device(kCUDA, CaffeCudaGetDevice())
+            ));
+          ptr = cuda::CUDACachingAllocator::raw_alloc(nbytes);
+        }
+        if (FLAGS_caffe2_gpu_memory_tracking) {
+          g_size_map[ptr] = nbytes;
+          g_cuda_device_affiliation[ptr] = CaffeCudaGetDevice();
+        }
+        return {ptr, ptr, &Delete, at::Device(CUDA, CaffeCudaGetDevice())};
+    }
+    return {nullptr, nullptr, &Delete, at::Device(CUDA, CaffeCudaGetDevice())};
+  }
+  at::DataPtr ARCallocate(size_t nbytes) const override {
     // Lock the mutex
     std::lock_guard<std::mutex> lock(CUDAContext::mutex());
     // A one-time caffe2 cuda initializer.

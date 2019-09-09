@@ -17,6 +17,11 @@ struct XLAAllocator final : public at::Allocator {
     auto* ptr = XLAMalloc(size);
     return {ptr, ptr, &XLAFree, at::DeviceType::XLA};
   }
+  at::DataPtr ARCallocate(size_t size) const override {
+    auto* ptr = XLAMalloc(size);
+    return {ptr, ptr, &XLAFree, at::DeviceType::XLA};
+  }
+
   at::DeleterFnPtr raw_deleter() const override {
     return &XLAFree;
   }

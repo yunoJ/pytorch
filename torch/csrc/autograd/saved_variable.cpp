@@ -23,7 +23,8 @@
 #include <THC/THCGeneral.h>
 #include <c10/core/ScalarType.h>
 
-#include <ATen/native/cuda/arc_flag.h>
+#include <c10/cuda/CUDACachingAllocator.h>
+
 #include <sys/time.h>
 
 namespace torch { namespace autograd {
@@ -149,115 +150,189 @@ static bool liveness_result_csr[3][NUM_TENSOR] = {false};
 static bool liveness_result_new[3][NUM_TENSOR] = {false};
 static bool liveness_result_csr_new[3][NUM_TENSOR] = {false};
 
+static bool liveness_result_new2[NUM_TENSOR] = {false};
+
+static double last_time_slot = 0;
+
 // thread for prefetch
 //static std::thread prefetch_thread_;
 
 static double accumSize = 0;
-static double ssd_bw = 4096;
+static double ssd_w = 3072;
+static double ssd_r = 10240;
+static double mem_wr = 12288;
 
-void ARCCppEngine::checkTest(double freeSize) {
+void ARCCppEngine::checkTest2(double freeSize) {
   double accumTime = 0;
+  double delay_time[NUM_TENSOR] = {0};
+  double real_trans_time[NUM_TENSOR] = {0};
+  double real_trans_start[NUM_TENSOR] = {0};
   double remainSize = accumSize - freeSize;
 
+  for (int i = 0; i < NUM_TENSOR-1; i++)
+    liveness_time[i + 1] += liveness_time[i];
+
+  last_time_slot += liveness_time[NUM_TENSOR - 1];
+
+  std::cout << "Possible resoure time: " << last_time_slot << ", mem: " << freeSize << ", remained size: " << remainSize << std::endl;
+
+  if (last_time_slot/1000 * ssd_w > remainSize) {
+    std::cout << "\tNo overhead maybe" << std::endl;
+  } else {
+    std::cout << "\tOverhead maybe" << std::endl;
+  }
+
   for (int i = 0; i < NUM_TENSOR; i++) {
-    if (liveness_size[i] > 0) {
-      accumTime += liveness_time[i];
+    if (at::native::arc_vm.is_using_ssd())
+      real_trans_time[i] = liveness_size[i] * 1000 / ssd_w;
+    else
+      real_trans_time[i] = liveness_size[i] * 1000 / mem_wr;
+
+    if (at::native::arc_vm.is_fp16() && liveness_fp[i])
+      real_trans_time[i] = real_trans_time[i] / 2;
+
+    if (at::native::arc_vm.is_csr() && liveness_csr[i])
+      real_trans_time[i] = real_trans_time[i] / 2;
+  }
+
+  int previous_i = 0;
+
+  for (int i = 0; i < NUM_TENSOR; i++) {
+    if (liveness_size[i] > 1) {
+      std::cout << "Test tid: " << i << ", size: " << liveness_size[i] << ", time: " << liveness_time[i] << std::endl;
+      liveness_result_new2[i] = true;
+      remainSize -= liveness_size[i];
+
+      previous_i = i;
+      break;
     }
   }
 
-  std::cout << "Total accum time: " << accumTime << std::endl;
-  std::cout << "Total accum size: " << accumSize << std::endl;
-  std::cout << "Total remain size: " << remainSize << std::endl;
-  int start_tid = 0;
-  int cur_back_num = at::globalContext().ARCGlobal.curBackNum();
+  for (int i = previous_i + 1; i < NUM_TENSOR; i++) {
+    if (liveness_size[i] > 1) {
+      liveness_result_new2[i] = true;
+      remainSize -= liveness_size[i];
 
-  while(remainSize > 0 && start_tid < NUM_TENSOR) {
-    double tempAccumTime = 0;
-    double scoring[NUM_TENSOR] = {100};
+      double delay_maybe = liveness_time[previous_i] + real_trans_time[previous_i] + delay_time[previous_i] - liveness_time[i];
 
-    for (int i = start_tid; i < NUM_TENSOR; i++) {
-      if (liveness_size[i] > 0) {
-        tempAccumTime += liveness_time[i];
+      if (delay_maybe < 0)
+        delay_time[i] = 0;
+      else
+        delay_time[i] = delay_maybe;
 
-        double active_data = liveness_size[i];
-        if (liveness_fp[i]) {
-          active_data = active_data / 2;
-          if (liveness_csr[i]) {
-            active_data = active_data / 2;
-          }
+      std::cout << "Test tid: " << i << ", size: " << liveness_size[i] << ", time: " << liveness_time[i] << ", " << delay_time[i] << ", " << real_trans_time[i] << std::endl;
+
+      previous_i = i;
+
+      if (liveness_time[i] + real_trans_time[i] + delay_time[i] > last_time_slot)
+        break;
+
+      if (remainSize < 0) {
+        std::cout << "Thanks, remained size is zero" << std::endl;
+        for (int check_i = 0; check_i < NUM_TENSOR; check_i++) {
+          if (liveness_result_new2[check_i])
+            std::cout << "First result: " << check_i << ", size: " << liveness_size[check_i] << ", csr, fp16: " << liveness_csr[check_i] << ", " << liveness_fp[check_i] << ", time info: " << liveness_time[check_i] << ", " << delay_time[check_i] << ", " << real_trans_time[check_i] << std::endl;
         }
-        double transfer_time = active_data * 1000 / ssd_bw;
-        double size_score = (remainSize - liveness_size[i]) / remainSize;
-
-        if (size_score < 0) {
-          if (remainSize - liveness_size[i] <= 0) {
-            remainSize -= liveness_size[i];
-            liveness_result_new[cur_back_num][i] = true;
-            liveness_result_csr_new[cur_back_num][i] = liveness_csr[i];
-            std::cout << "Selected last tid: " << i << std::endl;
-            break;
-          }
-        }
-        double time_score = (accumTime - tempAccumTime - transfer_time) / accumTime;
-        scoring[i] = size_score / time_score;
-
-        std::cout << "\tnew liveness test - tid: " << i << ", size: " << liveness_size[i] << ", time: " << liveness_time[i] << ", CSR flag: " << liveness_csr[i] << ", score: " << scoring[i] << ", size score: " << size_score << ", time_score: " << time_score << std::endl;
+        return;
       }
     }
+  }
 
-    if (remainSize <= 0) break;
-
-    int min_idx = 0;
-    double min_score = 100;
-    for (int i = 0; i < NUM_TENSOR; i++) {
-      if (scoring[i] > 0 && min_score > scoring[i] && liveness_size[i] > 1) {
-        min_idx = i;
-        min_score = scoring[i];
-      }
-      scoring[i] = 100;
-    }
-
-    std::cout << "Selected tid: " << min_idx << ", score: " << min_score << std::endl;
-    liveness_result_new[cur_back_num][min_idx] = true;
-    liveness_result_csr_new[cur_back_num][min_idx] = liveness_csr[min_idx];
-
-    remainSize -= liveness_size[min_idx];
-
-/*
-    double tempAccumTime_2 = 0;
-    for (int i = min_idx + 1; i < NUM_TENSOR; i++) {
-      if (liveness_size[i] > 0) {
-        tempAccumTime_2 += liveness_time[i];
-        if (tempAccumTime_2 > (liveness_size[i] * 1000 / ssd_bw)) {
-          start_tid = i;
-          accumTime -= (tempAccumTime_2 + liveness_time[min_idx]);
+  if (previous_i + 1 == NUM_TENSOR) {
+    std::cout << "Future work: operate on-demand mode as default" << std::endl;
+    exit(1);
+  } else {
+    std::cout << "Second phase: previous_i - " << previous_i << std::endl;
+    for (int i = previous_i + 1; i < NUM_TENSOR; i++) {
+      int delete_i = 0;
+      for (delete_i = previous_i; delete_i >= 0; delete_i--) {
+        if (liveness_size[delete_i] > 1 && liveness_result_new2[delete_i] &&
+            !liveness_csr[delete_i] && !liveness_fp[delete_i]) {
           break;
         }
       }
 
-      // No tensor is remained
-      start_tid = NUM_TENSOR;
-    }
-*/
-    start_tid = min_idx + 1;
-  }
+      if (delete_i == -1) {
+        for (delete_i = previous_i; delete_i >= 0; delete_i--) {
+          if (liveness_size[delete_i] > 1 && liveness_result_new2[delete_i] &&
+              !liveness_csr[delete_i]) {
+            break;
+          }
+        }
+      }
 
-  if (remainSize > 0) {
-    std::cout << "Hmmm, this network maybe shows disk latency, or not" << std::endl;
-    for (int i = 0; i < NUM_TENSOR; i++) {
-      if (liveness_size[i] > 1 && !liveness_result_new[cur_back_num][i]) {
-        liveness_result_new[cur_back_num][i] = true;
-        liveness_result_csr_new[cur_back_num][i] = liveness_csr[i];
-        std::cout << "Hardly selected tid: " << i << std::endl;
-        remainSize -= liveness_size[i];
+      std::cout << "Deleted tid: " << delete_i << ", csr, fp: " << liveness_csr[delete_i] << ", " << liveness_fp[delete_i] << std::endl;
+
+      int delete_previous_i = 0;
+      if (delete_i == -1) {
+        std::cout << "Give up in deleting" << std::endl;
+        break;
+      } else {
+        for (delete_previous_i = delete_i; delete_previous_i >= 0; delete_previous_i--) {
+          if (liveness_result_new2[delete_previous_i]) break;
+        }
+      }
+      
+      std::cout << "Deleted previous tid: " << delete_previous_i << std::endl;
+      remainSize += liveness_size[delete_i];
+      liveness_result_new2[delete_i] = false;
+
+      int add_i = 0;
+      for (add_i = previous_i + 1; add_i < NUM_TENSOR; add_i++) {
+        if (liveness_size[add_i] > 1 && liveness_csr[add_i] && !liveness_result_new2[add_i]) {
+          liveness_result_new2[add_i] = true;
+          for (int test = delete_i; test <= add_i; test++) {
+            if (liveness_result_new2[test]) {
+              double delay_maybe = liveness_time[delete_previous_i] + real_trans_time[delete_previous_i] + delay_time[delete_previous_i] - liveness_time[test];
+              if (delay_maybe < 0) {
+                delay_time[test] = 0;
+              } else {
+                delay_time[test] = delay_maybe;
+              }
+
+              delete_previous_i = test;
+            }
+          }
+
+          std::cout << "Added tid test: " << add_i << ", size: " << liveness_size[add_i] << ", time info: " << liveness_time[add_i] << ", " << delay_time[add_i] << ", " << real_trans_time[add_i] << ", " << last_time_slot << std::endl;
+          remainSize -= liveness_size[add_i];
+          i = add_i;
+          
+          break;
+        }
+      }
+
+      if (add_i == NUM_TENSOR) break;
+    }
+
+    if (remainSize > 0) {
+      for (int i = 0; i < NUM_TENSOR; i++) {
+        if (liveness_size[i] > 1 && !liveness_result_new2[i] && liveness_csr[i]) {
+          remainSize -= liveness_size[i];
+          liveness_result_new2[i] = true;
+        }
+
+        if (remainSize < 0) break;
+      }
+    }
+
+    if (remainSize > 0) {
+      for (int i = 0; i < NUM_TENSOR; i++) {
+        if (liveness_size[i] > 1 && !liveness_result_new2[i] && liveness_fp[i]) {
+          remainSize -= liveness_size[i];
+          liveness_result_new2[i] = true;
+        }
+
+        if (remainSize < 0) break;
       }
     }
   }
-
-  if (remainSize > 0) {
-    std::cout << "This network cannot work in SSD-based backing system without performance loss" << std::endl;
-    std::cout << "Changed always-on-demand mode" << std::endl;
-    exit(1);
+  
+  std::cout << "Remained data: " << remainSize << std::endl;
+  for (int i = 0; i < NUM_TENSOR; i++) {
+    if (liveness_result_new2[i]) {
+      std::cout << "Final check: " << i << ", size: " << liveness_size[i] << ", csr, fp16: " << liveness_csr[i] << ", " << liveness_fp[i] << ", time info: " << liveness_time[i] << ", " << delay_time[i] << ", " << real_trans_time[i] << ", " << last_time_slot << std::endl;
+    }
   }
 }
 
@@ -320,6 +395,20 @@ double ARCCppEngine::checkFirst(double remainSize) {
   return remainSize;
 }
 
+void ARCCppEngine::mapStack(at::Tensor t, tensorMap mtype) {
+  if (mtype == feature_map) {
+    at::native::arc_vm.feature_map_accum += (double)t.nbytes() / 1024 / 1024;
+  } else if (mtype == gradient_map) {
+    at::native::arc_vm.gradient_map_accum += (double)t.nbytes() / 1024 / 1024;
+  } else if (mtype == weight) {
+    at::native::arc_vm.weight_accum += (double)t.nbytes() / 1024 / 1024;
+  } else if (mtype == misc) {
+    at::native::arc_vm.misc_accum += (double)t.nbytes()/ 1024 / 1024;
+  } else {
+    std::cout << "Maybe this mem type is not accumulated in our framework" << std::endl;
+  }
+}
+
 //Note: Not referecne but copy a tensor to make it alive
 void ARCCppEngine::offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync sync,*/ Oid curOid, SavedVariable* fetch_loc, bool isOutput) {
 
@@ -335,7 +424,7 @@ void ARCCppEngine::offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync s
 //  std::cout << "liveness result: " << tid << ", curback: " << cur_back_num << ", " << liveness_result[cur_back_num][tid] << std::endl;
 
 //  if (liveness_result[cur_back_num][tid] == false && !at::globalContext().ARCGlobal.isOnDemand()) {
-  if (liveness_result_new[cur_back_num][tid] == false && !at::globalContext().ARCGlobal.isOnDemand()) {
+  if (liveness_result_new2[tid] == false && !at::globalContext().ARCGlobal.isOnDemand()) {
     *fetch_loc = SavedVariable(t, isOutput);
     return;
   }
@@ -393,6 +482,12 @@ void ARCCppEngine::joinOffload() {
   if (at::globalContext().ARCGlobal.isDebugMode())
     std::cout << "Wait until all offloading is done" << std::endl;
 
+   if (at::globalContext().ARCGlobal.isOnDemand()) {
+    gettimeofday(&at::native::arc_vm.tv2, NULL);
+    last_time_slot = (at::native::arc_vm.tv2.tv_sec - at::native::arc_vm.tv1.tv_sec) * 1000 +
+          (double)(at::native::arc_vm.tv2.tv_usec - at::native::arc_vm.tv1.tv_usec) / 1000;
+  }
+   
 /*
   if (at::native::arc_vm.is_using_ssd()) {
     at::native::arc_vm.Arcp2pSynchronize();
@@ -428,6 +523,16 @@ void ARCCppEngine::offLoadAsync(at::Tensor tensor) {
     at::native::arc_vm.set_dir(tid, at::native::arcp2p_gputossd);
     at::native::arcp2p_cpl *p_cpl = new at::native::arcp2p_cpl;
     at::native::arc_vm.set_cpl_addr(tid, at::native::arcp2p_gputossd, (void *)p_cpl);
+
+//    if (at::native::arc_vm.device_occupancy() < 0.1) {
+/*
+    if (at::native::arc_vm.on_the_fly > 4) {
+      while (at::native::arc_vm.on_the_fly > 1) {
+        at::native::arc_vm.Arcp2pCompletion(false);
+      }
+      c10::cuda::CUDACachingAllocator::emptyCache();
+    }
+*/
   }
 
   if (at::globalContext().ARCGlobal.isOnDemand()) {
@@ -435,7 +540,8 @@ void ARCCppEngine::offLoadAsync(at::Tensor tensor) {
     tensor_dict_check_[tid] = true;
   } else {
 //    tensor_dict_[tid] = tensor.ARCto(opt, false, true, liveness_result_csr[cur_back_num][tid]);
-    tensor_dict_[tid] = tensor.ARCto(opt, false, true, liveness_result_csr_new[cur_back_num][tid]);
+//    tensor_dict_[tid] = tensor.ARCto(opt, false, true, liveness_result_csr_new[cur_back_num][tid]);
+    tensor_dict_[tid] = tensor.ARCto(opt, false, true, liveness_csr[tid]);
     tensor_dict_check_[tid] = true;
   }
 
@@ -468,7 +574,6 @@ void ARCCppEngine::preFetch(Oid curOid, ARCSync sync) {//int required_tensor_num
 }
 
 bool ARCCppEngine::preFetchAsync(Oid curOid) {//int required_tensor_num, ARCSync sync) {
-  //if (target < 0) std::cerr << "There is no more operation to need prefetch." << std::endl;
   return fetchRequiredTensors_(curOid, Sync); 
 }
 
@@ -716,6 +821,17 @@ bool ARCCppEngine::fetchRequiredTensors_(Oid oid, ARCSync sync) {
  
     if (tref.device().type() == c10::DeviceType::CPU) {
 
+      if (!at::globalContext().ARCGlobal.isOnDemand()) {
+//        if (at::native::arc_vm.device_occupancy_future(tref.nbytes()) < 0.1) {
+        if (at::native::arc_vm.on_the_fly > 4) {
+//          at::native::arc_vm.Arcp2pCompletion(false);
+//          if (at::native::arc_vm.device_occupancy_future(tref.nbytes()) < 0.1) {
+//            c10::cuda::CUDACachingAllocator::emptyCache();
+//          }
+          return false;
+        }
+      }
+
       // [JS] p2p
       if (at::native::arc_vm.is_using_ssd()) {
         if (at::globalContext().ARCGlobal.isOnDemand()) {
@@ -741,7 +857,8 @@ bool ARCCppEngine::fetchRequiredTensors_(Oid oid, ARCSync sync) {
         tref = tref.ARCto(opt, false, true, false);
       } else {
 //        tref = tref.ARCto(opt, false, true, liveness_result_csr[cur_back_num][tid]);
-        tref = tref.ARCto(opt, false, true, liveness_result_csr_new[cur_back_num][tid]);
+//        tref = tref.ARCto(opt, false, true, liveness_result_csr_new[cur_back_num][tid]);
+        tref = tref.ARCto(opt, false, true, liveness_csr[tid]);
       }
     } else {
       if (at::globalContext().ARCGlobal.isDebugMode())
@@ -778,7 +895,7 @@ void ARCCppEngine::resetCppEngine() {
 
   memset(liveness_time, 0, sizeof(double) * NUM_TENSOR);
   memset(liveness_size, 0, sizeof(double) * NUM_TENSOR);
-  memset(liveness_csr, 0, sizeof(bool) * NUM_TENSOR);
+//  memset(liveness_csr, 0, sizeof(bool) * NUM_TENSOR);
   memset(liveness_fp, 0, sizeof(bool) * NUM_TENSOR);
 
   pf_dict_.clear();
@@ -789,6 +906,19 @@ void ARCCppEngine::resetCppEngine() {
   if (remaining_backward == 0) {
     at::globalContext().ARCGlobal.resetGlobalTid();
     at::globalContext().ARCGlobal.resetGlobalOid();
+
+/*
+    std::cout << "Accumulated feature map: " << at::native::arc_vm.feature_map_accum << " MB" << std::endl;
+    std::cout << "Accumulated gradient map: " << at::native::arc_vm.feature_map_accum << " MB" << std::endl;
+    std::cout << "Accumulated weight: " << at::native::arc_vm.feature_map_accum << " MB" << std::endl;
+    std::cout << "Accumulated misc: " << at::native::arc_vm.feature_map_accum << " MB" << std::endl;
+*/
+
+    at::native::arc_vm.feature_map_accum = 0;
+    at::native::arc_vm.gradient_map_accum = 0;
+    at::native::arc_vm.weight_accum = 0;
+    at::native::arc_vm.misc_accum = 0;
+
     if (at::globalContext().ARCGlobal.isCycleGAN()) {
         remaining_backward = backward_num_CycleGAN;
     } else {

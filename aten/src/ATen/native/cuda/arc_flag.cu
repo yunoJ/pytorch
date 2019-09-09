@@ -119,8 +119,12 @@ typedef struct {
 std::queue<req_element> req_queue;
 
 ARC_memory::ARC_memory(): relu_thru(false), mapping(false),
+    feature_map_accum(0), gradient_map_accum(0), weight_accum(0), misc_accum(0),
     isVDNN(false), isFP16(false), isCSR(false), isUsingSSD(false), isTesla(false), isDebug(false),
-    deviceStartBlk(0), device_sz(0), max_device(0), p2p_sz(0), max_p2p(0) {
+    device_sz(0), max_device(0), p2p_sz(0), max_p2p(0) {
+
+  on_the_fly = 0;
+
   fp16_ptr_arr = new uint64_t[NUM_TENSOR];
   bit_ptr_arr = new uint64_t[NUM_TENSOR];
   pos_ptr_arr = new uint64_t[NUM_TENSOR];
@@ -131,8 +135,6 @@ ARC_memory::ARC_memory(): relu_thru(false), mapping(false),
   cpl_pre_ptr_arr = new uint64_t[NUM_TENSOR];
   offset_arr = new uint64_t[NUM_TENSOR];
   dir_arr = new arcp2p_dir[NUM_TENSOR];
-
-  on_the_fly = 0;
 
   event_arr_d2h = new bool[NUM_TENSOR];
   event_arr_h2d = new bool[NUM_TENSOR];
@@ -150,6 +152,7 @@ ARC_memory::~ARC_memory() {
     cudaFree(deviceAddr);
     delete[] deviceTable;
     delete[] device_page_map;
+    delete[] device_page_map_rev;
   }
 
   if (p2p_sz > 0 && isVDNN) {
@@ -192,39 +195,148 @@ void ARC_memory::device_malloc(void** gpu_ptr, size_t size) {
 
   if (reqBlk == 0) return;
 
-//  dev.lock();
+/*
+  if (size < ((size_t)1 << 22)) {
+    devStartBlk = &devBlk_0_4;
+    devMaxBlk = init_4m;
+  } else if (size < ((size_t)1 << 24)) {
+    devStartBlk = &devBlk_4_16;
+    devMaxBlk = init_16m;
+  } else if (size < ((size_t)1 << 26)) {
+    devStartBlk = &devBlk_16_64;
+    devMaxBlk = init_64m;
+  } else if (size < ((size_t)1 << 27)) {
+    devStartBlk = &devBlk_64_128;
+    devMaxBlk = init_128m;
+  } else {
+    devStartBlk = &devBlk_128;
+    devMaxBlk = max_device;
+  }
+*/
+  devStartBlk = &devBlk_0_4;
+  devMaxBlk = max_device;
 
   while (true) {
-    for (int i = deviceStartBlk; i < max_device; i++) {
+    for (int i = *devStartBlk; i < devMaxBlk; i++) {
       blkCheck += 1;
-      if (deviceTable[i]) {
+      if (deviceTable[i] != 0) {
+        if (deviceTable[i] == 2) {
+          std::cout << "Table meet with reverse" << std::endl;
+        }
         if (device_page_map[i] == 0) {
           std::cout << "device_page_map[" << i << "] is zero, size: " << size << ", " << blkCheck << ", " << reqBlk << std::endl;
           exit(1);
         }
         i += device_page_map[i] - 1;
-        blkCheck = 0; deviceStartBlk = i + 1;
+        blkCheck = 0; *devStartBlk = i + 1;
         continue;
       }
 
       if (blkCheck == reqBlk) {
-        device_page_map[deviceStartBlk] = reqBlk;
-        *gpu_ptr = (void* )((size_t)deviceAddr + (deviceStartBlk * BLK_SZ));
+        device_page_map[*devStartBlk] = reqBlk;
+        *gpu_ptr = (void* )((size_t)deviceAddr + (*devStartBlk * BLK_SZ));
 
-        for (int i = deviceStartBlk; i < deviceStartBlk + reqBlk; i++) {
-          deviceTable[i] = true;
+        for (int i = *devStartBlk; i < *devStartBlk + reqBlk; i++) {
+          deviceTable[i] = 1;
         }
 
-        deviceStartBlk += reqBlk;
+        *devStartBlk += reqBlk;
+        dev_freeBlk -= reqBlk;
 
-//        dev.unlock();
         return;
       }
     }
-    deviceStartBlk = 0;  blkCheck = 0;
+    blkCheck = 0;
+/*
+    if (size < ((size_t)1 << 22)) *devStartBlk = 0;
+    else if (size < ((size_t)1 << 24)) *devStartBlk = init_4m;
+    else if (size < ((size_t)1 << 26)) *devStartBlk = init_16m;
+    else if (size < ((size_t)1 << 27)) *devStartBlk = init_64m;
+    else *devStartBlk = init_128m;
+*/
+    *devStartBlk = 0;
 
     if (retryCnt++ > 2) {
-//      dev.unlock();
+      std::cout << "dev malloc failed: " << (double)size / 1024 / 1024 << std::endl;
+      *gpu_ptr = NULL;
+      return;
+    }
+  }
+}
+
+void ARC_memory::device_malloc_reverse(void** gpu_ptr, size_t size) {
+  int reqBlk = std::ceil((double)size / (double)BLK_SZ);
+  int blkCheck = 0;
+  int retryCnt = 0;
+
+  if (device_sz == 0) return;
+
+  if (reqBlk == 0) return;
+
+/*
+  if (size < ((size_t)1 << 22)) {
+    devStartBlk_rev = &devBlk_0_4_rev;
+    devMaxBlk = 0;
+  } else if (size < ((size_t)1 << 24)) {
+    devStartBlk_rev = &devBlk_4_16_rev;
+    devMaxBlk = init_4m;
+  } else if (size < ((size_t)1 << 26)) {
+    devStartBlk_rev = &devBlk_16_64_rev;
+    devMaxBlk = init_16m;
+  } else if (size < ((size_t)1 << 27)) {
+    devStartBlk_rev = &devBlk_64_128_rev;
+    devMaxBlk = init_64m;
+  } else {
+    devStartBlk_rev = &devBlk_128_rev;
+    devMaxBlk = init_128m;
+  }
+*/
+  devStartBlk_rev = &devBlk_128_rev;
+  devMaxBlk = 0;
+
+  while (true) {
+    for (int i = *devStartBlk_rev; i >= devMaxBlk; i--) {
+      blkCheck += 1;
+      if (deviceTable[i] != 0) {
+        if (deviceTable[i] == 1) {
+          std::cout << "Table meet at first table" << std::endl;
+        }
+        if (device_page_map_rev[i] == 0) {
+          std::cout << "device_page_map_rev[" << i << "] is zero, size: " << size << ", " << blkCheck << ", " << reqBlk << ", " << deviceTable[i] << std::endl;
+          exit(1);
+        }
+        i -= (device_page_map_rev[i] - 1);
+        blkCheck = 0; *devStartBlk_rev = i - 1;
+        continue;
+      }
+
+      if (blkCheck == reqBlk) {
+        device_page_map_rev[*devStartBlk_rev] = reqBlk;
+        *gpu_ptr = (void* )((size_t)deviceAddr + ((*devStartBlk_rev - reqBlk + 1) * BLK_SZ));
+
+        for (int i = *devStartBlk_rev; i >= *devStartBlk_rev - reqBlk + 1; i--) {
+          deviceTable[i] = 2;
+        }
+
+        *devStartBlk_rev -= reqBlk;
+        dev_freeBlk -= reqBlk;
+
+        return;
+      }
+    }
+    blkCheck = 0;
+
+/*
+    if (size < ((size_t)1 << 22)) *devStartBlk_rev = init_4m - 1;
+    else if (size < ((size_t)1 << 24)) *devStartBlk_rev = init_16m - 1;
+    else if (size < ((size_t)1 << 26)) *devStartBlk_rev = init_64m - 1;
+    else if (size < ((size_t)1 << 27)) *devStartBlk_rev = init_128m - 1;
+    else *devStartBlk_rev = max_device - 1;
+*/
+    *devStartBlk_rev = max_device - 1;
+
+    if (retryCnt++ > 2) {
+      std::cout << "dev malloc reverse failed: " << (double)size / 1024 / 1024 << std::endl;
       *gpu_ptr = NULL;
       return;
     }
@@ -232,43 +344,70 @@ void ARC_memory::device_malloc(void** gpu_ptr, size_t size) {
 }
 
 void ARC_memory::device_free(void* addr, size_t size) {
-  unsigned int startBlk = ((size_t)addr - (size_t)deviceAddr) / BLK_SZ;
-  unsigned int reqBlk = std::ceil((double)size / (double)BLK_SZ);
+  int startBlk = ((size_t)addr - (size_t)deviceAddr) / BLK_SZ;
+  int reqBlk = std::ceil((double)size / (double)BLK_SZ);
 
   if (device_sz == 0) return;
 
-//  dev.lock();
-
   device_page_map[startBlk] = 0;
 
+  bool reverse = false;
+  if (deviceTable[startBlk] == 2) {
+    reverse = true;
+  }
+
+  if (isDebug)
+    std::cout << "device_free addr: " << addr << ", size: " << size << ", reverse: " << reverse << std::endl;
+
   for (unsigned int i = startBlk; i < startBlk + reqBlk; i++) {
-    deviceTable[i] = false;
+    deviceTable[i] = 0;
   }
 
-  deviceStartBlk = std::min((unsigned int)deviceStartBlk, startBlk);
+  dev_freeBlk += reqBlk;
 
-//  dev.unlock();
+  if (!reverse) {
+  /*
+    if (size < ((size_t)1 << 22)) devBlk_0_4 = std::min(devBlk_0_4, startBlk);
+    else if (size < ((size_t)1 << 24)) devBlk_4_16 = std::min(devBlk_4_16, startBlk);
+    else if (size < ((size_t)1 << 26)) devBlk_16_64 = std::min(devBlk_16_64, startBlk);
+    else if (size < ((size_t)1 << 27)) devBlk_64_128 = std::min(devBlk_64_128, startBlk);
+    else devBlk_128 = std::min(devBlk_128, startBlk);
+  */
+    devBlk_0_4 = std::min(devBlk_0_4, startBlk);
+  } else {
+  /*
+    if (size < ((size_t)1 << 22)) devBlk_0_4_rev = std::max(devBlk_0_4_rev, startBlk + reqBlk - 1);
+    else if (size < ((size_t)1 << 24)) devBlk_4_16_rev = std::max(devBlk_4_16_rev, startBlk + reqBlk - 1);
+    else if (size < ((size_t)1 << 26)) devBlk_16_64_rev = std::min(devBlk_16_64_rev, startBlk + reqBlk - 1);
+    else if (size < ((size_t)1 << 27)) devBlk_64_128_rev = std::min(devBlk_64_128_rev, startBlk + reqBlk - 1);
+    else devBlk_128_rev = std::min(devBlk_128_rev, startBlk + reqBlk - 1);
+  */
+    devBlk_128_rev = std::max(devBlk_128_rev, startBlk + reqBlk - 1);
+  }
+
 }
 
-size_t ARC_memory::device_occupancy() {
-  int occupancy = 0;
-//  dev.lock();
-
-  for(int i = 0; i < max_device; i++) {
-    occupancy += device_page_map[i];
-  }
-
-  return (max_device - occupancy) * BLK_SZ;
+size_t ARC_memory::device_occupancy_size() {
+  return dev_freeBlk * BLK_SZ;
 }
 
-size_t ARC_memory::p2p_occupancy() {
-  int occupancy = 0;
+size_t ARC_memory::p2p_occupancy_size() {
+  return p2p_freeBlk * BLK_SZ;
+}
 
-  for(int i = 0; i < max_p2p; i++) {
-    occupancy += p2p_page_map[i];
-  }
+double ARC_memory::device_occupancy() {
+  return dev_freeBlk / (double)max_device;
+}
 
-  return (max_p2p - occupancy) * BLK_SZ;
+double ARC_memory::device_occupancy_future(size_t size) {
+  unsigned int reqBlk = std::ceil((double)size / (double)BLK_SZ);
+
+  return (dev_freeBlk - reqBlk) / (double)max_device;
+}
+
+
+double ARC_memory::p2p_occupancy() {
+  return p2p_freeBlk / (double)max_p2p;
 }
 
 void ARC_memory::p2p_malloc(void** gpu_ptr, size_t size) {
@@ -284,29 +423,29 @@ void ARC_memory::p2p_malloc(void** gpu_ptr, size_t size) {
     std::cout << "p2p malloc size test sampling: " << (double)size / 1024 / 1024 << std::endl;
   }
 
+/*
   if (size < ((size_t)1 << 22)) {
     p2pStartBlk = &p2pBlk_0_4;
-    p2pMaxBlk = init_4m;
+    p2pMaxBlk = pinit_4m;
   } else if (size < ((size_t)1 << 23)) {
     p2pStartBlk = &p2pBlk_4_8;
-    p2pMaxBlk = init_8m;
+    p2pMaxBlk = pinit_8m;
   } else if (size < ((size_t)1 << 24)) {
     p2pStartBlk = &p2pBlk_8_16;
-    p2pMaxBlk = init_16m;
+    p2pMaxBlk = pinit_16m;
   } else if (size < ((size_t)1 << 25)) {
     p2pStartBlk = &p2pBlk_16_32;
-    p2pMaxBlk = init_32m;
+    p2pMaxBlk = pinit_32m;
   } else if (size < ((size_t)1 << 26)) {
     p2pStartBlk = &p2pBlk_32_64;
-    p2pMaxBlk = init_64m;
+    p2pMaxBlk = pinit_64m;
   } else {
     p2pStartBlk = &p2pBlk_64;
     p2pMaxBlk = max_p2p;
   }
-//    p2pStartBlk = &p2pBlk_0_4;
-//    p2pMaxBlk = max_p2p;
-
-//  p2p.lock();
+*/
+  p2pStartBlk = &p2pBlk_0_4;
+  p2pMaxBlk = max_p2p;
 
   while (true) {
     for (int i = *p2pStartBlk; i < p2pMaxBlk; i++) {
@@ -330,21 +469,23 @@ void ARC_memory::p2p_malloc(void** gpu_ptr, size_t size) {
         }
 
         *p2pStartBlk += reqBlk;
+        p2p_freeBlk -= reqBlk;
 
-//        p2p.unlock();
         return;
       }
     }
     blkCheck = 0;
+/*
     if (size < ((size_t)1 << 22)) *p2pStartBlk = 0;
-    else if (size < ((size_t)1 << 23)) *p2pStartBlk = init_4m;
-    else if (size < ((size_t)1 << 24)) *p2pStartBlk = init_8m;
-    else if (size < ((size_t)1 << 25)) *p2pStartBlk = init_16m;
-    else if (size < ((size_t)1 << 26)) *p2pStartBlk = init_32m;
-    else *p2pStartBlk = init_64m;
+    else if (size < ((size_t)1 << 23)) *p2pStartBlk = pinit_4m;
+    else if (size < ((size_t)1 << 24)) *p2pStartBlk = pinit_8m;
+    else if (size < ((size_t)1 << 25)) *p2pStartBlk = pinit_16m;
+    else if (size < ((size_t)1 << 26)) *p2pStartBlk = pinit_32m;
+    else *p2pStartBlk = pinit_64m;
+*/
+    *p2pStartBlk = 0;
 
     if (retryCnt++ > 2) {
-//      p2p.unlock();
       std::cout << "p2p malloc failed: " << (double)size / 1024 / 1024 << std::endl;
       *gpu_ptr = NULL;
       return;
@@ -358,23 +499,23 @@ void ARC_memory::p2p_free(void* addr, size_t size) {
 
   if (p2p_sz == 0) return;
 
-//  p2p.lock();
-
   p2p_page_map[startBlk] = 0;
 
   for (unsigned int i = startBlk; i < startBlk + reqBlk; i++) {
     p2pTable[i] = false;
   }
 
+  p2p_freeBlk += reqBlk;
+
+/*
   if (size < ((size_t)1 << 22)) p2pBlk_0_4 = std::min(p2pBlk_0_4, startBlk);
   else if (size < ((size_t)1 << 23)) p2pBlk_4_8 = std::min(p2pBlk_4_8, startBlk);
   else if (size < ((size_t)1 << 24)) p2pBlk_8_16 = std::min(p2pBlk_8_16, startBlk);
   else if (size < ((size_t)1 << 25)) p2pBlk_16_32 = std::min(p2pBlk_16_32, startBlk);
   else if (size < ((size_t)1 << 26)) p2pBlk_32_64 = std::min(p2pBlk_32_64, startBlk);
   else p2pBlk_64 = std::min(p2pBlk_64, startBlk);
-//  p2pBlk_0_4 = std::min(p2pBlk_0_4, startBlk);
-
-//  p2p.unlock();
+*/
+  p2pBlk_0_4 = std::min(p2pBlk_0_4, startBlk);
 }
 
 void* ARC_memory::get_fp16_addr(int tid) {
@@ -496,49 +637,69 @@ void ARC_memory::Arcp2pSetting(int flags) {
   p2p_sz = p2p_in_gb << 30;
   max_p2p = p2p_sz / BLK_SZ;
 
+  init_4m = ((size_t)(max_device * 0.2));
+  init_16m = ((size_t)(max_device * 0.4));
+  init_64m = ((size_t)(max_device * 0.6));
+  init_128m = ((size_t)(max_device * 0.8));
+
+  devBlk_0_4 = 0;
+  devBlk_4_16 = init_4m;
+  devBlk_16_64 = init_16m;
+  devBlk_64_128 = init_64m;
+  devBlk_128 = init_128m;
+
+  devBlk_0_4_rev = init_4m - 1;
+  devBlk_4_16_rev = init_16m - 1;
+  devBlk_16_64_rev = init_64m - 1;
+  devBlk_64_128_rev = init_128m - 1;
+  devBlk_128_rev = max_device - 1;
+
   // CycleGAN batch-16
 /*
-  init_4m = ((size_t)(max_p2p * 0.1));
-  init_8m = ((size_t)(max_p2p * 0.15));
-  init_16m = ((size_t)(max_p2p * 0.2));
-  init_32m = ((size_t)(max_p2p * 0.3));
-  init_64m = ((size_t)(max_p2p * 0.7));
+  pinit_4m = ((size_t)(max_p2p * 0.1));
+  pinit_8m = ((size_t)(max_p2p * 0.15));
+  pinit_16m = ((size_t)(max_p2p * 0.2));
+  pinit_32m = ((size_t)(max_p2p * 0.3));
+  pinit_64m = ((size_t)(max_p2p * 0.7));
 */
 
   // BERT batch-14
-  init_4m = ((size_t)(max_p2p * 0.15));
-  init_8m = ((size_t)(max_p2p * 0.3));
-  init_16m = ((size_t)(max_p2p * 0.45));
-  init_32m = ((size_t)(max_p2p * 0.55));
-  init_64m = ((size_t)(max_p2p * 0.9));
-
 /*
-  init_4m = ((size_t)(max_p2p * 0.2));
-  init_8m = ((size_t)(max_p2p * 0.4));
-  init_16m = ((size_t)(max_p2p * 0.5));
-  init_32m = ((size_t)(max_p2p * 0.7));
-  init_64m = ((size_t)(max_p2p * 0.85));
+  pinit_4m = ((size_t)(max_p2p * 0.15));
+  pinit_8m = ((size_t)(max_p2p * 0.3));
+  pinit_16m = ((size_t)(max_p2p * 0.45));
+  pinit_32m = ((size_t)(max_p2p * 0.55));
+  pinit_64m = ((size_t)(max_p2p * 0.9));
 */
 
   p2pBlk_0_4 = 0;
-  p2pBlk_4_8 = init_4m;
-  p2pBlk_8_16 = init_8m;
-  p2pBlk_16_32 = init_16m;
-  p2pBlk_32_64 = init_32m;
-  p2pBlk_64 = init_64m;
+/*
+  p2pBlk_4_8 = pinit_4m;
+  p2pBlk_8_16 = pinit_8m;
+  p2pBlk_16_32 = pinit_16m;
+  p2pBlk_32_64 = pinit_32m;
+  p2pBlk_64 = pinit_64m;
+*/
 
   printf("Device memory size = %ld GB\n", device_in_gb);
   printf("P2P memory size = %ld GB\n", p2p_in_gb);
 
   if (device_in_gb > 0) {
     cudaMalloc(&deviceAddr, device_sz);
-    deviceTable = new bool[max_device];
-    memset(deviceTable, 0, sizeof(bool) * max_device);
+    deviceTable = new short[max_device];
+    memset(deviceTable, 0, sizeof(short) * max_device);
 
     device_page_map = new unsigned int[max_device];
     for (int i = 0; i < max_device; i++) {
       device_page_map[i] = 0;
     }
+
+    device_page_map_rev = new unsigned int[max_device];
+    for (int i = 0; i < max_device; i++) {
+      device_page_map_rev[i] = 0;
+    }
+
+    dev_freeBlk = (double)max_device;
   }
 
   if (p2p_in_gb > 0) {
@@ -550,6 +711,8 @@ void ARC_memory::Arcp2pSetting(int flags) {
     for (int i = 0; i < max_p2p; i++) {
       p2p_page_map[i] = 0;
     }
+
+    p2p_freeBlk = (double)max_p2p;
   }
 
   if (flags & ARC_FLAG_VDNN) {
@@ -659,12 +822,9 @@ void ARC_memory::Arcp2pSubmission(uint64_t addr, uint64_t size, uint64_t *p_offs
     last_allocated_offset = last_allocated_offset + aligned_size;
 
     *p_offs = offset;
-
-    on_the_fly += 1;
   } else {
     // prefetch case, handle requested nvme offset
     offset = *p_offs;
-    on_the_fly += 1;
   }
 
   req_element req;
@@ -704,7 +864,13 @@ void ARC_memory::Arcp2pSubmission(uint64_t addr, uint64_t size, uint64_t *p_offs
     }
   }
 
+  on_the_fly += 1;
+
   req_queue.push(req);
+}
+
+bool ARC_memory::Arcp2pReqEmpty() {
+  return req_queue.empty();
 }
 
 // completion
@@ -729,7 +895,6 @@ void ARC_memory::Arcp2pCompletion(bool prefCall) {
       return;
     }
 
-//    m2.lock();
     // first, run completer of arcp2p, this will update cpl.issued
     arcp2p_completion(arc_handle);
 
@@ -766,8 +931,6 @@ void ARC_memory::Arcp2pCompletion(bool prefCall) {
   
         if (false == isFP16)
           delete req.stor;
-  
-        on_the_fly -= 1;
 
       } else if (arcp2p_ssdtogpu == req.dir) {
         // [TODO] backend job needed for read done case (ex. notify backward operation that data is ready)
@@ -817,11 +980,11 @@ void ARC_memory::Arcp2pCompletion(bool prefCall) {
           cudaMemcpyAsync(req.info->dst, req.info->ptr, req.size, cudaMemcpyDeviceToDevice, req.str);
         }
   
-        on_the_fly -= 1;
         event_arr_h2d[req.info->tid] = false;
         delete req.info;
       }
   
+      on_the_fly -= 1;
       req.p_cpl->requested = false;
   
       // remove current element
@@ -849,7 +1012,6 @@ void ARC_memory::Arcp2pCompletion(bool prefCall) {
         }
       }
     }
-//    m2.unlock();
   }
 }
 

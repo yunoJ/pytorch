@@ -712,13 +712,6 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
 
 //      arc_vm.Arcp2pSubmission(p2p_addr, p2p_size, p_offs, p_cpl, dir, stor, info);
 
-      if (arc_vm.on_the_fly > 1) {
-        std::cout << "on_the_fly in offload" << std::endl;
-        while (arc_vm.on_the_fly > 0) {
-          arc_vm.Arcp2pCompletion(false);
-        }
-      }
-
       arc_vm.Arcp2pSubmission(p2p_addr, p2p_size, p_offs, p_cpl, dir, stor, info, stream.stream());
       arc_vm.Arcp2pCompletion(false);
     } else if (arcp2p_ssdtogpu == dir) {
@@ -735,13 +728,6 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
       }
 
 //      arc_vm.Arcp2pSubmission(p2p_addr, p2p_size, p_offs, p_cpl, dir, nullptr, info);
-
-      if (arc_vm.on_the_fly > 1) {
-        while (arc_vm.on_the_fly > 0) {
-          std::cout << "on_the_fly in prefetch" << std::endl;
-          arc_vm.Arcp2pCompletion(false);
-        }
-      }
 
       arc_vm.Arcp2pSubmission(p2p_addr, p2p_size, p_offs, p_cpl, dir, nullptr, info, stream.stream());
       arc_vm.Arcp2pCompletion(false);

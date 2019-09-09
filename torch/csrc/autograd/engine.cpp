@@ -661,7 +661,7 @@ auto Engine::execute(const edge_list& roots,
   at::globalContext().ARCGlobal.endForward();
   ARCCppEngine::joinOffload();
   c10::cuda::CUDACachingAllocator::emptyCache();
-//  std::cout << "================Forward end: " << at::globalContext().ARCGlobal.curBackNum() << " ===================" << std::endl;
+  std::cout << "================Forward end: " << at::globalContext().ARCGlobal.curBackNum() << " ===================" << std::endl;
 
   if (!at::globalContext().ARCGlobal.isOnDemand()) {
     at::native::arc_vm.pref_it = at::globalContext().ARCGlobal.getBackPath();
@@ -675,8 +675,8 @@ auto Engine::execute(const edge_list& roots,
   size_t freeBytes;
   size_t p2pfreeBytes;
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    freeBytes = at::native::arc_vm.device_occupancy();
-    p2pfreeBytes = at::native::arc_vm.p2p_occupancy();
+    freeBytes = at::native::arc_vm.device_occupancy_size();
+    p2pfreeBytes = at::native::arc_vm.p2p_occupancy_size();
 
     std::cout << "Remaining GPU memory: " << (double)freeBytes/1024/1024 << std::endl;
     std::cout << "Remaining GPU memory p2p: " << (double)p2pfreeBytes/1024/1024 << std::endl;
@@ -757,21 +757,20 @@ auto Engine::execute(const edge_list& roots,
 
   // by sam SNU-ARC
   // end of backward path
-//  if (!at::globalContext().ARCGlobal.isOnDemand())
-//    ARCCppEngine::joinPrefetchThread();
 
+//  cudaDeviceSynchronize();
   c10::cuda::CUDACachingAllocator::emptyCache();
-//  std::cout << "================Backward end: " << at::globalContext().ARCGlobal.curBackNum() << " ===================" << std::endl;
+  std::cout << "================Backward end: " << at::globalContext().ARCGlobal.curBackNum() << " ===================" << std::endl;
 
   if (at::globalContext().ARCGlobal.isOnDemand()) {
     if (at::native::arc_vm.is_vdnn()) {
-      ARCCppEngine::checkTest((double)freeBytes / 1024 / 1024 / 1.2);
+      ARCCppEngine::checkTest2((double)freeBytes / 1024 / 1024 * 0.7);
     }
 
     double remainSize = 0;
     if (at::native::arc_vm.is_vdnn()) {
       std::cout << "Flush scheduling start" << std::endl;
-      remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 / 8);
+      remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 / 1.2);
    
       if (remainSize > 0)  remainSize = ARCCppEngine::checkLarge(remainSize);
 

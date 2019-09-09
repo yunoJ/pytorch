@@ -59,7 +59,8 @@ namespace {
 using stream_set = std::unordered_set<cuda::CUDAStream>;
 
 constexpr size_t kMinBlockSize = 512;       // all sizes are rounded to at least 512 bytes
-constexpr size_t kSmallSize = 1048576;      // largest "small" allocation is 1 MiB
+//constexpr size_t kSmallSize = 1048576;      // largest "small" allocation is 1 MiB
+constexpr size_t kSmallSize = 1;      // largest "small" allocation is 1 MiB
 constexpr size_t kSmallBuffer = 2097152;    // "small" allocations are packed in 2 MiB blocks
 constexpr size_t kLargeBuffer = 20971520;   // "large" allocations may be packed in 20 MiB blocks
 constexpr size_t kMinLargeAlloc = 10485760; // allocations between 1 and 10 MiB may use kLargeBuffer
@@ -191,7 +192,7 @@ struct THCCachingAllocator
   }
 
   /** allocates a block which is safe to use from the provided stream */
-  void malloc(void** devPtr, size_t size, cudaStream_t stream)
+  void malloc(void** devPtr, size_t size, cudaStream_t stream, bool reverse)
   {
     std::lock_guard<std::recursive_mutex> lock(mutex);
 
@@ -232,8 +233,9 @@ struct THCCachingAllocator
     }
     if (block == nullptr) {
       void* ptr;
-      size_t alloc_size = get_allocation_size(size);
-      cudaError_t err = cuda_malloc_retry(device, &ptr, alloc_size);
+//      size_t alloc_size = get_allocation_size(size);
+      size_t alloc_size = size;
+      cudaError_t err = cuda_malloc_retry(device, &ptr, alloc_size, reverse);
       if (err != cudaSuccess) {
         if (err == cudaErrorMemoryAllocation) {
           cudaGetLastError();  // clear CUDA error
@@ -468,7 +470,7 @@ struct THCCachingAllocator
     }
   }
 
-  cudaError_t cuda_malloc_retry(int device, void** devPtr, size_t size)
+  cudaError_t cuda_malloc_retry(int device, void** devPtr, size_t size, bool reverse)
   {
     // Try cudaMalloc. If cudaMalloc fails, frees all non-split cached blocks
     // and retries.
@@ -476,22 +478,24 @@ struct THCCachingAllocator
       at::native::arc_vm.device_malloc(devPtr, size);
 
       if (at::native::arc_vm.is_debug()) {
-        std::cout << "device_malloc addr: " << *devPtr << ", size: " << size << std::endl;
+        std::cout << "device_malloc addr: " << *devPtr << ", size: " << size << ", tensor reverse?: " << reverse << std::endl;
       }
 
       if (*devPtr == NULL) {
         free_cached_blocks(device);
-        at::native::arc_vm.device_malloc(devPtr, size);
+
+        if (reverse) {
+          at::native::arc_vm.device_malloc_reverse(devPtr, size);
+        } else {
+          at::native::arc_vm.device_malloc(devPtr, size);
+        }
 
         if (at::native::arc_vm.is_debug()) {
-          std::cout << "device_malloc retry addr: " << *devPtr << ", size: " << size << std::endl;
+          std::cout << "device_malloc retry addr: " << *devPtr << ", size: " << size << ", tensor reverse?: " << reverse << std::endl;
         }
 
         if (*devPtr == NULL) {
-//          std::cout << "Remained size: " << (double)at::native::arc_vm.device_occupancy()/1024/1024 << std::endl;
-          if (at::native::arc_vm.is_debug()) {
-            std::cout << "arc_vm.device_malloc() failed" << std::endl;
-          }
+          std::cout << "arc_vm.device_malloc() failed, remained size: " << (double)at::native::arc_vm.device_occupancy_size() / 1024 / 1024 << std::endl;
           return cudaErrorMemoryAllocation;
         }
       }
@@ -538,10 +542,6 @@ struct THCCachingAllocator
       Block* block = *it;
       if (!block->prev && !block->next) {
         if (at::native::arc_vm.is_vdnn()) {
-          if (at::native::arc_vm.is_debug()) {
-            std::cout << "device_free addr: " << (void*)block->ptr << ", size: " << block->size << std::endl;
-          }
-
           at::native::arc_vm.device_free((void *)block->ptr, block->size);
         } else {
           C10_CUDA_CHECK(cudaFree((void*)block->ptr));
@@ -659,10 +659,21 @@ struct CudaCachingAllocator : public Allocator {
     C10_CUDA_CHECK(cudaGetDevice(&device));
     void* r = nullptr;
     if (size != 0) {
-      caching_allocator.malloc(&r, size, cuda::getCurrentCUDAStream(device));
+      caching_allocator.malloc(&r, size, cuda::getCurrentCUDAStream(device), false);
     }
     return {r, r, &CudaCachingDeleter, Device(DeviceType::CUDA, device)};
   }
+
+  DataPtr ARCallocate(size_t size) const override {
+    int device;
+    C10_CUDA_CHECK(cudaGetDevice(&device));
+    void* r = nullptr;
+    if (size != 0) {
+      caching_allocator.malloc(&r, size, cuda::getCurrentCUDAStream(device), true);
+    }
+    return {r, r, &CudaCachingDeleter, Device(DeviceType::CUDA, device)};
+  }
+
   DeleterFnPtr raw_deleter() const override {
     return &CudaCachingDeleter;
   }
@@ -798,7 +809,7 @@ void* raw_alloc(size_t nbytes) {
   int device;
   C10_CUDA_CHECK(cudaGetDevice(&device));
   void* r = nullptr;
-  caching_allocator.malloc(&r, nbytes, cuda::getCurrentCUDAStream(device));
+  caching_allocator.malloc(&r, nbytes, cuda::getCurrentCUDAStream(device), false);
   return r;
 }
 
