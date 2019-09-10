@@ -127,7 +127,6 @@ bool Context::ARCGlobalContext::isBERT() {return bert;}
 
 // Data structure definitions
 // tensor, operation counts
-static int global_tensor_id_ = 0;
 static int global_operation_id_ = 0;
 // flags  
 // on_demand_mode is required to construct back_path_
@@ -154,12 +153,17 @@ c10::cuda::CUDAStream Context::ARCGlobalContext::globalPrefetchStream() { return
 Tid Context::ARCGlobalContext::getTid(Tensor& t) { return t.unsafeGetTensorImpl()->tensor_id; }
 
 void Context::ARCGlobalContext::setNewTid(Tensor& t) { 
-    t.unsafeGetTensorImpl()->tensor_id = ++global_tensor_id_; 
+    t.unsafeGetTensorImpl()->tensor_id = ++at::native::arc_vm.global_tensor_id_; 
 }
+
+void Context::ARCGlobalContext::setTid(Tensor& t, int tid) { 
+    t.unsafeGetTensorImpl()->tensor_id = tid;
+}
+
 void Context::ARCGlobalContext::updateTid(Tensor& t, int tid) { t.unsafeGetTensorImpl()->tensor_id = tid; }
 void Context::ARCGlobalContext::resetGlobalTid() { 
-    if (cycle_gan) global_tensor_id_ = RESET_TID;
-    else global_tensor_id_ = 0; 
+    if (cycle_gan) at::native::arc_vm.global_tensor_id_ = RESET_TID;
+    else at::native::arc_vm.global_tensor_id_ = 0; 
 }
 Oid Context::ARCGlobalContext::getCurOid() { return global_operation_id_; }
 Oid Context::ARCGlobalContext::getNewOid() { return ++global_operation_id_; }

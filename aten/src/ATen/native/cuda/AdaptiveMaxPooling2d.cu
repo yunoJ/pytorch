@@ -12,6 +12,7 @@
 #include <cfloat>
 #include <cmath>
 
+#include <ATen/native/cuda/arc_flag.h>
 
 namespace at {
 namespace native {
@@ -426,8 +427,14 @@ std::tuple<Tensor, Tensor> adaptive_max_pool2d_cuda(
   const Tensor& input,
   IntArrayRef output_size)
 {
-  Tensor output = at::empty({0}, input.options());
-  Tensor indices = at::empty({0}, input.options().dtype(kLong));
+  int newTid = ++arc_vm.global_tensor_id_;
+  Tensor output = arc_vm.liveness_result[newTid] ? at::ARCempty({0}, input.options()) : at::empty({0}, input.options());
+  output.unsafeGetTensorImpl()->tensor_id = newTid;
+
+  newTid = ++arc_vm.global_tensor_id_;
+  Tensor indices = arc_vm.liveness_result[newTid] ? at::ARCempty({0}, input.options().dtype(kLong)) : at::empty({0}, input.options().dtype(kLong));
+  indices.unsafeGetTensorImpl()->tensor_id = newTid;
+
   adaptive_max_pool2d_out_cuda_template(
     output,
     indices,

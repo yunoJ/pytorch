@@ -66,6 +66,13 @@ std::tuple<Tensor,Tensor,Tensor,int64_t> VariableType::_batch_norm_impl_index(co
     jit::tracer::addOutput(node, result2);
     jit::tracer::addOutput(node, result3);
   }
+
+  int tid0 = at::globalContext().ARCGlobal.getTid(result0);
+  int tid1 = at::globalContext().ARCGlobal.getTid(result1);
+  int tid2 = at::globalContext().ARCGlobal.getTid(result2);
+
+  std::cout << "result tid of batch norm: " << tid0 << ", " << tid1 << ", " << tid2 << std::endl;
+
   return std::make_tuple(std::move(result0), std::move(result1), std::move(result2), std::move(result3));
 }
 std::tuple<Tensor,Tensor> VariableType::_ctc_loss(const Tensor & log_probs, const Tensor & targets, IntArrayRef input_lengths, IntArrayRef target_lengths, int64_t blank, bool zero_infinity) {

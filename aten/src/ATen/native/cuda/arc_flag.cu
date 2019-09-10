@@ -118,12 +118,17 @@ typedef struct {
 
 std::queue<req_element> req_queue;
 
-ARC_memory::ARC_memory(): relu_thru(false), mapping(false),
+ARC_memory::ARC_memory(): global_tensor_id_(0), relu_thru(false), mapping(false),
     feature_map_accum(0), gradient_map_accum(0), weight_accum(0), misc_accum(0),
     isVDNN(false), isFP16(false), isCSR(false), isUsingSSD(false), isTesla(false), isDebug(false),
     device_sz(0), max_device(0), p2p_sz(0), max_p2p(0) {
 
   on_the_fly = 0;
+
+  liveness_result = new bool[NUM_TENSOR];
+  for (int i = 0; i < NUM_TENSOR; i++) {
+    liveness_result[i] = false;
+  }
 
   fp16_ptr_arr = new uint64_t[NUM_TENSOR];
   bit_ptr_arr = new uint64_t[NUM_TENSOR];

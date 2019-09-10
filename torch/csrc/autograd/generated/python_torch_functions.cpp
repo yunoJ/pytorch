@@ -2777,12 +2777,11 @@ static PyObject * THPVariable_batch_norm(PyObject* self_, PyObject* args, PyObje
   }
   Tensor input = r.tensor(0);
 
-
   if(at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
     ARCPyEngine::fetch(input);
   
   Tensor weight = r.tensor(1);
-  at::globalContext().ARCGlobal.setNewTid(weight);
+//  at::globalContext().ARCGlobal.setNewTid(weight);
 
   Tensor output;
   if (r.idx == 0) {
@@ -2790,8 +2789,6 @@ static PyObject * THPVariable_batch_norm(PyObject* self_, PyObject* args, PyObje
   }
   
   // all batch norm functions offlaod result
-  //at::globalContext().ARCGlobal.setNewTid(output);
-
   if (at::native::arc_vm.is_using_ssd())
     at::native::arc_vm.Arcp2pCompletion(false);
 
@@ -3523,14 +3520,13 @@ static PyObject * THPVariable_conv2d(PyObject* self_, PyObject* args, PyObject* 
   }
   Tensor input = r.tensor(0);
 
-
   if(at::globalContext().ARCGlobal.isOnDemand() && (input.device().type() == at::DeviceType::CPU))
     ARCPyEngine::fetch(input);
 
   //std::cout << "conv2d in: " << input[0][0][0][0].item().toFloat() << std::endl;
  
   Tensor weight = r.tensor(1);
-  at::globalContext().ARCGlobal.setNewTid(weight);
+//  at::globalContext().ARCGlobal.setNewTid(weight);
 
 
   Tensor output;
@@ -3538,7 +3534,7 @@ static PyObject * THPVariable_conv2d(PyObject* self_, PyObject* args, PyObject* 
     output = dispatch_conv2d(input, weight, r.tensor(2), r.intlist(3), r.intlist(4), r.intlist(5), r.toInt64(6));
   }
 
-  at::globalContext().ARCGlobal.setNewTid(output);
+//  at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
     at::native::arc_vm.Arcp2pCompletion(false);
@@ -3636,7 +3632,7 @@ static PyObject * THPVariable_conv_transpose2d(PyObject* self_, PyObject* args, 
     ARCPyEngine::fetch(input);
 
   Tensor weight = r.tensor(1);
-  at::globalContext().ARCGlobal.setNewTid(weight);
+//  at::globalContext().ARCGlobal.setNewTid(weight);
 
   Tensor output;
   if (r.idx == 0) {
@@ -4341,7 +4337,7 @@ static PyObject * THPVariable_embedding(PyObject* self_, PyObject* args, PyObjec
   }*/
 
   Tensor weight = r.tensor(0);
-  at::globalContext().ARCGlobal.setNewTid(weight);
+//  at::globalContext().ARCGlobal.setNewTid(weight);
 
 
   Tensor output;
@@ -5890,7 +5886,7 @@ static PyObject * THPVariable_instance_norm(PyObject* self_, PyObject* args, PyO
     ARCPyEngine::fetch(input);
 
   Tensor weight = r.tensor(1);
-  at::globalContext().ARCGlobal.setNewTid(weight);
+//  at::globalContext().ARCGlobal.setNewTid(weight);
 
   Tensor output;
   if (r.idx == 0) {
@@ -7935,7 +7931,7 @@ static PyObject * THPVariable_prelu(PyObject* self_, PyObject* args, PyObject* k
     ARCPyEngine::fetch(input);
   
   Tensor weight = r.tensor(1);
-  at::globalContext().ARCGlobal.setNewTid(weight);
+//  at::globalContext().ARCGlobal.setNewTid(weight);
 
 
   Tensor output;

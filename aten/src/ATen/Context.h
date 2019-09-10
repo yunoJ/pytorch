@@ -115,6 +115,7 @@ class CAFFE2_API Context {
     // tid, oid manipulation
     Tid getTid(at::Tensor& t);
     void setNewTid(at::Tensor& t);
+    void setTid(at::Tensor& t, int tid);
     void updateTid(at::Tensor& t, int tid);
     void resetGlobalTid();
     

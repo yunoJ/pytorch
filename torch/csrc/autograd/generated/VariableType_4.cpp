@@ -3784,11 +3784,18 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::cudnn_batch_norm(Tensor & input, 
     at::AutoNonVariableTypeMode non_var_type_mode(true);
     return at::cudnn_batch_norm(input_, weight_, bias_, running_mean_, running_var_, training, exponential_average_factor, epsilon);
   })();
+
+  int tid_tmp0 = at::globalContext().ARCGlobal.getTid(std::get<0>(tmp));
+  int tid_tmp1 = at::globalContext().ARCGlobal.getTid(std::get<1>(tmp));
+  int tid_tmp2 = at::globalContext().ARCGlobal.getTid(std::get<2>(tmp));
+
   std::tie(result0, result1, result2) = as_variable(std::move(tmp));
-  
-  at::globalContext().ARCGlobal.setNewTid(result0);
-  at::globalContext().ARCGlobal.setNewTid(result1);
-  at::globalContext().ARCGlobal.setNewTid(result2);
+
+  std::cout << "asdfasdf: " << tid_tmp0 << ", " << tid_tmp1 << ", " << tid_tmp2 << std::endl;
+
+  at::globalContext().ARCGlobal.setTid(result0, tid_tmp0);
+  at::globalContext().ARCGlobal.setTid(result1, tid_tmp1);
+  at::globalContext().ARCGlobal.setTid(result2, tid_tmp2);
 
   #ifndef NDEBUG
   if (input__storage_saved.has_value())
@@ -3818,6 +3825,11 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::cudnn_batch_norm(Tensor & input, 
   }
   if (grad_fn) {
     if (at::globalContext().ARCGlobal.isForward()) {
+      int tid1 = at::globalContext().ARCGlobal.getTid(result1);
+      int tid2 = at::globalContext().ARCGlobal.getTid(result2);
+
+      std::cout << "cudnn_batch_norm result: " << tid1 << ", " << tid2 << std::endl;
+
       ARCCppEngine::offLoad(result1, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result1_), true);
       ARCCppEngine::offLoad(result2, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result2_), true);
     }

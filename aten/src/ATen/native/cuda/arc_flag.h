@@ -19,7 +19,7 @@
 #include <torch/csrc/autograd/saved_variable.h>
 
 #define BLK_SZ ((size_t)1 << 12)
-#define NUM_TENSOR 4096
+#define NUM_TENSOR 8192
 #define NUM_OP 8192
 
 using namespace std;
@@ -48,6 +48,9 @@ class ARC_memory {
  public:
   ARC_memory();
   ~ARC_memory();
+
+  int global_tensor_id_;
+  bool* liveness_result;
 
   bool relu_thru;
   bool mapping;

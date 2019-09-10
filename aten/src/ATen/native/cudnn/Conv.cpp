@@ -4,6 +4,8 @@
 #include <ATen/cuda/CUDAConfig.h>
 #include <ATen/cuda/Exceptions.h>
 
+#include <ATen/native/cuda/arc_flag.h>
+
 #if !AT_CUDNN_ENABLED()
 
 namespace at { namespace native {
@@ -899,11 +901,14 @@ Tensor cudnn_convolution_forward(
   checkAllSameType(c, {input, weight});
   checkAllSameGPU(c, {input, weight});
 
-//  auto output_t = at::empty(
-  auto output_t = at::ARCempty(
-                    conv_output_size(input->sizes(), weight->sizes(),
-                                     padding, stride, dilation, groups),
-                    input->options());
+  int newTid = ++arc_vm.global_tensor_id_;
+  std::cout << "test conv2d output tensor_id: " << newTid << std::endl;
+
+  auto output_t =  arc_vm.liveness_result[newTid] ? 
+      at::ARCempty(conv_output_size(input->sizes(), weight->sizes(), padding, stride, dilation, groups), input->options()) :
+      at::empty(conv_output_size(input->sizes(), weight->sizes(), padding, stride, dilation, groups), input->options());
+
+  output_t.unsafeGetTensorImpl()->tensor_id = newTid;
 
   // Avoid ambiguity of "output" when this is being used as backwards
   TensorArg output{ output_t, "result", 0 };
