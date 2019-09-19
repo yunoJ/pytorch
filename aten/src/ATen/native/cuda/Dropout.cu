@@ -9,6 +9,8 @@
 
 #include <THC/THCGeneral.h>
 
+#include <ATen/native/cuda/arc_flag.h>
+
 namespace at{
 namespace native{
 
@@ -89,8 +91,20 @@ void masked_scale_kernel(at::Tensor& ret, const at::Tensor src, const at::Tensor
 std::tuple<Tensor,Tensor>
 fused_dropout_cuda(const Tensor& self, double p, Generator * gen_){
   auto gen = get_generator_or_default<CUDAGenerator>(gen_, cuda::detail::getDefaultCUDAGenerator());
+
+  int newTid = ++arc_vm.global_tensor_id_;
   Tensor ret = at::empty_like(self);
-  Tensor mask = at::empty(self.sizes(), self.options().dtype(kByte));
+  ret.unsafeGetTensorImpl()->tensor_id = newTid;
+//  std::cout << "dropout ret newTid: " << newTid << std::endl;
+
+  newTid = ++arc_vm.global_tensor_id_;
+  Tensor mask = arc_vm.liveness_result[arc_vm.cur_back_num][newTid] ?
+      at::ARCempty(self.sizes(), self.options().dtype(kByte)) : at::empty(self.sizes(), self.options().dtype(kByte));
+  mask.unsafeGetTensorImpl()->tensor_id = newTid;
+//  std::cout << "dropout mask newTid: " << newTid << std::endl;
+
+//  std::cout << "dropout self newTid: " << self.unsafeGetTensorImpl()->tensor_id << std::endl;
+
   const int64_t nelem = self.numel();
 //empty tensors should not get here, but just in case, avoid FPE
   if (nelem==0) return std::tuple<Tensor,Tensor>(self, mask);

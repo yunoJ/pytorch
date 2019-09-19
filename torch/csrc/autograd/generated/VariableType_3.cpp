@@ -67,12 +67,6 @@ std::tuple<Tensor,Tensor,Tensor,int64_t> VariableType::_batch_norm_impl_index(co
     jit::tracer::addOutput(node, result3);
   }
 
-  int tid0 = at::globalContext().ARCGlobal.getTid(result0);
-  int tid1 = at::globalContext().ARCGlobal.getTid(result1);
-  int tid2 = at::globalContext().ARCGlobal.getTid(result2);
-
-  std::cout << "result tid of batch norm: " << tid0 << ", " << tid1 << ", " << tid2 << std::endl;
-
   return std::make_tuple(std::move(result0), std::move(result1), std::move(result2), std::move(result3));
 }
 std::tuple<Tensor,Tensor> VariableType::_ctc_loss(const Tensor & log_probs, const Tensor & targets, IntArrayRef input_lengths, IntArrayRef target_lengths, int64_t blank, bool zero_infinity) {
@@ -1232,6 +1226,7 @@ std::tuple<Tensor,Tensor> VariableType::adaptive_max_pool1d(const Tensor & self,
     jit::tracer::setTracingState(nullptr);
   }
   std::tie(result0, result1) = TypeDefault::adaptive_max_pool1d(self, output_size);
+  at::native::arc_vm.misc_accum += (double)self.nbytes() / 1024 / 1024;
   if (tracer_state) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result0);
@@ -3219,7 +3214,11 @@ Tensor VariableType::div(Tensor & self, Tensor & other) {
     at::AutoNonVariableTypeMode non_var_type_mode(true);
     return at::div(self_, other_);
   })();
+
+  int tid = at::globalContext().ARCGlobal.getTid(tmp);
   auto result = as_variable(std::move(tmp));
+  if (tid != 0)  at::globalContext().ARCGlobal.setTid(result, tid);
+
   #ifndef NDEBUG
   if (self__storage_saved.has_value())
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));
@@ -9359,10 +9358,11 @@ Tensor VariableType::sqrt(const Tensor & self) {
     at::AutoNonVariableTypeMode non_var_type_mode(true);
     return at::sqrt(self_);
   })();
-  auto result = as_variable(std::move(tmp));
-  
-  at::globalContext().ARCGlobal.setNewTid(result);
 
+  int tid = at::globalContext().ARCGlobal.getTid(tmp);
+  auto result = as_variable(std::move(tmp));
+  if (tid != 0)  at::globalContext().ARCGlobal.setTid(result, tid);
+  
   #ifndef NDEBUG
   if (self__storage_saved.has_value())
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));

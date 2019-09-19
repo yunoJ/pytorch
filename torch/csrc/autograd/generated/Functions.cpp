@@ -2279,6 +2279,7 @@ variable_list AddBackward1::apply(variable_list&& grads) {
   if (should_compute_output({ self_ix })) {
     auto grad_result = grad;
     copy_range(grad_inputs, self_ix, grad_result);
+    at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
   if (at::native::arc_vm.is_vdnn()) {
     at::native::arc_vm.Arcp2pCompletion(true);
@@ -2385,10 +2386,12 @@ variable_list AddmmBackward::apply(variable_list&& grads) {
   if (should_compute_output({ mat1_ix })) {
     auto grad_result = mm_mat1_backward(grad, mat2, mat1, alpha);
     copy_range(grad_inputs, mat1_ix, grad_result);
+    at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
   if (should_compute_output({ mat2_ix })) {
     auto grad_result = mm_mat2_backward(grad, mat1, mat2_sizes, mat2.strides(), alpha);
     copy_range(grad_inputs, mat2_ix, grad_result);
+    at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
   if (should_compute_output({ self_ix })) {
     auto grad_result = maybe_multiply(grad, beta);
@@ -3187,12 +3190,14 @@ variable_list DivBackward0::apply(variable_list&& grads) {
   if (should_compute_output({ other_ix })) {
     auto grad_result = -grad * self / (other * other);
     copy_range(grad_inputs, other_ix, grad_result);
+    at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
     if ( at::globalContext().ARCGlobal.isBERT() )
       ARCCppEngine::dropTensor(this->getOid(), &self_);
   }
   if (should_compute_output({ self_ix })) {
     auto grad_result = grad / other;
     copy_range(grad_inputs, self_ix, grad_result);
+    at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
 
   if ( at::globalContext().ARCGlobal.isBERT() )
@@ -3261,6 +3266,7 @@ variable_list FusedDropoutBackward::apply(variable_list&& grads) {
   if (should_compute_output({ self_ix })) {
     auto grad_result = _fused_dropout_backward(grad, result1, p);
     copy_range(grad_inputs, self_ix, grad_result);
+    at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
   ARCCppEngine::dropTensor(this->getOid(), &result1_);
 
@@ -3339,6 +3345,7 @@ variable_list ErfBackward::apply(variable_list&& grads) {
   if (should_compute_output({ self_ix })) {
     auto grad_result = 2.0 / sqrt(M_PI) * exp(-(self.pow(2))) * grad;
     copy_range(grad_inputs, self_ix, grad_result);
+    at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
   ARCCppEngine::dropTensor(this->getOid(), &self_);
 
@@ -4406,10 +4413,12 @@ variable_list MmBackward::apply(variable_list&& grads) {
   if (should_compute_output({ mat2_ix })) {
     auto grad_result = mm_mat2_backward(grad, self, mat2_sizes, mat2.strides(), 1);
     copy_range(grad_inputs, mat2_ix, grad_result);
+    at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
   if (should_compute_output({ self_ix })) {
     auto grad_result = mm_mat1_backward(grad, mat2, self, 1);
     copy_range(grad_inputs, self_ix, grad_result);
+    at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
 
   ARCCppEngine::dropTensor(this->getOid(), &self_);
@@ -4453,6 +4462,7 @@ variable_list MulBackward0::apply(variable_list&& grads) {
   if (should_compute_output({ other_ix })) {
     auto grad_result = grad * self;
     copy_range(grad_inputs, other_ix, grad_result);
+    at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
     ARCCppEngine::dropTensor(this->getOid(), &self_);
   }
   if (should_compute_output({ self_ix })) {
@@ -4541,12 +4551,15 @@ variable_list NativeBatchNormBackward::apply(variable_list&& grads) {
     auto grad_result = native_batch_norm_backward(grad, input, weight, running_mean, running_var, result1, result2, training, eps, grad_input_mask);
       if (should_compute_output({ input_ix })) {
         copy_range(grad_inputs, input_ix, std::get<0>(grad_result));
+        at::native::arc_vm.gradient_map_accum += (double)std::get<0>(grad_result).nbytes() / 1024 / 1024;
       }
       if (should_compute_output({ weight_ix })) {
         copy_range(grad_inputs, weight_ix, std::get<1>(grad_result));
+        at::native::arc_vm.gradient_map_accum += (double)std::get<1>(grad_result).nbytes() / 1024 / 1024;
       }
       if (should_compute_output({ bias_ix })) {
         copy_range(grad_inputs, bias_ix, std::get<2>(grad_result));
+        at::native::arc_vm.gradient_map_accum += (double)std::get<2>(grad_result).nbytes() / 1024 / 1024;
       }
   }
 
@@ -4937,6 +4950,7 @@ variable_list PermuteBackward::apply(variable_list&& grads) {
   auto& grad = grads[0];
   if (should_compute_output({ self_ix })) {
     auto grad_result = permute_backwards(grad, dims);
+    at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
     copy_range(grad_inputs, self_ix, grad_result);
   }
   return grad_inputs;
@@ -4968,6 +4982,7 @@ variable_list PowBackward0::apply(variable_list&& grads) {
   if (should_compute_output({ self_ix })) {
     auto grad_result = pow_backward(grad, self, exponent);
     copy_range(grad_inputs, self_ix, grad_result);
+    at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
 
   ARCCppEngine::dropTensor(this->getOid(), &self_);
@@ -5409,6 +5424,7 @@ variable_list SqrtBackward::apply(variable_list&& grads) {
   if (should_compute_output({ self_ix })) {
     auto grad_result = grad / (2 * result);
     copy_range(grad_inputs, self_ix, grad_result);
+    at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
 
   ARCCppEngine::dropTensor(this->getOid(), &result_);
@@ -5696,6 +5712,7 @@ variable_list TanhBackward::apply(variable_list&& grads) {
   if (should_compute_output({ self_ix })) {
     auto grad_result = tanh_backward(grad, result);
     copy_range(grad_inputs, self_ix, grad_result);
+    at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
 
   ARCCppEngine::dropTensor(this->getOid(), &result_);
@@ -6118,14 +6135,17 @@ variable_list TrilinearBackward::apply(variable_list&& grads) {
       should_compute_output({ i3_ix }),
     };
     auto grad_result = _trilinear_backward(grad, i1, i2, i3, expand1, expand2, expand3, sumdim, unroll_dim, grad_input_mask);
+    at::native::arc_vm.gradient_map_accum += (double)std::get<2>(grad_result).nbytes() / 1024 / 1024;
     if (should_compute_output({ i1_ix })) {
       copy_range(grad_inputs, i1_ix, std::get<0>(grad_result));
     }
     if (should_compute_output({ i2_ix })) {
       copy_range(grad_inputs, i2_ix, std::get<1>(grad_result));
+      at::native::arc_vm.gradient_map_accum += (double)std::get<1>(grad_result).nbytes() / 1024 / 1024;
     }
     if (should_compute_output({ i3_ix })) {
       copy_range(grad_inputs, i3_ix, std::get<2>(grad_result));
+      at::native::arc_vm.gradient_map_accum += (double)std::get<0>(grad_result).nbytes() / 1024 / 1024;
     }
   }
   return grad_inputs;
@@ -6196,6 +6216,7 @@ variable_list EmbeddingBackward::apply(variable_list&& grads) {
   if (should_compute_output({ weight_ix })) {
     auto grad_result = embedding_backward(grad, indices, weight_argsize_0, padding_idx, scale_grad_by_freq, sparse);
     copy_range(grad_inputs, weight_ix, grad_result);
+    at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
 
   ARCCppEngine::dropTensor(this->getOid(), &indices_);
@@ -6290,6 +6311,7 @@ variable_list L1LossBackward::apply(variable_list&& grads) {
   if (should_compute_output({ self_ix })) {
     auto grad_result = l1_loss_backward(grad, self, target, reduction);
     copy_range(grad_inputs, self_ix, grad_result);
+    at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
 
   ARCCppEngine::dropTensor(this->getOid(), &self_);
@@ -6422,6 +6444,7 @@ variable_list ReluBackward0::apply(variable_list&& grads) {
   if (should_compute_output({ self_ix })) {
     auto grad_result = threshold_backward(grad, self, 0);
     copy_range(grad_inputs, self_ix, grad_result);
+    at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
   
   ARCCppEngine::dropTensor(this->getOid(), &self_);
@@ -6449,6 +6472,7 @@ variable_list ReluBackward1::apply(variable_list&& grads) {
   if (should_compute_output({ self_ix })) {
     auto grad_result = threshold_backward(grad, result, 0);
     copy_range(grad_inputs, self_ix, grad_result);
+    at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
   
   ARCCppEngine::dropTensor(this->getOid(), &result_);
@@ -6572,6 +6596,7 @@ variable_list LeakyReluBackward0::apply(variable_list&& grads) {
   if (should_compute_output({ self_ix })) {
     auto grad_result = leaky_relu_backward(grad, self, negative_slope);
     copy_range(grad_inputs, self_ix, grad_result);
+    at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
 
   ARCCppEngine::dropTensor(this->getOid(), &self_);
@@ -6600,6 +6625,7 @@ variable_list LeakyReluBackward1::apply(variable_list&& grads) {
   if (should_compute_output({ self_ix })) {
     auto grad_result = leaky_relu_backward(grad, result, negative_slope);
     copy_range(grad_inputs, self_ix, grad_result);
+    at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
 
   ARCCppEngine::dropTensor(this->getOid(), &result_);
@@ -6808,6 +6834,7 @@ variable_list ReflectionPad2DBackward::apply(variable_list&& grads) {
   if (should_compute_output({ self_ix })) {
     auto grad_result = reflection_pad2d_backward(grad, self, padding);
     copy_range(grad_inputs, self_ix, grad_result);
+    at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
 
   ARCCppEngine::dropTensor(this->getOid(), &self_);
@@ -6958,6 +6985,7 @@ variable_list AdaptiveAvgPool2DBackward::apply(variable_list&& grads) {
   if (should_compute_output({ self_ix })) {
     auto grad_result = _adaptive_avg_pool2d_backward(grad, self);
     copy_range(grad_inputs, self_ix, grad_result);
+    at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
   return grad_inputs;
 }
@@ -7020,6 +7048,7 @@ variable_list AvgPool2DBackward::apply(variable_list&& grads) {
   if (should_compute_output({ self_ix })) {
     auto grad_result = avg_pool2d_backward(grad, self, kernel_size, stride, padding, ceil_mode, count_include_pad, divisor_override);
     copy_range(grad_inputs, self_ix, grad_result);
+    at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
   
   ARCCppEngine::dropTensor(this->getOid(), &self_);
@@ -7089,6 +7118,7 @@ variable_list MaxPool2DWithIndicesBackward::apply(variable_list&& grads) {
   if (should_compute_output({ self_ix })) {
     auto grad_result = max_pool2d_with_indices_backward(grad, self, kernel_size, stride, padding, dilation, ceil_mode, result1);
     copy_range(grad_inputs, self_ix, grad_result);
+    at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
   
   ARCCppEngine::dropTensor(this->getOid(), &self_);
@@ -7167,12 +7197,15 @@ variable_list ConvTranspose2DBackward::apply(variable_list&& grads) {
     auto grad_result = conv_transpose2d_backward(grad, self, weight, kernel_size, stride, padding, output_padding, dilation, empty_like(grad), empty_like(grad), grad_input_mask);
     if (should_compute_output({ self_ix })) {
       copy_range(grad_inputs, self_ix, std::get<0>(grad_result));
+      at::native::arc_vm.gradient_map_accum += (double)std::get<0>(grad_result).nbytes() / 1024 / 1024;
     }
     if (should_compute_output({ weight_ix })) {
       copy_range(grad_inputs, weight_ix, std::get<1>(grad_result));
+      at::native::arc_vm.gradient_map_accum += (double)std::get<1>(grad_result).nbytes() / 1024 / 1024;
     }
     if (should_compute_output({ bias_ix })) {
       copy_range(grad_inputs, bias_ix, std::get<2>(grad_result));
+      at::native::arc_vm.gradient_map_accum += (double)std::get<2>(grad_result).nbytes() / 1024 / 1024;
     }
   }
 
@@ -7298,12 +7331,15 @@ variable_list ThnnConv2DBackward::apply(variable_list&& grads) {
     auto grad_result = thnn_conv2d_backward(grad, self, weight, kernel_size, stride, padding, finput, fgrad_input, grad_input_mask);
       if (should_compute_output({ self_ix })) {
         copy_range(grad_inputs, self_ix, std::get<0>(grad_result));
+        at::native::arc_vm.gradient_map_accum += (double)std::get<0>(grad_result).nbytes() / 1024 / 1024;
       }
       if (should_compute_output({ weight_ix })) {
         copy_range(grad_inputs, weight_ix, std::get<1>(grad_result));
+        at::native::arc_vm.gradient_map_accum += (double)std::get<1>(grad_result).nbytes() / 1024 / 1024;
       }
       if (should_compute_output({ bias_ix })) {
         copy_range(grad_inputs, bias_ix, std::get<2>(grad_result));
+        at::native::arc_vm.gradient_map_accum += (double)std::get<2>(grad_result).nbytes() / 1024 / 1024;
       }
   }
   ARCCppEngine::dropTensor(this->getOid(), &self_);
@@ -8452,12 +8488,15 @@ variable_list CudnnConvolutionBackward::apply(variable_list&& grads) {
     auto grad_result = cudnn_convolution_backward(self, grad, weight, padding, stride, dilation, groups, benchmark, deterministic, grad_input_mask);
       if (should_compute_output({ self_ix })) {
         copy_range(grad_inputs, self_ix, std::get<0>(grad_result));
+        at::native::arc_vm.gradient_map_accum += (double)std::get<0>(grad_result).nbytes() / 1024 / 1024;
       }
       if (should_compute_output({ weight_ix })) {
         copy_range(grad_inputs, weight_ix, std::get<1>(grad_result));
+        at::native::arc_vm.gradient_map_accum += (double)std::get<1>(grad_result).nbytes() / 1024 / 1024;
       }
       if (should_compute_output({ bias_ix })) {
         copy_range(grad_inputs, bias_ix, std::get<2>(grad_result));
+        at::native::arc_vm.gradient_map_accum += (double)std::get<2>(grad_result).nbytes() / 1024 / 1024;
       }
   }
 
@@ -8561,12 +8600,15 @@ variable_list CudnnBatchNormBackward::apply(variable_list&& grads) {
     auto grad_result = training ? cudnn_batch_norm_backward(input, grad.contiguous(), weight, running_mean, running_var, result1, result2, epsilon) : native_batch_norm_backward(grad, input, weight, running_mean, running_var, result1, result2, training, epsilon, grad_input_mask);
       if (should_compute_output({ input_ix })) {
         copy_range(grad_inputs, input_ix, std::get<0>(grad_result));
+        at::native::arc_vm.gradient_map_accum += (double)std::get<0>(grad_result).nbytes() / 1024 / 1024;
       }
       if (should_compute_output({ weight_ix })) {
         copy_range(grad_inputs, weight_ix, std::get<1>(grad_result));
+        at::native::arc_vm.gradient_map_accum += (double)std::get<1>(grad_result).nbytes() / 1024 / 1024;
       }
       if (should_compute_output({ bias_ix })) {
         copy_range(grad_inputs, bias_ix, std::get<2>(grad_result));
+        at::native::arc_vm.gradient_map_accum += (double)std::get<2>(grad_result).nbytes() / 1024 / 1024;
       }
   }
   //ARCCppEngine::dropTensor(this->getOid()); 
@@ -8677,15 +8719,19 @@ variable_list CudnnRnnBackward::apply(variable_list&& grads) {
     auto grad_result = _cudnn_rnn_backward(input, weight, weight_stride0, result4, hx, cx, result0, grads[0], grads[1], grads[2], mode, hidden_size, num_layers, batch_first, dropout, train, bidirectional, batch_sizes, dropout_state, retain_variables ? result3.clone() : result3, grad_input_mask);
       if (should_compute_output({ input_ix })) {
         copy_range(grad_inputs, input_ix, std::get<0>(grad_result));
+        at::native::arc_vm.gradient_map_accum += (double)std::get<0>(grad_result).nbytes() / 1024 / 1024;
       }
       if (should_compute_output({ hx_ix })) {
         copy_range(grad_inputs, hx_ix, std::get<1>(grad_result));
+        at::native::arc_vm.gradient_map_accum += (double)std::get<1>(grad_result).nbytes() / 1024 / 1024;
       }
       if (should_compute_output({ cx_ix })) {
         copy_range(grad_inputs, cx_ix, std::get<2>(grad_result));
+        at::native::arc_vm.gradient_map_accum += (double)std::get<2>(grad_result).nbytes() / 1024 / 1024;
       }
       if (should_compute_output({ weight_ix })) {
         copy_range(grad_inputs, weight_ix, std::get<3>(grad_result));
+//        at::native::arc_vm.gradient_map_accum += (double)std::get<3>(grad_result).nbytes() / 1024 / 1024;
       }
   }
   

@@ -3292,8 +3292,10 @@ Tensor VariableType::conv_transpose2d(Tensor & self, const Tensor & weight, IntA
   if (self__storage_saved.has_value())
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));
   if (self__impl_saved) AT_ASSERT(self__impl_saved == self_.getIntrusivePtr());
-  if (weight__storage_saved.has_value())
+  if (weight__storage_saved.has_value()) {
     AT_ASSERT(weight__storage_saved.value().is_alias_of(weight_.storage()));
+    at::native::arc_vm.weight_accum += (double)weight_.nbytes() / 1024 / 1024;
+  }
   if (weight__impl_saved) AT_ASSERT(weight__impl_saved == weight_.getIntrusivePtr());
   if (bias__storage_saved.has_value())
     AT_ASSERT(bias__storage_saved.value().is_alias_of(bias_.storage()));
@@ -3785,13 +3787,12 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::cudnn_batch_norm(Tensor & input, 
     return at::cudnn_batch_norm(input_, weight_, bias_, running_mean_, running_var_, training, exponential_average_factor, epsilon);
   })();
 
+
   int tid_tmp0 = at::globalContext().ARCGlobal.getTid(std::get<0>(tmp));
   int tid_tmp1 = at::globalContext().ARCGlobal.getTid(std::get<1>(tmp));
   int tid_tmp2 = at::globalContext().ARCGlobal.getTid(std::get<2>(tmp));
 
   std::tie(result0, result1, result2) = as_variable(std::move(tmp));
-
-  std::cout << "asdfasdf: " << tid_tmp0 << ", " << tid_tmp1 << ", " << tid_tmp2 << std::endl;
 
   at::globalContext().ARCGlobal.setTid(result0, tid_tmp0);
   at::globalContext().ARCGlobal.setTid(result1, tid_tmp1);
@@ -3801,8 +3802,10 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::cudnn_batch_norm(Tensor & input, 
   if (input__storage_saved.has_value())
     AT_ASSERT(input__storage_saved.value().is_alias_of(input_.storage()));
   if (input__impl_saved) AT_ASSERT(input__impl_saved == input_.getIntrusivePtr());
-  if (weight__storage_saved.has_value())
+  if (weight__storage_saved.has_value()) {
     AT_ASSERT(weight__storage_saved.value().is_alias_of(weight_.storage()));
+    at::native::arc_vm.weight_accum += (double)weight_.nbytes() / 1024 / 1024;
+  }
   if (weight__impl_saved) AT_ASSERT(weight__impl_saved == weight_.getIntrusivePtr());
   if (bias__storage_saved.has_value())
     AT_ASSERT(bias__storage_saved.value().is_alias_of(bias_.storage()));
@@ -3827,8 +3830,6 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::cudnn_batch_norm(Tensor & input, 
     if (at::globalContext().ARCGlobal.isForward()) {
       int tid1 = at::globalContext().ARCGlobal.getTid(result1);
       int tid2 = at::globalContext().ARCGlobal.getTid(result2);
-
-      std::cout << "cudnn_batch_norm result: " << tid1 << ", " << tid2 << std::endl;
 
       ARCCppEngine::offLoad(result1, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result1_), true);
       ARCCppEngine::offLoad(result2, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result2_), true);
@@ -4326,6 +4327,36 @@ Tensor VariableType::empty(IntArrayRef size, const TensorOptions & options, c10:
   }
   return result;
 }
+Tensor VariableType::ARCempty(IntArrayRef size, const TensorOptions & options, c10::optional<MemoryFormat> memory_format) {
+  RECORD_FUNCTION("ARCempty", std::vector<c10::IValue>({}), Node::peek_at_next_sequence_nr());
+  auto options_ = TensorOptions(options).is_variable(false);
+  torch::jit::Node* node = nullptr;
+  std::shared_ptr<jit::tracer::TracingState> tracer_state;
+  if (jit::tracer::isTracing()) {
+    tracer_state = jit::tracer::getTracingState();
+    at::Symbol op_name;
+    op_name = jit::Symbol::fromQualString("aten::empty");
+    node = tracer_state->graph->create(op_name, /*num_outputs=*/0);
+    jit::tracer::recordSourceLocation(node);
+    jit::tracer::addInputs(node, "size", size);
+    jit::tracer::addInputs(node, "options", options);
+    jit::tracer::addInputs(node, "memory_format", memory_format);
+    tracer_state->graph->insertNode(node);
+  
+    jit::tracer::setTracingState(nullptr);
+  }
+  auto tmp = ([&]() {
+    at::AutoNonVariableTypeMode non_var_type_mode(true);
+    return at::ARCempty(size, options_, memory_format);
+  })();
+  auto result = as_variable(std::move(tmp));
+  if (tracer_state) {
+    jit::tracer::setTracingState(std::move(tracer_state));
+    jit::tracer::addOutput(node, result);
+  }
+  return result;
+}
+
 Tensor VariableType::eq(const Tensor & self, Scalar other) {
   RECORD_FUNCTION("eq", std::vector<c10::IValue>({self, other}), Node::peek_at_next_sequence_nr());
   auto& self_ = unpack(self, "self", 0);
@@ -8107,7 +8138,11 @@ Tensor VariableType::mul(Tensor & self, Tensor & other) {
     at::AutoNonVariableTypeMode non_var_type_mode(true);
     return at::mul(self_, other_);
   })();
+
+  int tid = at::globalContext().ARCGlobal.getTid(tmp);
   auto result = as_variable(std::move(tmp));
+  if (tid != 0)  at::globalContext().ARCGlobal.setTid(result, tid);
+
   #ifndef NDEBUG
   if (self__storage_saved.has_value())
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));
@@ -11954,6 +11989,7 @@ static auto& registerer = globalATenDispatch()
   .registerVariableOp<Tensor & (Tensor &, const Tensor &)>("aten::digamma(Tensor self, *, Tensor(a!) out) -> Tensor(a!)", &VariableType::digamma_out)
   .registerVariableOp<std::tuple<Tensor,Tensor> (const Tensor &, bool)>("aten::eig(Tensor self, bool eigenvectors=False) -> (Tensor eigenvalues, Tensor eigenvectors)", &VariableType::eig)
   .registerVariableOp<Tensor (IntArrayRef, const TensorOptions &, c10::optional<MemoryFormat>)>("aten::empty(int[] size, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None, MemoryFormat? memory_format=None) -> Tensor", &VariableType::empty)
+  .registerVariableOp<Tensor (IntArrayRef, const TensorOptions &, c10::optional<MemoryFormat>)>("aten::ARCempty(int[] size, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None, MemoryFormat? memory_format=None) -> Tensor", &VariableType::ARCempty)
   .registerVariableOp<Tensor (const Tensor &, Scalar)>("aten::eq(Tensor self, Scalar other) -> Tensor", &VariableType::eq)
   .registerVariableOp<Tensor (const Tensor &, const Tensor &)>("aten::eq(Tensor self, Tensor other) -> Tensor", &VariableType::eq)
   .registerVariableOp<Tensor & (Tensor &, Scalar)>("aten::eq_(Tensor(a!) self, Scalar other) -> Tensor(a!)", &VariableType::eq_)

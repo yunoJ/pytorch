@@ -16,7 +16,7 @@
 
 #include <c10/util/intrusive_ptr.h>
 
-void THCStorage_resize(THCState *state, THCStorage *self, ptrdiff_t size)
+void THCStorage_resize(THCState *state, THCStorage *self, ptrdiff_t size, bool reverse)
 {
   THArgCheck(size >= 0, 2, "invalid size");
   THAssert(self->allocator() != nullptr);
@@ -35,8 +35,7 @@ void THCStorage_resize(THCState *state, THCStorage *self, ptrdiff_t size)
   }
   else
   {
-    at::DataPtr data =
-      self->allocator()->allocate(size * itemsize);
+    at::DataPtr data = reverse ? self->allocator()->ARCallocate(size * itemsize) : self->allocator()->allocate(size * itemsize);
 
     if (self->data_ptr()) {
       // Enable p2p access when the memcpy is across devices

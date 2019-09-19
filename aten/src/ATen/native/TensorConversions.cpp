@@ -4,6 +4,8 @@
 
 #include <c10/core/impl/DeviceGuardImplInterface.h>
 
+#include <ATen/native/cuda/arc_flag.h>
+
 namespace at {
 namespace native {
 
@@ -42,8 +44,17 @@ static inline Tensor ARCto_impl(const Tensor& self, const TensorOptions& options
   //  r = at::empty(self.sizes(), new_options);
   //} else {
   auto tid = self.getIntrusivePtr().get()->tensor_id;
-  r = at::empty(self.sizes(), options);
-  //}
+
+  std::cout << "device: " << options.device().type() << ", off: " << at::native::arc_vm.liveness_result[0][tid] << ", demand: " << at::globalContext().ARCGlobal.isOnDemand() << std::endl;
+  if (options.device().type() == c10::DeviceType::CPU) {
+    r = at::empty(self.sizes(), options);
+  } else {
+    if (at::native::arc_vm.liveness_result[0][tid]) {
+      r = at::ARCempty(self.sizes(), options);
+    } else {
+      r = at::empty(self.sizes(), options);
+    }
+  }
 
   r.ARCcopy_(self, non_blocking, is_csr);
   r.unsafeGetTensorImpl()->tensor_id = tid;

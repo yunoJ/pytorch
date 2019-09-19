@@ -675,8 +675,10 @@ auto Engine::execute(const edge_list& roots,
   size_t freeBytes;
   size_t p2pfreeBytes;
   if (at::globalContext().ARCGlobal.isOnDemand()) {
+    size_t dummy1, dummy2;
     freeBytes = at::native::arc_vm.device_occupancy_size();
     p2pfreeBytes = at::native::arc_vm.p2p_occupancy_size();
+//    THCudaMemGetInfo(at::globalContext().getTHCState(), &freeBytes, &dummy1, &dummy2);
 
     std::cout << "Remaining GPU memory: " << (double)freeBytes/1024/1024 << std::endl;
     std::cout << "Remaining GPU memory p2p: " << (double)p2pfreeBytes/1024/1024 << std::endl;
@@ -763,23 +765,11 @@ auto Engine::execute(const edge_list& roots,
   std::cout << "================Backward end: " << at::globalContext().ARCGlobal.curBackNum() << " ===================" << std::endl;
 
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    if (at::native::arc_vm.is_vdnn()) {
-      ARCCppEngine::checkTest2((double)freeBytes / 1024 / 1024 * 0.7);
-    }
-
     double remainSize = 0;
     if (at::native::arc_vm.is_vdnn()) {
       std::cout << "Flush scheduling start" << std::endl;
-      remainSize = ARCCppEngine::checkCSR((double)freeBytes / 1024 / 1024 / 1.2);
-   
-      if (remainSize > 0)  remainSize = ARCCppEngine::checkLarge(remainSize);
-
-      if (remainSize > 0)  remainSize = ARCCppEngine::checkFirst(remainSize);
-
-      if (remainSize > 0) {
-        std::cout << "We cannot operate this model because it is too large: remaining " << remainSize << "MB" << std::endl;
-        exit(1);
-      }
+      ARCCppEngine::checkTest2((double)freeBytes / 1024 / 1024 * 0.5);
+//      remainSize = ARCCppEngine::checkLarge((double)freeBytes / 1024 / 1024 * 0.8);
     }
   }
 

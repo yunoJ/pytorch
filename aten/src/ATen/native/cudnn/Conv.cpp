@@ -902,9 +902,8 @@ Tensor cudnn_convolution_forward(
   checkAllSameGPU(c, {input, weight});
 
   int newTid = ++arc_vm.global_tensor_id_;
-  std::cout << "test conv2d output tensor_id: " << newTid << std::endl;
-
-  auto output_t =  arc_vm.liveness_result[newTid] ? 
+//  std::cout << "conv2d newTid: " << newTid << std::endl;
+  auto output_t =  arc_vm.liveness_result[arc_vm.cur_back_num][newTid] ? 
       at::ARCempty(conv_output_size(input->sizes(), weight->sizes(), padding, stride, dilation, groups), input->options()) :
       at::empty(conv_output_size(input->sizes(), weight->sizes(), padding, stride, dilation, groups), input->options());
 

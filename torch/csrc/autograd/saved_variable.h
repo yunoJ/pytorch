@@ -82,8 +82,6 @@ public:
   static double checkLarge(double remainSize); // Second priority
   static double checkFirst(double remainSize); // Third priority
 
-  static void mapStack(at::Tensor t, tensorMap mtype);
-
   // basic fetch/offload operation
   static void offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync sync,*/ Oid curOid, SavedVariable* fetch_loc, bool isOutput);
   static void explicitAllSync();

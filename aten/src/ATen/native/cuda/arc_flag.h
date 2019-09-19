@@ -19,8 +19,8 @@
 #include <torch/csrc/autograd/saved_variable.h>
 
 #define BLK_SZ ((size_t)1 << 12)
-#define NUM_TENSOR 8192
-#define NUM_OP 8192
+#define NUM_TENSOR 32768
+#define NUM_OP 32768
 
 using namespace std;
 
@@ -49,8 +49,11 @@ class ARC_memory {
   ARC_memory();
   ~ARC_memory();
 
+  cudaStream_t arc_stream;
+
   int global_tensor_id_;
-  bool* liveness_result;
+  int cur_back_num;
+  bool liveness_result[3][NUM_TENSOR] = {false};
 
   bool relu_thru;
   bool mapping;
@@ -127,7 +130,7 @@ class ARC_memory {
   double dev_freeBlk;
   double p2p_freeBlk;
 
-  double feature_map_accum;
+  double feature_map_accum[NUM_TENSOR] = {0};
   double gradient_map_accum;
   double weight_accum;
   double misc_accum;

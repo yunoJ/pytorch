@@ -428,11 +428,15 @@ std::tuple<Tensor, Tensor> adaptive_max_pool2d_cuda(
   IntArrayRef output_size)
 {
   int newTid = ++arc_vm.global_tensor_id_;
-  Tensor output = arc_vm.liveness_result[newTid] ? at::ARCempty({0}, input.options()) : at::empty({0}, input.options());
+  Tensor output = arc_vm.liveness_result[arc_vm.cur_back_num][newTid] ?
+      at::ARCempty({0}, input.options()) : at::empty({0}, input.options());
   output.unsafeGetTensorImpl()->tensor_id = newTid;
+//  std::cout << "adamaxpool output newTid: " << newTid << std::endl;
 
   newTid = ++arc_vm.global_tensor_id_;
-  Tensor indices = arc_vm.liveness_result[newTid] ? at::ARCempty({0}, input.options().dtype(kLong)) : at::empty({0}, input.options().dtype(kLong));
+  Tensor indices = arc_vm.liveness_result[arc_vm.cur_back_num][newTid] ?
+      at::ARCempty({0}, input.options().dtype(kLong)) : at::empty({0}, input.options().dtype(kLong));
+//  std::cout << "adamaxpool indixes newTid: " << newTid << std::endl;
   indices.unsafeGetTensorImpl()->tensor_id = newTid;
 
   adaptive_max_pool2d_out_cuda_template(

@@ -461,6 +461,7 @@ struct TORCH_API VariableType final {
   static Tensor & embedding_renorm_(Tensor & self, const Tensor & indices, double max_norm, double norm_type) ;
   static Tensor embedding_sparse_backward(const Tensor & grad, const Tensor & indices, int64_t num_weights, int64_t padding_idx, bool scale_grad_by_freq) ;
   static Tensor empty(IntArrayRef size, const TensorOptions & options, c10::optional<MemoryFormat> memory_format) ;
+  static Tensor ARCempty(IntArrayRef size, const TensorOptions & options, c10::optional<MemoryFormat> memory_format) ;
   static Tensor empty_like(const Tensor & self) ;
   static Tensor empty_like(const Tensor & self, const TensorOptions & options, c10::optional<MemoryFormat> memory_format) ;
   static Tensor & empty_out(Tensor & out, IntArrayRef size, c10::optional<MemoryFormat> memory_format) ;

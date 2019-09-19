@@ -15,7 +15,7 @@ void THCStorage_(fill)(THCState *state, THCStorage *self, scalar_t value)
 
 void THCStorage_(resize)(THCState *state, THCStorage *self, ptrdiff_t size)
 {
-  THCStorage_resize(state, self, size);
+  THCStorage_resize(state, self, size, false);
 }
 
 int THCStorage_(getDevice)(THCState* state, const THCStorage* storage) {

@@ -27,6 +27,8 @@
 #include <cstddef>
 #include <string>
 
+#include <ATen/native/cuda/arc_flag.h>
+
 namespace at {
 namespace native {
 namespace {
@@ -221,7 +223,12 @@ Tensor empty_like(
                                        use_memory_format);
   }
 
-  return at::empty(self.sizes(), options, use_memory_format);
+  int tid = self.unsafeGetTensorImpl()->tensor_id;
+  if (at::native::arc_vm.liveness_result[at::native::arc_vm.cur_back_num][tid]) {
+    return at::ARCempty(self.sizes(), options, use_memory_format);
+  } else {
+    return at::empty(self.sizes(), options, use_memory_format);
+  }
 }
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ eye ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

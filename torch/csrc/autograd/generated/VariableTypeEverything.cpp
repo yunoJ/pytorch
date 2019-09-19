@@ -21309,6 +21309,36 @@ Tensor VariableType::empty(IntArrayRef size, const TensorOptions & options, c10:
   }
   return result;
 }
+Tensor VariableType::ARCempty(IntArrayRef size, const TensorOptions & options, c10::optional<MemoryFormat> memory_format) {
+  RECORD_FUNCTION("empty", std::vector<c10::IValue>({}), Node::peek_at_next_sequence_nr());
+  auto options_ = TensorOptions(options).is_variable(false);
+  torch::jit::Node* node = nullptr;
+  std::shared_ptr<jit::tracer::TracingState> tracer_state;
+  if (jit::tracer::isTracing()) {
+    tracer_state = jit::tracer::getTracingState();
+    at::Symbol op_name;
+    op_name = jit::Symbol::fromQualString("aten::empty");
+    node = tracer_state->graph->create(op_name, /*num_outputs=*/0);
+    jit::tracer::recordSourceLocation(node);
+    jit::tracer::addInputs(node, "size", size);
+    jit::tracer::addInputs(node, "options", options);
+    jit::tracer::addInputs(node, "memory_format", memory_format);
+    tracer_state->graph->insertNode(node);
+  
+    jit::tracer::setTracingState(nullptr);
+  }
+  auto tmp = ([&]() {
+    at::AutoNonVariableTypeMode non_var_type_mode(true);
+    return at::ARCempty(size, options_, memory_format);
+  })();
+  auto result = as_variable(std::move(tmp));
+  if (tracer_state) {
+    jit::tracer::setTracingState(std::move(tracer_state));
+    jit::tracer::addOutput(node, result);
+  }
+  return result;
+}
+
 Tensor VariableType::empty_like(const Tensor & self) {
   RECORD_FUNCTION("empty_like", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
   torch::jit::Node* node = nullptr;
@@ -60504,6 +60534,7 @@ static auto& registerer = globalATenDispatch()
   .registerVariableOp<Tensor & (Tensor &, const Tensor &, double, double)>("aten::embedding_renorm_(Tensor(a!) self, Tensor indices, float max_norm, float norm_type) -> Tensor(a!)", &VariableType::embedding_renorm_)
   .registerVariableOp<Tensor (const Tensor &, const Tensor &, int64_t, int64_t, bool)>("aten::embedding_sparse_backward(Tensor grad, Tensor indices, int num_weights, int padding_idx, bool scale_grad_by_freq) -> Tensor", &VariableType::embedding_sparse_backward)
   .registerVariableOp<Tensor (IntArrayRef, const TensorOptions &, c10::optional<MemoryFormat>)>("aten::empty(int[] size, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None, MemoryFormat? memory_format=None) -> Tensor", &VariableType::empty)
+  .registerVariableOp<Tensor (IntArrayRef, const TensorOptions &, c10::optional<MemoryFormat>)>("aten::ARCempty(int[] size, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None, MemoryFormat? memory_format=None) -> Tensor", &VariableType::ARCempty)
   .registerVariableOp<Tensor (const Tensor &)>("aten::empty_like(Tensor self) -> Tensor", &VariableType::empty_like)
   .registerVariableOp<Tensor (const Tensor &, const TensorOptions &, c10::optional<MemoryFormat>)>("aten::empty_like(Tensor self, *, ScalarType dtype, Layout layout, Device device, bool pin_memory=False, MemoryFormat? memory_format=contiguous_format) -> Tensor", &VariableType::empty_like)
   .registerVariableOp<Tensor & (Tensor &, IntArrayRef, c10::optional<MemoryFormat>)>("aten::empty(int[] size, *, MemoryFormat? memory_format=None, Tensor(a!) out) -> Tensor(a!)", &VariableType::empty_out)

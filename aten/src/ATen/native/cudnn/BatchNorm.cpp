@@ -97,13 +97,12 @@ std::tuple<Tensor, Tensor, Tensor> cudnn_batch_norm(
   }
 
   int newTid = ++arc_vm.global_tensor_id_;
-  auto output_t = arc_vm.liveness_result[newTid] ?
+  auto output_t = arc_vm.liveness_result[arc_vm.cur_back_num][newTid] ?
       at::ARCempty(input->sizes(), input->options()) : at::empty(input->sizes(), input->options());
+//  std::cout << "batchnorm output newTid: " << newTid << std::endl;
   output_t.unsafeGetTensorImpl()->tensor_id = newTid;
 
   TensorArg output{ output_t, "output", 0 };
-
-  std::cout << "cudnn_batch_norm_cuda tid: " << newTid << ", " << at::globalContext().ARCGlobal.getTid(output_t) << std::endl;
 
   auto handle = getCudnnHandle();
   auto dataType = getCudnnDataType(*input);
@@ -120,14 +119,16 @@ std::tuple<Tensor, Tensor, Tensor> cudnn_batch_norm(
 //    save_var = at::empty({ num_features }, weight_t.options());
 
     newTid = ++arc_vm.global_tensor_id_;
-    save_mean = arc_vm.liveness_result[newTid] ?
+    save_mean = arc_vm.liveness_result[arc_vm.cur_back_num][newTid] ?
         at::ARCempty({ num_features }, weight_t.options()) : at::empty({ num_features }, weight_t.options());
     save_mean.unsafeGetTensorImpl()->tensor_id = newTid;
+//    std::cout << "batchnorm savemean newTid: " << newTid << std::endl;
 
     newTid = ++arc_vm.global_tensor_id_;
-    save_var = arc_vm.liveness_result[newTid] ?
+    save_var = arc_vm.liveness_result[arc_vm.cur_back_num][newTid] ?
         at::ARCempty({ num_features }, weight_t.options()) : at::empty({ num_features }, weight_t.options());
     save_var.unsafeGetTensorImpl()->tensor_id = newTid;
+//    std::cout << "batchnorm savevar newTid: " << newTid << std::endl;
 
     AT_CUDNN_CHECK(cudnnBatchNormalizationForwardTraining(
       handle, mode, &one, &zero,

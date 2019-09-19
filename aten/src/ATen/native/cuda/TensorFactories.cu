@@ -18,6 +18,8 @@
 #include <cstddef>
 #include <cmath>
 
+#include <ATen/native/cuda/arc_flag.h>
+
 namespace at {
 namespace native {
 
@@ -59,7 +61,7 @@ Tensor empty_cuda(IntArrayRef size, const TensorOptions& options, c10::optional<
     allocator,
     /*resizeable=*/true);
 
-  auto tensor = detail::make_tensor<TensorImpl>(storage_impl, CUDATensorId());
+  auto tensor = at::detail::make_tensor<TensorImpl>(storage_impl, CUDATensorId());
   // Default TensorImpl has size [0]
   if (size.size() != 1 || size[0] != 0) {
     tensor.unsafeGetTensorImpl()->set_sizes_contiguous(size);
@@ -87,7 +89,7 @@ Tensor ARCempty_cuda(IntArrayRef size, const TensorOptions& options, c10::option
     allocator,
     /*resizeable=*/true);
 
-  auto tensor = detail::make_tensor<TensorImpl>(storage_impl, CUDATensorId());
+  auto tensor = at::detail::make_tensor<TensorImpl>(storage_impl, CUDATensorId());
   // Default TensorImpl has size [0]
   if (size.size() != 1 || size[0] != 0) {
     tensor.unsafeGetTensorImpl()->set_sizes_contiguous(size);
@@ -100,7 +102,11 @@ Tensor ARCempty_cuda(IntArrayRef size, const TensorOptions& options, c10::option
 
 
 Tensor empty_strided_cuda(IntArrayRef size, IntArrayRef stride, const TensorOptions& options) {
+  int newTid = ++arc_vm.global_tensor_id_;
   auto t = at::native::empty_cuda({0}, options);
+//  std::cout << "empty_strided t newTid: " << newTid << std::endl;
+  t.unsafeGetTensorImpl()->tensor_id = newTid;
+
   at::native::resize_impl_cuda_(t.unsafeGetTensorImpl(), size, stride);
   return t;
 }

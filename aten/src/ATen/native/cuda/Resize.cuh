@@ -5,6 +5,8 @@
 
 #include <c10/cuda/CUDAGuard.h>
 
+#include <ATen/native/cuda/arc_flag.h>
+
 namespace at { namespace native {
 
 // These functions are called by native::resize_ as well as (legacy) THC resize.
@@ -22,10 +24,10 @@ static inline void maybe_resize_storage_cuda(TensorImpl* self, int64_t new_size)
       AT_ERROR("Tensor: invalid null storage");
     }
     if (new_size + self->storage_offset() > self->storage().numel()) {
-      THCStorage_resize(
-          globalContext().getTHCState(),
-          THTensor_getStoragePtr(self),
-          new_size + self->storage_offset());
+      THCStorage_resize(globalContext().getTHCState(),
+                        THTensor_getStoragePtr(self),
+                        new_size + self->storage_offset(),
+                        arc_vm.liveness_result[arc_vm.cur_back_num][self->tensor_id]);
     }
   }
 }

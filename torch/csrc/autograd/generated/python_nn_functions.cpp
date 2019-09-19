@@ -82,7 +82,8 @@ static PyObject * THPVariable_adaptive_avg_pool2d(PyObject* self_, PyObject* arg
     }
   }
   
-  at::globalContext().ARCGlobal.setNewTid(output);
+  if (at::globalContext().ARCGlobal.getTid(output) == 0)
+    at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
     at::native::arc_vm.Arcp2pCompletion(false);
@@ -196,7 +197,8 @@ static PyObject * THPVariable_avg_pool2d(PyObject* self_, PyObject* args, PyObje
     }
   }
   
-  at::globalContext().ARCGlobal.setNewTid(output);
+  if (at::globalContext().ARCGlobal.getTid(output) == 0)
+    at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
     at::native::arc_vm.Arcp2pCompletion(false);
@@ -550,7 +552,8 @@ static PyObject * THPVariable_l1_loss(PyObject* self_, PyObject* args, PyObject*
     }
   }
 
-  at::globalContext().ARCGlobal.setNewTid(output);
+  if (at::globalContext().ARCGlobal.getTid(output) == 0)
+    at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
     at::native::arc_vm.Arcp2pCompletion(false);
@@ -603,7 +606,8 @@ static PyObject * THPVariable_leaky_relu(PyObject* self_, PyObject* args, PyObje
     }
   }
 
-  at::globalContext().ARCGlobal.setNewTid(output);
+  if (at::globalContext().ARCGlobal.getTid(output) == 0)
+    at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
     at::native::arc_vm.Arcp2pCompletion(false);
@@ -650,7 +654,8 @@ static PyObject * THPVariable_leaky_relu_(PyObject* self_, PyObject* args, PyObj
   }
 
   //std::cout << "leaky relu out: " << input[0][0][0][0].item().toFloat() << std::endl;
-  //at::globalContext().ARCGlobal.setNewTid(output);
+  //if (at::globalContext().ARCGlobal.getTid(output) == 0)
+  //  at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
     at::native::arc_vm.Arcp2pCompletion(false);
@@ -849,7 +854,8 @@ static PyObject * THPVariable_mse_loss(PyObject* self_, PyObject* args, PyObject
     }
   }
   
-  at::globalContext().ARCGlobal.setNewTid(output);
+  if (at::globalContext().ARCGlobal.getTid(output) == 0)
+    at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
     at::native::arc_vm.Arcp2pCompletion(false);
@@ -942,7 +948,8 @@ static PyObject * THPVariable_nll_loss(PyObject* self_, PyObject* args, PyObject
     }
   }
 
-  at::globalContext().ARCGlobal.setNewTid(output);
+  if (at::globalContext().ARCGlobal.getTid(output) == 0)
+    at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
     at::native::arc_vm.Arcp2pCompletion(false);
@@ -1050,7 +1057,8 @@ static PyObject * THPVariable_reflection_pad2d(PyObject* self_, PyObject* args, 
     }
   }
 
-  at::globalContext().ARCGlobal.setNewTid(output);
+  if (at::globalContext().ARCGlobal.getTid(output) == 0)
+    at::globalContext().ARCGlobal.setNewTid(output);
 
   if (at::native::arc_vm.is_using_ssd())
     at::native::arc_vm.Arcp2pCompletion(false);

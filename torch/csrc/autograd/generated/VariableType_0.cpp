@@ -852,7 +852,10 @@ std::tuple<Tensor,Tensor,Tensor,Tensor,Tensor> VariableType::_cudnn_rnn(const Te
       ARCCppEngine::offLoad(input, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->input_), false);
       ARCCppEngine::offLoad(hx, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->hx_), false);
       ARCCppEngine::offLoad(cx, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->cx_), false);
-      
+
+      int tid0 = input.unsafeGetTensorImpl()->tensor_id;
+      at::native::arc_vm.feature_map_accum[tid0] = input.nbytes();
+
       grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
     }
     else {
@@ -947,6 +950,7 @@ std::tuple<Tensor,Tensor,Tensor,Tensor,Tensor> VariableType::_cudnn_rnn(const Te
   at::globalContext().ARCGlobal.setNewTid(result0);
   at::globalContext().ARCGlobal.setNewTid(result3);
   at::globalContext().ARCGlobal.setNewTid(result4);
+
   #ifndef NDEBUG
   if (input__storage_saved.has_value())
     AT_ASSERT(input__storage_saved.value().is_alias_of(input_.storage()));
@@ -1001,6 +1005,11 @@ std::tuple<Tensor,Tensor,Tensor,Tensor,Tensor> VariableType::_cudnn_rnn(const Te
       at::native::arc_vm.Arcp2pCompletion(false);
 
   }
+
+  for (int i = 0; i < weight_.size(); i++) {
+    at::native::arc_vm.weight_accum += (double)weight_[i].nbytes() / 1024 / 1024;
+  }
+
   return std::make_tuple(std::move(result0), std::move(result1), std::move(result2), std::move(result3), std::move(result4));
 }
 Tensor & VariableType::_cumsum_out(Tensor & out, const Tensor & self, int64_t dim) {
@@ -2902,6 +2911,7 @@ Tensor VariableType::addmm(Tensor & self, Tensor & mat1, Tensor & mat2, Scalar b
     if (at::globalContext().ARCGlobal.isForward()) {
       if (m1id != 0) {
         ARCCppEngine::offLoad(mat1, /*(TraceableFunction*)(grad_fn.get()), Async,*/ oid, &(grad_fn->mat1_), false);
+
         grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
       } else {
         grad_fn->mat1_ = SavedVariable(mat1, false);
@@ -2913,6 +2923,7 @@ Tensor VariableType::addmm(Tensor & self, Tensor & mat1, Tensor & mat2, Scalar b
     if (at::globalContext().ARCGlobal.isForward()) {
       if (m2id != 0) {
         ARCCppEngine::offLoad(mat2, oid, &(grad_fn->mat2_), false);
+
         grad_fn->mat2_ = SavedVariable(mat2, false);
       } else {
         grad_fn->mat2_ = SavedVariable(mat2, false);
@@ -8343,6 +8354,7 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::native_batch_norm(Tensor & input,
 
     if (at::globalContext().ARCGlobal.isForward()){
       ARCCppEngine::offLoad(input, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->input_), false);
+
       grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
     }
     else {
@@ -8409,19 +8421,34 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::native_batch_norm(Tensor & input,
   })();
   std::tie(result0, result1, result2) = as_variable(std::move(tmp));
   
-  at::globalContext().ARCGlobal.setNewTid(result0);
-  at::globalContext().ARCGlobal.setNewTid(result1);
-  at::globalContext().ARCGlobal.setNewTid(result2);
+  int tid0 = at::globalContext().ARCGlobal.getTid(std::get<0>(tmp));
+  int tid1 = at::globalContext().ARCGlobal.getTid(std::get<1>(tmp));
+  int tid2 = at::globalContext().ARCGlobal.getTid(std::get<2>(tmp));
+
+//  for (int i = 0; i < weight_.size(); i++) {
+//  }
+
+  if (tid0 == 0) at::globalContext().ARCGlobal.setNewTid(result0);
+  else           at::globalContext().ARCGlobal.setTid(result0, tid0);
+
+  if (tid1 == 0) at::globalContext().ARCGlobal.setNewTid(result1);
+  else           at::globalContext().ARCGlobal.setTid(result1, tid1);
+
+  if (tid2 == 0) at::globalContext().ARCGlobal.setNewTid(result2);
+  else           at::globalContext().ARCGlobal.setTid(result1, tid1);
 
   #ifndef NDEBUG
   if (input__storage_saved.has_value())
     AT_ASSERT(input__storage_saved.value().is_alias_of(input_.storage()));
   if (input__impl_saved) AT_ASSERT(input__impl_saved == input_.getIntrusivePtr());
-  if (weight__storage_saved.has_value())
+  if (weight__storage_saved.has_value()) {
     AT_ASSERT(weight__storage_saved.value().is_alias_of(weight_.storage()));
+    at::native::arc_vm.weight_accum += (double)weight_.nbytes() / 1024 / 1024;
+  }
   if (weight__impl_saved) AT_ASSERT(weight__impl_saved == weight_.getIntrusivePtr());
-  if (bias__storage_saved.has_value())
+  if (bias__storage_saved.has_value()) {
     AT_ASSERT(bias__storage_saved.value().is_alias_of(bias_.storage()));
+  }
   if (bias__impl_saved) AT_ASSERT(bias__impl_saved == bias_.getIntrusivePtr());
   if (running_mean__storage_saved.has_value())
     AT_ASSERT(running_mean__storage_saved.value().is_alias_of(running_mean_.storage()));
@@ -8700,8 +8727,10 @@ Tensor & VariableType::nll_loss2d_backward_out(Tensor & grad_input, const Tensor
   if (target__storage_saved.has_value())
     AT_ASSERT(target__storage_saved.value().is_alias_of(target_.storage()));
   if (target__impl_saved) AT_ASSERT(target__impl_saved == target_.getIntrusivePtr());
-  if (weight__storage_saved.has_value())
+  if (weight__storage_saved.has_value()) {
     AT_ASSERT(weight__storage_saved.value().is_alias_of(weight_.storage()));
+    at::native::arc_vm.weight_accum += (double)weight_.nbytes() / 1024 / 1024;
+  }
   if (weight__impl_saved) AT_ASSERT(weight__impl_saved == weight_.getIntrusivePtr());
   if (total_weight__storage_saved.has_value())
     AT_ASSERT(total_weight__storage_saved.value().is_alias_of(total_weight_.storage()));
@@ -8799,8 +8828,10 @@ Tensor & VariableType::nll_loss_backward_out(Tensor & grad_input, const Tensor &
   if (target__storage_saved.has_value())
     AT_ASSERT(target__storage_saved.value().is_alias_of(target_.storage()));
   if (target__impl_saved) AT_ASSERT(target__impl_saved == target_.getIntrusivePtr());
-  if (weight__storage_saved.has_value())
+  if (weight__storage_saved.has_value()) {
     AT_ASSERT(weight__storage_saved.value().is_alias_of(weight_.storage()));
+    at::native::arc_vm.weight_accum += (double)weight_.nbytes() / 1024 / 1024;
+  }
   if (weight__impl_saved) AT_ASSERT(weight__impl_saved == weight_.getIntrusivePtr());
   if (total_weight__storage_saved.has_value())
     AT_ASSERT(total_weight__storage_saved.value().is_alias_of(total_weight_.storage()));
@@ -9038,8 +9069,10 @@ Tensor VariableType::permute(const Tensor & self, IntArrayRef dims) {
   })();
   auto result = as_view(self, tmp, true);
   #ifndef NDEBUG
-  if (self__storage_saved.has_value())
+  if (self__storage_saved.has_value()) {
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));
+    at::native::arc_vm.misc_accum += (double)self_.nbytes() / 1024 / 1024;
+  }
   if (self__impl_saved) AT_ASSERT(self__impl_saved == self_.getIntrusivePtr());
   #endif
   if (grad_fn) {
@@ -11101,7 +11134,11 @@ Tensor VariableType::sub(const Tensor & self, const Tensor & other, Scalar alpha
     at::AutoNonVariableTypeMode non_var_type_mode(true);
     return at::sub(self_, other_, alpha);
   })();
+
+  int tid = at::globalContext().ARCGlobal.getTid(tmp);
   auto result = as_variable(std::move(tmp));
+  if (tid != 0)  at::globalContext().ARCGlobal.setTid(result, tid);
+
   #ifndef NDEBUG
   if (self__storage_saved.has_value())
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));
@@ -11152,7 +11189,11 @@ Tensor VariableType::sub(const Tensor & self, Scalar other, Scalar alpha) {
     at::AutoNonVariableTypeMode non_var_type_mode(true);
     return at::sub(self_, other, alpha);
   })();
+
+  int tid = at::globalContext().ARCGlobal.getTid(tmp);
   auto result = as_variable(std::move(tmp));
+  if (tid != 0)  at::globalContext().ARCGlobal.setTid(result, tid);
+
   #ifndef NDEBUG
   if (self__storage_saved.has_value())
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));
@@ -11482,15 +11523,22 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::thnn_conv2d_forward(Tensor & self
     return at::thnn_conv2d_forward(self_, weight_, kernel_size, bias_, stride, padding);
   })();
   std::tie(output, finput, fgrad_input) = as_variable(std::move(tmp));
+
+//  for (int i = 0; i < weight_.size(); i++) {
+//  }
+
   #ifndef NDEBUG
   if (self__storage_saved.has_value())
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));
   if (self__impl_saved) AT_ASSERT(self__impl_saved == self_.getIntrusivePtr());
-  if (weight__storage_saved.has_value())
+  if (weight__storage_saved.has_value()) {
     AT_ASSERT(weight__storage_saved.value().is_alias_of(weight_.storage()));
+    at::native::arc_vm.weight_accum += (double)weight_.nbytes() / 1024 / 1024;
+  }
   if (weight__impl_saved) AT_ASSERT(weight__impl_saved == weight_.getIntrusivePtr());
-  if (bias__storage_saved.has_value())
+  if (bias__storage_saved.has_value()) {
     AT_ASSERT(bias__storage_saved.value().is_alias_of(bias_.storage()));
+  }
   if (bias__impl_saved) AT_ASSERT(bias__impl_saved == bias_.getIntrusivePtr());
   #endif
   if (grad_fn) {
@@ -11506,6 +11554,7 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::thnn_conv2d_forward(Tensor & self
     grad_fn->finput_ = SavedVariable(finput, true);
     grad_fn->fgrad_input_ = SavedVariable(fgrad_input, true);
   }
+  at::native::arc_vm.weight_accum += (double)weight_.nbytes() / 1024 / 1024;
   return std::make_tuple(std::move(output), std::move(finput), std::move(fgrad_input));
 }
 std::tuple<Tensor,Tensor,Tensor> VariableType::thnn_conv3d_backward(const Tensor & grad_output, const Tensor & self, const Tensor & weight, IntArrayRef kernel_size, IntArrayRef stride, IntArrayRef padding, const Tensor & finput, const Tensor & fgrad_input, std::array<bool,3> output_mask) {
@@ -11585,8 +11634,10 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::thnn_conv3d_backward(const Tensor
   if (self__storage_saved.has_value())
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));
   if (self__impl_saved) AT_ASSERT(self__impl_saved == self_.getIntrusivePtr());
-  if (weight__storage_saved.has_value())
+  if (weight__storage_saved.has_value()) {
     AT_ASSERT(weight__storage_saved.value().is_alias_of(weight_.storage()));
+    at::native::arc_vm.weight_accum += (double)weight_.nbytes() / 1024 / 1024;
+  }
   if (weight__impl_saved) AT_ASSERT(weight__impl_saved == weight_.getIntrusivePtr());
   if (finput__storage_saved.has_value())
     AT_ASSERT(finput__storage_saved.value().is_alias_of(finput_.storage()));
@@ -11689,11 +11740,14 @@ std::tuple<Tensor &,Tensor &,Tensor &> VariableType::thnn_conv3d_forward_out(Ten
   if (self__storage_saved.has_value())
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));
   if (self__impl_saved) AT_ASSERT(self__impl_saved == self_.getIntrusivePtr());
-  if (weight__storage_saved.has_value())
+  if (weight__storage_saved.has_value()) {
     AT_ASSERT(weight__storage_saved.value().is_alias_of(weight_.storage()));
+    at::native::arc_vm.weight_accum += (double)weight_.nbytes() / 1024 / 1024;
+  }
   if (weight__impl_saved) AT_ASSERT(weight__impl_saved == weight_.getIntrusivePtr());
-  if (bias__storage_saved.has_value())
+  if (bias__storage_saved.has_value()) {
     AT_ASSERT(bias__storage_saved.value().is_alias_of(bias_.storage()));
+  }
   if (bias__impl_saved) AT_ASSERT(bias__impl_saved == bias_.getIntrusivePtr());
   #endif
   increment_version(output);

@@ -1577,7 +1577,11 @@ Tensor VariableType::add(const Tensor & self, const Tensor & other, Scalar alpha
     at::AutoNonVariableTypeMode non_var_type_mode(true);
     return at::add(self_, other_, alpha);
   })();
+
+  int tid = at::globalContext().ARCGlobal.getTid(tmp);
   auto result = as_variable(std::move(tmp));
+  if (tid != 0)  at::globalContext().ARCGlobal.setTid(result, tid);
+
   #ifndef NDEBUG
   if (self__storage_saved.has_value())
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));
@@ -1628,7 +1632,11 @@ Tensor VariableType::add(const Tensor & self, Scalar other, Scalar alpha) {
     at::AutoNonVariableTypeMode non_var_type_mode(true);
     return at::add(self_, other, alpha);
   })();
+
+  int tid = at::globalContext().ARCGlobal.getTid(tmp);
   auto result = as_variable(std::move(tmp));
+  if (tid != 0)  at::globalContext().ARCGlobal.setTid(result, tid);
+
   #ifndef NDEBUG
   if (self__storage_saved.has_value())
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));
@@ -2670,8 +2678,10 @@ Tensor VariableType::cat(TensorList tensors, int64_t dim) {
   auto result = as_variable(std::move(tmp));
   #ifndef NDEBUG
   for (size_t i=0; i<tensors_.size(); i++) {
-    if (tensors__storage_saved[i].has_value())
+    if (tensors__storage_saved[i].has_value()) {
       AT_ASSERT(tensors__storage_saved[i].value().is_alias_of(tensors_[i].storage()));
+      at::native::arc_vm.misc_accum += (double)tensors_[i].nbytes() / 1024 / 1024;
+    }
   }
   for (size_t i=0; i<tensors_.size(); i++) {
     if (tensors__impl_saved[i])
@@ -3213,11 +3223,14 @@ Tensor VariableType::cudnn_convolution(Tensor & self, const Tensor & weight, con
   if (self__storage_saved.has_value())
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));
   if (self__impl_saved) AT_ASSERT(self__impl_saved == self_.getIntrusivePtr());
-  if (weight__storage_saved.has_value())
+  if (weight__storage_saved.has_value()) {
     AT_ASSERT(weight__storage_saved.value().is_alias_of(weight_.storage()));
+    at::native::arc_vm.weight_accum += (double)weight_.nbytes() / 1024 / 1024;
+  }
   if (weight__impl_saved) AT_ASSERT(weight__impl_saved == weight_.getIntrusivePtr());
-  if (bias__storage_saved.has_value())
+  if (bias__storage_saved.has_value()) {
     AT_ASSERT(bias__storage_saved.value().is_alias_of(bias_.storage()));
+  }
   if (bias__impl_saved) AT_ASSERT(bias__impl_saved == bias_.getIntrusivePtr());
   #endif
   if (grad_fn) {
@@ -3711,8 +3724,10 @@ Tensor VariableType::embedding(const Tensor & weight, Tensor & indices, int64_t 
   })();
   auto result = as_variable(std::move(tmp));
   #ifndef NDEBUG
-  if (weight__storage_saved.has_value())
+  if (weight__storage_saved.has_value()) {
     AT_ASSERT(weight__storage_saved.value().is_alias_of(weight_.storage()));
+    at::native::arc_vm.weight_accum += (double)weight_.nbytes() / 1024 / 1024;
+  }
   if (weight__impl_saved) AT_ASSERT(weight__impl_saved == weight_.getIntrusivePtr());
   if (indices__storage_saved.has_value())
     AT_ASSERT(indices__storage_saved.value().is_alias_of(indices_.storage()));
@@ -6810,7 +6825,11 @@ Tensor VariableType::mean(const Tensor & self, c10::optional<ScalarType> dtype) 
     at::AutoNonVariableTypeMode non_var_type_mode(true);
     return at::mean(self_, dtype);
   })();
+
+  int tid = at::globalContext().ARCGlobal.getTid(tmp);
   auto result = as_variable(std::move(tmp));
+  if (tid != 0)  at::globalContext().ARCGlobal.setTid(result, tid);
+
   #ifndef NDEBUG
   if (self__storage_saved.has_value())
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));
@@ -6863,7 +6882,11 @@ Tensor VariableType::mean(const Tensor & self, IntArrayRef dim, bool keepdim, c1
     at::AutoNonVariableTypeMode non_var_type_mode(true);
     return at::mean(self_, dim, keepdim, dtype);
   })();
+
+  int tid = at::globalContext().ARCGlobal.getTid(tmp);
   auto result = as_variable(std::move(tmp));
+  if (tid != 0)  at::globalContext().ARCGlobal.setTid(result, tid);
+
   #ifndef NDEBUG
   if (self__storage_saved.has_value())
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));
@@ -10722,7 +10745,10 @@ Tensor VariableType::tanh(Tensor & self) {
   })();
   auto result = as_variable(std::move(tmp));
   //result tid manipulation
-  at::globalContext().ARCGlobal.setNewTid(result);
+
+  if (at::globalContext().ARCGlobal.getTid(result) == 0)
+    at::globalContext().ARCGlobal.setNewTid(result);
+
   if (at::globalContext().ARCGlobal.isDebugMode()) {
     std::cout << "tanh RESULT TENSOR ID: " << at:: globalContext().ARCGlobal.getTid(result) << std::endl;
   }
@@ -11715,7 +11741,11 @@ Tensor VariableType::unsqueeze(const Tensor & self, int64_t dim) {
     at::AutoNonVariableTypeMode non_var_type_mode(true);
     return at::unsqueeze(self_, dim);
   })();
+
+  int tid = at::globalContext().ARCGlobal.getTid(tmp);
   auto result = as_view(self, tmp, true);
+  if (tid != 0)  at::globalContext().ARCGlobal.setTid(result, tid);
+
   #ifndef NDEBUG
   if (self__storage_saved.has_value())
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));
