@@ -13,7 +13,7 @@ void THCTensor_(fill)(THCState* state, THCTensor *self_, scalar_t value)
     THArgCheck(false, 1, CUTORCH_DIM_WARNING);
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 void THCTensor_(zero)(THCState *state, THCTensor *self_)
@@ -32,7 +32,7 @@ void THCTensor_(zero)(THCState *state, THCTensor *self_)
     }
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 ptrdiff_t
@@ -223,7 +223,7 @@ void THCTensor_(catArray)(THCState *state, THCTensor *result,
           HANDLE_CASE(4);
           break;
       }
-      THCudaCheck(cudaGetLastError());
+//      THCudaCheck(cudaGetLastError());
     }
     THCudaFree(state, d_inputs);
 #undef HANDLE_CASE
@@ -313,7 +313,7 @@ void THCTensor_(nonzero)(THCState* state, THCudaLongTensor *tensor,
   THCTensor_(free)(state, self);
   THCudaLongTensor_free(state, tensor);
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 #if !defined(THC_REAL_IS_BOOL) /* non bool only part */
@@ -353,7 +353,7 @@ void THCTensor_(diag)(THCState *state, THCTensor *self_, THCTensor *src_, int64_
       (THCTensor_(data)(state, self_), THCTensor_(data)(state, src_), start, totalElements, stride0 + stride1, strideSrc);
     }
   }
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 accreal THCTensor_(trace)(THCState *state, THCTensor *src_) {

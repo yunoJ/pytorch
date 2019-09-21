@@ -170,10 +170,10 @@ Tensor& max_unpooling2d_forward_out_cuda(
             owidth,
             output.data<scalar_t>());
       }));
-  TORCH_CHECK(
-      cudaGetLastError() == cudaSuccess,
-      "max_unpooling2d_forward_kernel failed with error code ",
-      cudaGetLastError());
+//  TORCH_CHECK(
+//      cudaGetLastError() == cudaSuccess,
+//      "max_unpooling2d_forward_kernel failed with error code ",
+//      cudaGetLastError());
   if (self.ndimension() == 3) {
     output.resize_({numChannels, oheight, owidth});
   }
@@ -346,10 +346,10 @@ Tensor& max_unpooling3d_forward_out_cuda(
               oH,
               oW,
               offsetZ);
-          TORCH_CHECK(
-              cudaGetLastError() == cudaSuccess,
-              "max_unpooling3d_forward_kernel failed with error code ",
-              cudaGetLastError());
+//          TORCH_CHECK(
+//              cudaGetLastError() == cudaSuccess,
+//              "max_unpooling3d_forward_kernel failed with error code ",
+//              cudaGetLastError());
           totalZ -= 65535;
           offsetZ += 65535;
         }
@@ -455,10 +455,10 @@ at::Tensor& max_unpooling2d_backward_out_cuda(
             owidth,
             grad_input.data<scalar_t>());
       }));
-  TORCH_CHECK(
-      cudaGetLastError() == cudaSuccess,
-      "max_unpooling2d_backward_kernel failed with error code ",
-      cudaGetLastError());
+//  TORCH_CHECK(
+//      cudaGetLastError() == cudaSuccess,
+//      "max_unpooling2d_backward_kernel failed with error code ",
+//      cudaGetLastError());
   return grad_input;
 }
 at::Tensor max_unpooling2d_backward_cuda(
@@ -561,10 +561,10 @@ at::Tensor& max_unpooling3d_backward_out_cuda(
               indices.packed_accessor<int64_t, 4>(),
               grad_input_reshaped.packed_accessor<scalar_t, 4>(),
               offsetZ);
-          TORCH_CHECK(
-              cudaGetLastError() == cudaSuccess,
-              "max_unpooling3d_backward_kernel failed with error code ",
-              cudaGetLastError());
+//          TORCH_CHECK(
+//              cudaGetLastError() == cudaSuccess,
+//              "max_unpooling3d_backward_kernel failed with error code ",
+//              cudaGetLastError());
           totalZ -= 65535;
           offsetZ += 65535;
         }

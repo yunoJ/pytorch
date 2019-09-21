@@ -35,7 +35,7 @@ THCState *state;
 
 void THCPModule_setDevice(int device)
 {
-  THCudaCheck(cudaSetDevice(device));
+//  THCudaCheck(cudaSetDevice(device));
 }
 
 PyObject * THCPModule_setDevice_wrap(PyObject *self, PyObject *arg)
@@ -53,8 +53,9 @@ PyObject * THCPModule_setDevice_wrap(PyObject *self, PyObject *arg)
 PyObject * THCPModule_getDevice_wrap(PyObject *self)
 {
   HANDLE_TH_ERRORS
-  int device;
-  THCudaCheck(cudaGetDevice(&device));
+//  int device;
+//  THCudaCheck(cudaGetDevice(&device));
+  int device = 0;
   return PyLong_FromLong(device);
   END_HANDLE_TH_ERRORS
 }
@@ -97,8 +98,9 @@ PyObject * THCPModule_setStream_wrap(PyObject *self, PyObject *obj)
     throw python_error();
   }
   auto stream = at::cuda::CUDAStream::unpack(bits);
-  int device;
-  THCudaCheck(cudaGetDevice(&device));
+//  int device;
+//  THCudaCheck(cudaGetDevice(&device));
+  int device = 0;
   if (device != stream.device_index()) {
     THCPModule_setDevice(stream.device_index());
   }

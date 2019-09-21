@@ -723,7 +723,8 @@ public:
     : device_(0)
     , async_signal_(new detail::async_signal(detail::unique_stream{}))
   {
-    thrust::cuda_cub::throw_on_error(cudaGetDevice(&device_));
+//    thrust::cuda_cub::throw_on_error(cudaGetDevice(&device_));
+    device_ = 0;
   }
 
   __host__
@@ -829,7 +830,8 @@ public:
     : device_(0)
     , async_signal_(new detail::async_value<value_type>(detail::unique_stream{}))
   {
-    thrust::cuda_cub::throw_on_error(cudaGetDevice(&device_));
+//    thrust::cuda_cub::throw_on_error(cudaGetDevice(&device_));
+    device_ = 0;
   }
 
   __host__
@@ -1267,7 +1269,7 @@ __host__
 unique_eager_event make_dependent_event(std::tuple<Dependencies...>&& deps)
 {
   int device = 0;
-  thrust::cuda_cub::throw_on_error(cudaGetDevice(&device));
+//  thrust::cuda_cub::throw_on_error(cudaGetDevice(&device));
 
   // First, either steal a stream from one of our children or make a new one.
   auto as = acquire_stream(device, deps);
@@ -1304,7 +1306,7 @@ unique_eager_future_promise_pair<X, XPointer>
 make_dependent_future(ComputeContent&& cc, std::tuple<Dependencies...>&& deps)
 {
   int device = 0;
-  thrust::cuda_cub::throw_on_error(cudaGetDevice(&device));
+//  thrust::cuda_cub::throw_on_error(cudaGetDevice(&device));
 
   // First, either steal a stream from one of our children or make a new one.
   auto as = acquire_stream(device, deps);

@@ -148,7 +148,7 @@ void THCTensor_(sortKeyValueInplace)(THCState* state,
 #undef HANDLE_SORT_CASE
 #undef HANDLE_A_CASE
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 void THCTensor_(sortViaThrust)(THCState* state,
@@ -324,7 +324,7 @@ void THCTensor_(sort)(THCState* state,
     THCTensor_(sortViaThrust)(state, sorted, indices, input, dim, (bool) order);
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 #endif

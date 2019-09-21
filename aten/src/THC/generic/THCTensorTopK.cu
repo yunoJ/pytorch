@@ -183,7 +183,7 @@ void THCTensor_(topk)(THCState* state,
 
   THCudaLongTensor_free(state, input);
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 #endif // THC_GENERIC_FILE

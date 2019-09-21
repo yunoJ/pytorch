@@ -107,8 +107,10 @@ const at::cuda::NVRTC& CUDAHooks::nvrtc() const {
 }
 
 int64_t CUDAHooks::current_device() const {
-  int device;
-  cudaError_t err = cudaGetDevice(&device);
+//  int device;
+//  cudaError_t err = cudaGetDevice(&device);
+  int device = 0;
+  cudaError_t err = cudaSuccess;
   if (err == cudaSuccess) {
     return device;
   }

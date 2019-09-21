@@ -143,8 +143,9 @@ thread_local std::unique_ptr<PoolWindow> myPoolWindow;
 
 cudnnHandle_t getCudnnHandle()
 {
-  int device;
-  AT_CUDA_CHECK(cudaGetDevice(&device));
+//  int device;
+//  AT_CUDA_CHECK(cudaGetDevice(&device));
+  int device = 0;
 
   if (!myPoolWindow)
     myPoolWindow.reset(new PoolWindow());

@@ -126,7 +126,7 @@ void adaptiveaveragepool_loop(
 
     totalZ -= 65535;
     offsetZ += 65535;
-    AT_CUDA_CHECK(cudaGetLastError());
+//    AT_CUDA_CHECK(cudaGetLastError());
   }
 }
 
@@ -220,7 +220,7 @@ void adaptiveaveragegradinput_loop(
 
     totalZ -= 65535;
     offsetZ += 65535;
-    AT_CUDA_CHECK(cudaGetLastError());
+//    AT_CUDA_CHECK(cudaGetLastError());
   }
 }
 
@@ -315,7 +315,7 @@ void atomicadaptiveaveragegradinput_loop(
 
     totalZ -= 65535;
     offsetZ += 65535;
-    AT_CUDA_CHECK(cudaGetLastError());
+//    AT_CUDA_CHECK(cudaGetLastError());
   }
 }
 

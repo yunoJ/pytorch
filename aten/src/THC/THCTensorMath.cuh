@@ -35,8 +35,9 @@ __global__ void THCTensor_copyToDiagonal(T* a, T* b, ptrdiff_t start, ptrdiff_t 
 #define CAT_ARRAY_MAX_INPUT_DIMS 4
 
 inline bool getCatGrid(THCState* state, ptrdiff_t nTensors, dim3& grid) {
-  int curDevice = -1;
-  cudaGetDevice(&curDevice);
+//  int curDevice = -1;
+//  cudaGetDevice(&curDevice);
+  int curDevice = 0;
 
   if (curDevice == -1) {
      return false;

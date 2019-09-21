@@ -49,7 +49,7 @@ __host__ void THCTensor_(scanOuterDim)(THCState *state, THCTensor *tgt,
     THCTensor_(data)(state, tgt), THCTensor_(data)(state, src),
     num_orows, num_irows, row_size, init, binary_op);
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 template<class BinaryFunction>
@@ -71,7 +71,7 @@ __host__ void THCTensor_(scanInnermostDim)(THCState *state, THCTensor *tgt,
   THCTensor_kernel_scanInnermostDim<scalar_t, 16, 32><<<grid, threads, 0, THCState_getCurrentStream(state)>>>(
     THCTensor_(data)(state, tgt), THCTensor_(data)(state, src), num_rows, row_size, init, binary_op);
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 template<class BinaryFunction>

@@ -67,7 +67,7 @@ Tensor& linspace_cuda_out(Tensor& result, Scalar start, Scalar end, int64_t step
   if (!result.is_contiguous()) {
     result.copy_(r);
   }
-  AT_CUDA_CHECK(cudaGetLastError());
+//  AT_CUDA_CHECK(cudaGetLastError());
   return result;
 }
 
@@ -100,7 +100,7 @@ Tensor& logspace_cuda_out(Tensor& result, Scalar start, Scalar end, int64_t step
   if (!result.is_contiguous()) {
     result.copy_(r);
   }
-  AT_CUDA_CHECK(cudaGetLastError());
+//  AT_CUDA_CHECK(cudaGetLastError());
   return result;
 }
 
@@ -133,7 +133,7 @@ Tensor& range_cuda_out(Tensor& result, Scalar start, Scalar end, Scalar step) {
     }
   });
 
-  AT_CUDA_CHECK(cudaGetLastError());
+//  AT_CUDA_CHECK(cudaGetLastError());
   return result;
 }
 
@@ -186,7 +186,7 @@ Tensor& arange_cuda_out(Tensor& result, Scalar start, Scalar end, Scalar step) {
     }
   });
 
-  AT_CUDA_CHECK(cudaGetLastError());
+//  AT_CUDA_CHECK(cudaGetLastError());
   return result;
 }
 

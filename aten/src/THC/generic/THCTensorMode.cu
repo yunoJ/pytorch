@@ -269,7 +269,7 @@ void THCTensor_(mode)(THCState *state,
       default:
         assert(false);
     }
-    THCudaCheck(cudaGetLastError());
+//    THCudaCheck(cudaGetLastError());
 
     THCTensor_(free)(state, transposed);
     THCTensor_(free)(state, contiguous);

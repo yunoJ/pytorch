@@ -382,8 +382,9 @@ struct DeviceRleDispatch
         do
         {
             // Get device ordinal
-            int device_ordinal;
-            if (CubDebug(error = cudaGetDevice(&device_ordinal))) break;
+            int device_ordinal = 0;
+//            if (CubDebug(error = cudaGetDevice(&device_ordinal))) break;
+            if (CubDebug(error = cudaSuccess)) break;
 
             // Get SM count
             int sm_count;

@@ -42,8 +42,9 @@ bool allContiguous(at::TensorList tensors) {
 }
 
 void getLaunchConfig(dim3* block, dim3* grid, int64_t numel) {
-  int curDevice = -1;
-  cudaGetDevice(&curDevice);
+//  int curDevice = -1;
+//  cudaGetDevice(&curDevice);
+  int curDevice = 0;
   *block = cuda::getApplyBlock();
   AT_ASSERTM(cuda::getApplyGrid(numel, *grid, curDevice),
              "Could not get grid size for pointwise apply.");

@@ -583,7 +583,7 @@ std::tuple<Tensor, Tensor, Tensor> batch_norm_cuda_template(const Tensor& input_
     batch_norm_transform_input_kernel<scalar_t, accscalar_t, true, index_t> <<<blocks_trans, threads_trans, 0, stream>>>
       (input, output, save_mean, save_invstd, weight, bias, epsilon);
   }
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
   return std::make_tuple(output_reshaped.view(input_.sizes()), save_mean_, save_invstd_);
 }
 
@@ -630,7 +630,7 @@ std::tuple<Tensor, Tensor, Tensor> batch_norm_backward_cuda_template(const Tenso
   batch_norm_backward_kernel<scalar_t,  accscalar_t, index_t> <<<blocks, threads, 0, stream>>>
     (input, grad_output, grad_input, grad_weight, grad_bias, weight, running_mean, running_var,
      save_mean, save_invstd, train, epsilon);
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 
   return std::make_tuple(grad_input_, grad_weight_, grad_bias_);
 }
@@ -669,7 +669,7 @@ std::tuple<Tensor, Tensor> batch_norm_stats_cuda_template(const Tensor& input_, 
   dim3 threads(tf, std::max<int>(1, MAX_BLOCK_SIZE/tf));
   batch_norm_collect_statistics_kernel<InvStd, scalar_t, scalar_t, accscalar_t, index_t> <<<blocks, threads, 0, stream>>>
     (input, epsilon, 0.0, dummy_mean, dummy_invstd, mean, invstd);
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
   return std::make_tuple(mean_, invstd_);
 }
 
@@ -709,7 +709,7 @@ Tensor batch_norm_elemt_cuda_template(const Tensor& input_, const Tensor& weight
   dim3 threads_trans(tf, tb);
   batch_norm_transform_input_kernel<scalar_t, accscalar_t, true, index_t> <<<blocks_trans, threads_trans, 0, stream>>>
     (input, output, mean, invstd, weight, bias, epsilon);
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
   return output_reshaped.view(input_.sizes());
 }
 
@@ -743,7 +743,7 @@ std::tuple<Tensor, Tensor> batch_norm_gather_stats_cuda_template(const Tensor& m
   int grid = std::max<int>(1, features/block);
   batch_norm_reduce_statistics_kernel<scalar_t, accscalar_t, index_t> <<<grid, block, 0, stream>>>
       (mean, invstd, save_mean, save_invstd, running_mean, running_var, epsilon, momentum, counts);
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
   return std::make_tuple(save_mean_, save_invstd_);
 }
 
@@ -793,7 +793,7 @@ std::tuple<Tensor, Tensor, Tensor, Tensor> batch_norm_backward_reduce_cuda_templ
 
   batch_norm_backward_reduce_kernel<scalar_t, accscalar_t, index_t> <<<grid, block, 0, stream>>>
     (input, grad_output, mean, invstd, mean_dy, mean_dy_xmu, grad_weight, grad_bias);
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 
   return std::make_tuple(mean_dy_, mean_dy_xmu_, grad_weight_, grad_bias_);
 }
@@ -835,7 +835,7 @@ Tensor batch_norm_backward_elemt_cuda_template(const Tensor& grad_out_, const Te
   dim3 threads_trans(tf, tb);
   batch_norm_backward_elemt_kernel<scalar_t, accscalar_t, index_t> <<<blocks_trans, threads_trans, 0, stream>>>
     (input, grad_output, mean, invstd, weight, mean_dy, mean_dy_xmu, grad_input);
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
   return grad_input_reshaped.view(input_.sizes());
 }
 
@@ -869,7 +869,7 @@ std::tuple<Tensor, Tensor> batch_norm_update_stats_cuda_template(
   // NB: epsilon is unused by the Var transform, so we set it to 0
   batch_norm_collect_statistics_kernel<Var, input_scalar_t, stat_scalar_t, stat_accscalar_t, index_t> <<<blocks, threads, 0, stream>>>
     (input, 0., momentum, running_mean, running_var, save_mean, save_var);
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
   return std::make_tuple(save_mean_, save_var_);
 }
 

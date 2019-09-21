@@ -38,10 +38,10 @@ void THNN_(LRNforward)(THCState* state, THCTensor* input, THCTensor* output,
       n_threads, THCTensor_(data)(state, input), batchSize, nInputPlane, imsize_h, imsize_w, local_size,
       alpha / local_size, k, THCTensor_(data)(state, scale));
   n_threads *= nInputPlane;
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
   LRNComputeOutput<<<GET_BLOCKS(n_threads), CUDA_NUM_THREADS, 0, THCState_getCurrentStream(state)>>>(
     n_threads, THCTensor_(data)(state, input), THCTensor_(data)(state, scale), -beta, THCTensor_(data)(state, output));
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 
   THCTensor_(free)(state, input);
 }
@@ -85,7 +85,7 @@ void THNN_(LRNbackward)(THCState* state, THCTensor* input, THCTensor* output,
       THCTensor_(data)(state, scale), THCTensor_(data)(state, gradOutput), batchSize, nInputPlane, imsize_h, imsize_w,
       local_size, -beta, ScalarConvert<int, scalar_t>::to(2) * alpha * beta / local_size,
       THCTensor_(data)(state, gradInput));
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 
   THCTensor_(free)(state, input);
   THCTensor_(free)(state, gradOutput);

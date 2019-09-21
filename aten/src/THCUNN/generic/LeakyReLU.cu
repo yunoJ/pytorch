@@ -26,7 +26,7 @@ void THNN_(LeakyReLU_updateOutput)(
     THC_pointwiseApply2<scalar_t, scalar_t>(state, output, input, LeakyReLUUpdateOutput<scalar_t>(negval));
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 void THNN_(LeakyReLU_updateGradInput)(
@@ -53,7 +53,7 @@ void THNN_(LeakyReLU_updateGradInput)(
     THC_pointwiseApply3<scalar_t, scalar_t, scalar_t>(state, gradInput, input, gradOutput, LeakyReLUUpdateGradInput<scalar_t>(negval));
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 #endif

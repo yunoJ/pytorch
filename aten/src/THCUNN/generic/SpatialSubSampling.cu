@@ -72,7 +72,7 @@ void THNN_(SpatialSubSampling_updateOutput)(
     subsample<scalar_t, accreal> <<<blocks, threads, 0, THCState_getCurrentStream(state)>>> (
       input_data, output_data, weight_data, bias_data,
       nInputPlane, nInputRows, nInputCols, kH, kW, dH, dW);
-    THCudaCheck(cudaGetLastError());
+//    THCudaCheck(cudaGetLastError());
   } else {
     int64_t nInputCols = input->size(3);
     int64_t nInputRows = input->size(2);
@@ -96,7 +96,7 @@ void THNN_(SpatialSubSampling_updateOutput)(
     subsample<scalar_t, accreal> <<<blocks, threads, 0, THCState_getCurrentStream(state)>>> (
       input_data, output_data, weight_data, bias_data,
       nInputPlane, nInputRows, nInputCols, kH, kW, dH, dW);
-    THCudaCheck(cudaGetLastError());
+//    THCudaCheck(cudaGetLastError());
   }
 
   // clean
@@ -147,7 +147,7 @@ void THNN_(SpatialSubSampling_updateGradInput)(
         gradInput_data, gradOutput_data, weight_data,
         nInputPlane, nInputRows, nInputCols, kH, kW, dH, dW);
     }
-    THCudaCheck(cudaGetLastError());
+//    THCudaCheck(cudaGetLastError());
   } else {
     int64_t nInputCols = input->size(3);
     int64_t nInputRows = input->size(2);
@@ -178,7 +178,7 @@ void THNN_(SpatialSubSampling_updateGradInput)(
         gradInput_data, gradOutput_data, weight_data,
         nInputPlane, nInputRows, nInputCols, kH, kW, dH, dW);
     }
-    THCudaCheck(cudaGetLastError());
+//    THCudaCheck(cudaGetLastError());
   }
   THCTensor_(free)(state, gradOutput);
 }
@@ -219,7 +219,7 @@ void THNN_(SpatialSubSampling_accGradParameters)(
     subgradweight<scalar_t, accreal> <<<blocks, threads, 0, THCState_getCurrentStream(state)>>> (
       input_data, gradOutput_data, gradWeight_data, gradBias_data,
       nInputPlane, nInputRows, nInputCols, kH, kW, dH, dW, scale);
-    THCudaCheck(cudaGetLastError());
+//    THCudaCheck(cudaGetLastError());
   } else {
     int64_t nInputCols = input->size(3);
     int64_t nInputRows = input->size(2);
@@ -247,7 +247,7 @@ void THNN_(SpatialSubSampling_accGradParameters)(
         gradWeight_data, gradBias_data,
         nInputPlane, nInputRows, nInputCols, kH, kW, dH, dW, scale);
     }
-    THCudaCheck(cudaGetLastError());
+//    THCudaCheck(cudaGetLastError());
   }
 
   // clean

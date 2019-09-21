@@ -253,7 +253,7 @@ void adaptive_max_pool2d_out_cuda_template(
                                    istrideD, istrideH, istrideW);
       }
     );
-    THCudaCheck(cudaGetLastError());
+//    THCudaCheck(cudaGetLastError());
 
   } else {
     Tensor input_ = input.contiguous();
@@ -290,7 +290,7 @@ void adaptive_max_pool2d_out_cuda_template(
                                    istrideD, istrideH, istrideW);
       }
     );
-    THCudaCheck(cudaGetLastError());
+//    THCudaCheck(cudaGetLastError());
 
   }
 }
@@ -357,7 +357,7 @@ void adaptive_max_pool2d_backward_out_cuda_template(
         }
       }
     );
-    THCudaCheck(cudaGetLastError());
+//    THCudaCheck(cudaGetLastError());
   } else {
     int64_t sizeB  = input.size(0);
     int64_t sizeD  = input.size(1);
@@ -403,7 +403,7 @@ void adaptive_max_pool2d_backward_out_cuda_template(
         }
       }
     );
-    THCudaCheck(cudaGetLastError());
+//    THCudaCheck(cudaGetLastError());
   }
 }
 

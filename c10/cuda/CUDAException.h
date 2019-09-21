@@ -16,7 +16,9 @@
   do {                                                     \
     cudaError_t __err = EXPR;                              \
     if (__err != cudaSuccess) {                            \
-      auto error_unused C10_UNUSED = cudaGetLastError();   \
-      AT_ERROR("CUDA error: ", cudaGetErrorString(__err)); \
     }                                                      \
   } while (0)
+
+//      auto error_unused C10_UNUSED = cudaGetLastError();
+//      AT_ERROR("CUDA error: ", cudaGetErrorString(__err));
+

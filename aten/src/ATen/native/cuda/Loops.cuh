@@ -99,7 +99,7 @@ static void launch_kernel(int64_t N, const func_t& f) {
   dim3 grid((N + block.x * vt - 1) / (block.x * vt));
   auto stream = at::cuda::getCurrentCUDAStream();
   elementwise_kernel<nt, vt, func_t><<<grid, block, 0, stream>>>(N, f);
-  AT_CUDA_CHECK(cudaGetLastError());
+//  AT_CUDA_CHECK(cudaGetLastError());
 }
 
 template <typename traits, typename index_t, std::size_t... I>

@@ -16,6 +16,7 @@
 #include <cuda_fp16.h>
 #include <thrust/device_ptr.h>
 #include <thrust/copy.h>
+#include <c10/cuda/CUDACachingAllocator.h>
 
 #define find(n) (32 * (unsigned int)(n / 1024) + (n % 32))
 #define mask(n) (0x80000000 >> (unsigned int)((n % 1024) / 32))
@@ -118,12 +119,13 @@ typedef struct {
 
 std::queue<req_element> req_queue;
 
-ARC_memory::ARC_memory(): global_tensor_id_(0), cur_back_num(0), relu_thru(false), mapping(false),
+ARC_memory::ARC_memory(): global_tensor_id_(0), cur_back_num(0), hard_training(false), relu_thru(false), mapping(false),
     gradient_map_accum(0), weight_accum(0), misc_accum(0),
     isVDNN(false), isFP16(false), isCSR(false), isUsingSSD(false), isTesla(false), isDebug(false),
     device_sz(0), max_device(0), p2p_sz(0), max_p2p(0) {
 
   on_the_fly = 0;
+  cudaEventCreate(&arc_event);
 
   /*
   liveness_result = new bool[3][NUM_TENSOR];
@@ -293,6 +295,7 @@ void ARC_memory::device_malloc_reverse(void** gpu_ptr, size_t size) {
         return;
       }
     }
+    c10::cuda::CUDACachingAllocator::emptyCache();
     blkCheck = 0;
     *devStartBlk_rev = max_device - 1;
 

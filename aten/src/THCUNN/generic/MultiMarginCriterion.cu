@@ -47,7 +47,7 @@ void THNN_(MultiMarginCriterion_updateOutput)(
         margin
       );
     }
-    THCudaCheck(cudaGetLastError());
+//    THCudaCheck(cudaGetLastError());
   }
   else if (input->dim() == 2)
   {
@@ -84,7 +84,7 @@ void THNN_(MultiMarginCriterion_updateOutput)(
           margin
         );
       }
-      THCudaCheck(cudaGetLastError());
+//      THCudaCheck(cudaGetLastError());
     }
     else
     {
@@ -114,7 +114,7 @@ void THNN_(MultiMarginCriterion_updateOutput)(
           margin
         );
       }
-      THCudaCheck(cudaGetLastError());
+//      THCudaCheck(cudaGetLastError());
       float sum = THCTensor_(sumall)(state, output_);
       THCTensor_(set1d)(state, output, 0, ScalarConvert<accreal, scalar_t>::to(sum));
       THCTensor_(free)(state, output_);
@@ -182,7 +182,7 @@ void THNN_(MultiMarginCriterion_updateGradInput)(
         reduction != Reduction::None
       );
     }
-    THCudaCheck(cudaGetLastError());
+//    THCudaCheck(cudaGetLastError());
   }
   else if (input->dim() == 2)
   {
@@ -220,7 +220,7 @@ void THNN_(MultiMarginCriterion_updateGradInput)(
         reduction != Reduction::None
       );
     }
-    THCudaCheck(cudaGetLastError());
+//    THCudaCheck(cudaGetLastError());
   }
   else
   {

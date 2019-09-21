@@ -597,7 +597,7 @@ static void launch_reduce_kernel(const ReduceConfig& config, const R& reduction)
   auto stream = at::cuda::getCurrentCUDAStream();
   int shared_memory = config.shared_memory_size();
   reduce_kernel<nt, R><<<grid, block, shared_memory, stream>>>(reduction);
-  AT_CUDA_CHECK(cudaGetLastError());
+//  AT_CUDA_CHECK(cudaGetLastError());
 }
 
 struct AccumulationBuffer {

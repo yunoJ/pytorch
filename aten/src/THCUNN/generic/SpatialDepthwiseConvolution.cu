@@ -86,7 +86,7 @@ void THNN_(SpatialDepthwiseConvolution_updateOutput)(
     kW, kH, dW, dH, padW, padH, dilationW, dilationH);
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 
   THCTensor_(free)(state, input);
   THCTensor_(free)(state, weight);
@@ -192,7 +192,7 @@ void THNN_(SpatialDepthwiseConvolution_updateGradInput)(
     }
 
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 
   THCTensor_(free)(state, weight);
   THCTensor_(free)(state, gradOutput);
@@ -257,7 +257,7 @@ void THNN_(SpatialDepthwiseConvolution_accGradParameters)(
       dGradOutput, dInput, dGradWeight, batchSize, inputChannels, outputChannels, depthwiseMultiplier,
       width, height, outputWidth, outputHeight, kW, kH, dW, dH, padW, padH, dilationW, dilationH);
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 
   THCTensor_(free)(state, gradOutput);
 }

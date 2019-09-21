@@ -196,8 +196,9 @@ struct THCCachingAllocator
   {
     std::lock_guard<std::recursive_mutex> lock(mutex);
 
-    int device;
-    C10_CUDA_CHECK(cudaGetDevice(&device));
+//    int device;
+//    C10_CUDA_CHECK(cudaGetDevice(&device));
+    int device = 0;
 
     // process outstanding cudaEvents
     process_events();
@@ -238,7 +239,7 @@ struct THCCachingAllocator
       cudaError_t err = cuda_malloc_retry(device, &ptr, alloc_size, reverse);
       if (err != cudaSuccess) {
         if (err == cudaErrorMemoryAllocation) {
-          cudaGetLastError();  // clear CUDA error
+//          cudaGetLastError();  // clear CUDA error
 
           size_t device_free;
           size_t device_total;
@@ -502,7 +503,7 @@ struct THCCachingAllocator
     } else {
       cudaError_t err = cudaMalloc(devPtr, size);
       if (err != cudaSuccess) {
-        cudaGetLastError();  // reset the last CUDA error
+//        cudaGetLastError();  // reset the last CUDA error
         free_cached_blocks(device);
         err = cudaMalloc(devPtr, size);
         if (err != cudaSuccess) {
@@ -593,13 +594,14 @@ struct THCCachingAllocator
 
   void insert_events(Block* block)
   {
-    int prev_device;
-    C10_CUDA_CHECK(cudaGetDevice(&prev_device));
+//    int prev_device;
+//    C10_CUDA_CHECK(cudaGetDevice(&prev_device));
+    int prev_device = 0;
 
     stream_set streams(std::move(block->stream_uses));
     AT_ASSERT(block->stream_uses.empty());
     for (auto it = streams.begin(); it != streams.end(); ++it) {
-      C10_CUDA_CHECK(cudaSetDevice(it->device_index()));
+//      C10_CUDA_CHECK(cudaSetDevice(it->device_index()));
 
       cudaEvent_t event;
       C10_CUDA_CHECK(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
@@ -609,7 +611,7 @@ struct THCCachingAllocator
       cuda_events.emplace_back(event, block);
     }
 
-    C10_CUDA_CHECK(cudaSetDevice(prev_device));
+//    C10_CUDA_CHECK(cudaSetDevice(prev_device));
   }
 
   void process_events()
@@ -627,7 +629,7 @@ struct THCCachingAllocator
       cudaError_t err = cudaEventQuery(event);
       if (err == cudaErrorNotReady) {
         // ignore and clear the error if not ready
-        cudaGetLastError();
+//        cudaGetLastError();
         break;
       } else if (err != cudaSuccess) {
         C10_CUDA_CHECK(err);
@@ -655,8 +657,9 @@ static void CudaCachingDeleter(void* ptr) {
 // actually be publically exposed
 struct CudaCachingAllocator : public Allocator {
   DataPtr allocate(size_t size) const override {
-    int device;
-    C10_CUDA_CHECK(cudaGetDevice(&device));
+//    int device;
+//    C10_CUDA_CHECK(cudaGetDevice(&device));
+    int device = 0;
     void* r = nullptr;
     if (size != 0) {
       caching_allocator.malloc(&r, size, cuda::getCurrentCUDAStream(device), false);
@@ -665,8 +668,9 @@ struct CudaCachingAllocator : public Allocator {
   }
 
   DataPtr ARCallocate(size_t size) const override {
-    int device;
-    C10_CUDA_CHECK(cudaGetDevice(&device));
+//    int device;
+//    C10_CUDA_CHECK(cudaGetDevice(&device));
+    int device = 0;
     void* r = nullptr;
     if (size != 0) {
       caching_allocator.malloc(&r, size, cuda::getCurrentCUDAStream(device), true);
@@ -783,8 +787,9 @@ std::shared_ptr<void> getIpcDevPtr(std::string handle) {
   auto ipc_handle = reinterpret_cast<const cudaIpcMemHandle_t*>(handle.c_str());
   C10_CUDA_CHECK(cudaIpcOpenMemHandle(&dev, *ipc_handle, cudaIpcMemLazyEnablePeerAccess));
   // devPtr has to be deleted in same device when created.
-  int curr_device;
-  C10_CUDA_CHECK(cudaGetDevice(&curr_device));
+//  int curr_device;
+//  C10_CUDA_CHECK(cudaGetDevice(&curr_device));
+  int curr_device = 0;
   auto sp = std::shared_ptr<void>(
       dev,
       [handle, curr_device](void *ptr) {
@@ -806,8 +811,9 @@ void* raw_alloc(size_t nbytes) {
   if (nbytes == 0) {
     return nullptr;
   }
-  int device;
-  C10_CUDA_CHECK(cudaGetDevice(&device));
+//  int device;
+//  C10_CUDA_CHECK(cudaGetDevice(&device));
+  int device = 0;
   void* r = nullptr;
   caching_allocator.malloc(&r, nbytes, cuda::getCurrentCUDAStream(device), false);
   return r;

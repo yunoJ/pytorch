@@ -51,7 +51,7 @@ void THNN_(LookupTableBag_updateOutput)(
     bag_size_data
   );
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 
@@ -187,7 +187,7 @@ void THNN_(LookupTableBag_accGradParameters)(
   );
 
   THCTensor_(free)(state, gradOutput);
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 #endif

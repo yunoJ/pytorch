@@ -50,11 +50,13 @@ class ARC_memory {
   ~ARC_memory();
 
   cudaStream_t arc_stream;
+  cudaEvent_t arc_event;
 
   int global_tensor_id_;
   int cur_back_num;
   bool liveness_result[3][NUM_TENSOR] = {false};
 
+  bool hard_training;
   bool relu_thru;
   bool mapping;
   bool* event_arr_d2h;

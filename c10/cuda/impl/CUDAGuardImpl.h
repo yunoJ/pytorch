@@ -9,9 +9,11 @@
 
 #include <cuda_runtime_api.h>
 
+
 namespace c10 {
 namespace cuda {
 namespace impl {
+
 
 struct CUDAGuardImpl final : public c10::impl::DeviceGuardImplInterface {
   static constexpr DeviceType static_type = DeviceType::CUDA;
@@ -26,21 +28,23 @@ struct CUDAGuardImpl final : public c10::impl::DeviceGuardImplInterface {
     AT_ASSERT(d.type() == DeviceType::CUDA);
     Device old_device = getDevice();
     if (old_device.index() != d.index()) {
-      C10_CUDA_CHECK(cudaSetDevice(d.index()));
+//      C10_CUDA_CHECK(cudaSetDevice(d.index()));
     }
     return old_device;
   }
   Device getDevice() const override {
-    int device;
-    C10_CUDA_CHECK(cudaGetDevice(&device));
+//    int device;
+//    C10_CUDA_CHECK(cudaGetDevice(&device));
+    int device = 0;
     return Device(DeviceType::CUDA, device);
   }
   void setDevice(Device d) const override {
     AT_ASSERT(d.type() == DeviceType::CUDA);
-    C10_CUDA_CHECK(cudaSetDevice(d.index()));
+//    C10_CUDA_CHECK(cudaSetDevice(d.index()));
   }
   void uncheckedSetDevice(Device d) const noexcept override {
-    cudaError_t __err = cudaSetDevice(d.index());
+//    cudaError_t __err = cudaSetDevice(d.index());
+    cudaError_t __err = cudaSuccess;
     if (__err != cudaSuccess) {
       AT_WARN("CUDA error: ", cudaGetErrorString(__err));
     }

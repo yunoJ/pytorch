@@ -35,7 +35,7 @@ void THNN_(MultiLabelMarginCriterion_updateOutput)(
         1, dim,
         reduction == Reduction::Mean
         );
-    THCudaCheck(cudaGetLastError());
+//    THCudaCheck(cudaGetLastError());
   }
   else if(input->dim() == 2)
   {
@@ -61,7 +61,7 @@ void THNN_(MultiLabelMarginCriterion_updateOutput)(
           nframe, dim,
           reduction == Reduction::Mean
           );
-      THCudaCheck(cudaGetLastError());
+//      THCudaCheck(cudaGetLastError());
       THCTensor_(set1d)(state, output, 0, ScalarConvert<accreal, scalar_t>::to(THCTensor_(sumall)(state, output_tmp)));
       THCTensor_(free)(state, output_tmp);
     }
@@ -78,7 +78,7 @@ void THNN_(MultiLabelMarginCriterion_updateOutput)(
         nframe, dim,
         false
         );
-    THCudaCheck(cudaGetLastError());
+//    THCudaCheck(cudaGetLastError());
     }
   }
   else
@@ -151,7 +151,7 @@ void THNN_(MultiLabelMarginCriterion_updateGradInput)(
   else
     AT_ERROR("non-empty vector or matrix expected, got size: ", gradInput->sizes());
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 
   THCTensor_(free)(state, input);
   THCIndexTensor_(free)(state, target);

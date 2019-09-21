@@ -58,7 +58,7 @@ void THNN_(ClassNLLCriterion_updateOutput)(
         n_classes,
         ignore_index);
 
-    THCudaCheck(cudaGetLastError());
+//    THCudaCheck(cudaGetLastError());
 
     if (weights) {
       THCTensor_(free)(state, weights);
@@ -107,7 +107,7 @@ void THNN_(ClassNLLCriterion_updateOutput)(
         ignore_index
     );
   }
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 
   if (weights) {
     THCTensor_(free)(state, weights);
@@ -176,7 +176,7 @@ void THNN_(ClassNLLCriterion_updateGradInput)(
         n_classes,
         ignore_index);
 
-    THCudaCheck(cudaGetLastError());
+//    THCudaCheck(cudaGetLastError());
 
     if (weights) {
       THCTensor_(free)(state, weights);
@@ -221,7 +221,7 @@ void THNN_(ClassNLLCriterion_updateGradInput)(
         ignore_index
     );
   }
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 
   if (weights) {
     THCTensor_(free)(state, weights);

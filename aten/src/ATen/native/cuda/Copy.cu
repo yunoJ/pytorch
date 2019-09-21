@@ -223,7 +223,7 @@ static void copy_device_to_device(TensorIterator& iter, bool non_blocking) {
     src_ready.block(getCurrentCUDAStream(dst_device.index()));
   }
 
-  AT_CUDA_CHECK(cudaGetLastError());
+//  AT_CUDA_CHECK(cudaGetLastError());
 }
 
 static bool copy_requires_temporaries(TensorIterator& iter, bool p2p_enabled) {
@@ -481,6 +481,7 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
         pos_second<<<nblocks, nthreads, 0, stream>>>(nz_pos, (unsigned int*)pos, pos_elements);
 
         int resize = 0;
+
         cudaMemcpyAsync((void *)&resize, (void *)((size_t)pos + sizeof(unsigned int) * (pos_elements - 1)),
             sizeof(int), cudaMemcpyDeviceToHost, stream);
 
@@ -488,7 +489,6 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
         arc_vm.set_fp16_addr(tid, (uint64_t)fp16);
 
         half_scale<<<(iter.numel() + nTPB - 1) / nTPB, nTPB, 0, stream>>>((float *)nz_src, (__half *)fp16, resize);
-//        half_scale<<<(resize + nTPB - 1) / nTPB, nTPB, 0, stream>>>((float *)nz_src, (__half *)fp16, resize);
 
         arc_vm.set_resize(tid, resize);
         arc_vm.set_numel(tid, iter.numel());
@@ -501,8 +501,8 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
           p2p_addr = (uint64_t)fp16;
           p2p_size = (uint64_t)(resize * sizeof(__half));
         } else {
+
           AT_CUDA_CHECK(cudaMemcpyAsync(dst, fp16, resize * sizeof(__half), kind, stream));
-//          cudaStreamSynchronize(stream);
 
           if (globalContext().ARCGlobal.isDebugMode()) {
             std::cout << "CSR FP16 mem free tid: " << tid << ", size: " << sizeof(__half) * resize << std::endl;
@@ -540,6 +540,7 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
           p2p_addr = (uint64_t)fp16;
           p2p_size = (uint64_t)(iter.numel() * sizeof(__half));
         } else {
+
           AT_CUDA_CHECK(cudaMemcpyAsync(dst, fp16, sizeof(__half) * iter.numel(), kind, stream));
 
           if (globalContext().ARCGlobal.isDebugMode()) {
@@ -579,6 +580,7 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
           }
 
           AT_CUDA_CHECK(cudaMemcpyAsync(dst, src, nbytes, kind, stream));
+
           arc_vm.event_arr_d2h[tid] = false;
         }
       }
@@ -608,6 +610,7 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
         arc_vm.set_fp16_addr(tid, (uint64_t)NULL);
 
         AT_CUDA_CHECK(cudaMemcpyAsync(dst, src, nbytes, kind, stream));
+
         arc_vm.event_arr_d2h[tid] = false;
       }
     }
@@ -700,6 +703,7 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
           }
 
           arc_vm.set_fp16_addr(tid, (uint64_t)NULL);
+
           AT_CUDA_CHECK(cudaMemcpyAsync(dst, src, nbytes, kind, stream));
 
           if (at::globalContext().ARCGlobal.isOnDemand()) {
@@ -727,8 +731,8 @@ static void ARC_copy_kernel_cuda(TensorIterator& iter, bool non_blocking, int ti
         }
 
         arc_vm.set_fp16_addr(tid, (uint64_t)NULL);
-        AT_CUDA_CHECK(cudaMemcpyAsync(dst, src, nbytes, kind, stream));
 
+        AT_CUDA_CHECK(cudaMemcpyAsync(dst, src, nbytes, kind, stream));
         if (at::globalContext().ARCGlobal.isOnDemand()) {
           cudaStreamSynchronize(stream);
           arc_vm.event_arr_h2d[tid] = false;

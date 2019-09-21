@@ -19,7 +19,8 @@ static inline void cudaCheck(cudaError_t result, const char * file, int line) {
 
 struct CUDAMethods : public CUDAStubs {
   void record(int* device, CUDAEventStub* event, int64_t* cpu_ns) override {
-    TORCH_CUDA_CHECK(cudaGetDevice(device));
+//    TORCH_CUDA_CHECK(cudaGetDevice(device));
+    *device = 0;
     TORCH_CUDA_CHECK(cudaEventCreate(event));
     auto stream = at::cuda::getCurrentCUDAStream();
     *cpu_ns = getTime();

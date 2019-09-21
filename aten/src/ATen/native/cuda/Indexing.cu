@@ -244,7 +244,7 @@ void index_put_accum_kernel(Tensor & self, TensorList indices, const Tensor & va
         strideBefore,
         nElemBefore);
       });
-      THCudaCheck(cudaGetLastError());
+//      THCudaCheck(cudaGetLastError());
       if (permuted)
           self.copy_(src_.permute(inversePerm));
   }

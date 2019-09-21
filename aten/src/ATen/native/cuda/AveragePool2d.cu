@@ -248,9 +248,9 @@ void avg_pool2d_out_cuda_template(
   }
 
   
-  TORCH_CHECK(cudaGetLastError() == cudaSuccess,
-     "avg_pool2d_out_cuda_frame failed with error code ",
-     cudaGetLastError());
+//  TORCH_CHECK(cudaGetLastError() == cudaSuccess,
+//     "avg_pool2d_out_cuda_frame failed with error code ",
+//     cudaGetLastError());
 
   if (input.ndimension() == 3) {
     output.resize_({nInputPlane, outputHeight, outputWidth});
@@ -396,9 +396,9 @@ Tensor& avg_pool2d_backward_out_cuda_template(
     }
   }
 
-  TORCH_CHECK(cudaGetLastError() == cudaSuccess,
-    "avg_pool2d_backward_out_cuda failed with error code ",
-    cudaGetLastError());
+//  TORCH_CHECK(cudaGetLastError() == cudaSuccess,
+//    "avg_pool2d_backward_out_cuda failed with error code ",
+//    cudaGetLastError());
 
   return gradInput;
 }

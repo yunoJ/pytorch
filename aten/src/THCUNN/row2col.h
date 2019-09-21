@@ -40,7 +40,7 @@ void row2col(cudaStream_t stream, const Dtype *data_row, const int channels,
   row2col_kernel<<<GET_BLOCKS(num_kernels), CUDA_NUM_THREADS, 0, stream>>>(
       num_kernels, data_row, width, ksize_w, pad_w, stride_w, 1, width_col,
       data_col);
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 template <typename Dtype, typename Acctype>
@@ -85,6 +85,6 @@ void col2row(cudaStream_t stream, const Dtype *data_col, const int channels,
       num_kernels, data_col, width, channels, patch_w, pad_w, stride_w,
       dilation_w, width_col, data_row);
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 #endif

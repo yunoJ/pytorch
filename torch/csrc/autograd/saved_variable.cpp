@@ -607,20 +607,6 @@ void ARCCppEngine::joinOffload() {
     last_time_slot = (at::native::arc_vm.tv2.tv_sec - at::native::arc_vm.tv1.tv_sec) * 1000 +
           (double)(at::native::arc_vm.tv2.tv_usec - at::native::arc_vm.tv1.tv_usec) / 1000;
   }
-   
-/*
-  if (at::native::arc_vm.is_using_ssd()) {
-    at::native::arc_vm.Arcp2pSynchronize();
-    int count = 1;
-    while(count > 0) {
-      count = 0;
-      for (int i = 0; i < NUM_TENSOR; i++) {
-        count += (int)at::native::arc_vm.event_arr_d2h[i];
-        at::native::arc_vm.Arcp2pCompletion(false);
-      }
-    }
-  }
-*/
 
   if (at::globalContext().ARCGlobal.isDebugMode())
     std::cout << "Wait end" << std::endl;
@@ -643,16 +629,6 @@ void ARCCppEngine::offLoadAsync(at::Tensor tensor) {
     at::native::arc_vm.set_dir(tid, at::native::arcp2p_gputossd);
     at::native::arcp2p_cpl *p_cpl = new at::native::arcp2p_cpl;
     at::native::arc_vm.set_cpl_addr(tid, at::native::arcp2p_gputossd, (void *)p_cpl);
-
-//    if (at::native::arc_vm.device_occupancy() < 0.1) {
-/*
-    if (at::native::arc_vm.on_the_fly > 4) {
-      while (at::native::arc_vm.on_the_fly > 1) {
-        at::native::arc_vm.Arcp2pCompletion(false);
-      }
-      c10::cuda::CUDACachingAllocator::emptyCache();
-    }
-*/
   }
 
   if (at::globalContext().ARCGlobal.isOnDemand()) {
@@ -692,8 +668,6 @@ void ARCCppEngine::preFetch(Oid curOid, ARCSync sync) {//int required_tensor_num
     return;
   }
 
-//  at::globalContext().ARCGlobal.globalOffloadStream().synchronize();   
-  
   bool notused = fetchRequiredTensors_(curOid, sync); 
 }
 
@@ -723,6 +697,7 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
   auto sid = pf_sync_dict_[oid];
   c10::cuda::CUDAStream str(c10::Stream(c10::Stream::UNSAFE, c10::Device(c10::DeviceType::CUDA, 0), sid));
   str.synchronize();
+  cudaStreamSynchronize(at::native::arc_vm.arc_stream);
 
   auto fetch_vec = pf_dict_[oid];
   for (auto it = fetch_vec.begin(); it != fetch_vec.end(); it++) {
@@ -871,7 +846,7 @@ void ARCCppEngine::dropTensor(Oid oid, SavedVariable* fetch_loc) {
   auto fetch_vec = pf_dict_[oid];
   for (auto it = fetch_vec.begin(); it != fetch_vec.end(); it++) {
     auto tid = it->second;
-    if (at::globalContext().ARCGlobal.isOnDemand()) {
+    if (at::globalContext().ARCGlobal.isOnDemand() && !at::native::arc_vm.hard_training) {
       at::Tensor& tref = tensor_dict_[tid]; 
       c10::TensorOptions opt = c10::TensorOptions();
       opt = opt.device(c10::Device(c10::DeviceType::CPU));
@@ -907,6 +882,9 @@ void ARCCppEngine::dropTensor(Oid oid, SavedVariable* fetch_loc) {
         tensor_dict_check_[tid] = false;
         fetch_loc->reset_data();
         c10::cuda::CUDACachingAllocator::emptyCache();
+
+//        if (at::native::arc_vm.hard_training)
+//          at::native::arc_vm.Arcp2pCompletion(true);
       }
     }
   }
@@ -947,12 +925,13 @@ bool ARCCppEngine::fetchRequiredTensors_(Oid oid, ARCSync sync) {
     if (tref.device().type() == c10::DeviceType::CPU) {
 
       if (!at::globalContext().ARCGlobal.isOnDemand()) {
-//        if (at::native::arc_vm.device_occupancy_future(tref.nbytes()) < 0.1) {
+//        if (at::native::arc_vm.device_occupancy_future(tref.nbytes()) < 0.05) {
+//          c10::cuda::CUDACachingAllocator::emptyCache();
+//          return false;
+//        }
+
         if (at::native::arc_vm.on_the_fly > 1) {
-//          at::native::arc_vm.Arcp2pCompletion(false);
-//          if (at::native::arc_vm.device_occupancy_future(tref.nbytes()) < 0.1) {
-//            c10::cuda::CUDACachingAllocator::emptyCache();
-//          }
+          c10::cuda::CUDACachingAllocator::emptyCache();
           return false;
         }
       }
@@ -1033,9 +1012,11 @@ void ARCCppEngine::resetCppEngine() {
     at::globalContext().ARCGlobal.resetGlobalTid();
     at::globalContext().ARCGlobal.resetGlobalOid();
 
+/*
     std::cout << "Accumulated gradient map: " << at::native::arc_vm.gradient_map_accum << " MB" << std::endl;
     std::cout << "Accumulated weight: " << at::native::arc_vm.weight_accum << " MB" << std::endl;
     std::cout << "Accumulated missing?: " << at::native::arc_vm.misc_accum << " MB" << std::endl;
+*/
 
     at::native::arc_vm.gradient_map_accum = 0;
     at::native::arc_vm.weight_accum = 0;

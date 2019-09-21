@@ -52,7 +52,7 @@ void THNN_(LookupTable_accGradParameters)(
        stride,
        paddingValue);
     THCTensor_(free)(state, gradOutput);
-    THCudaCheck(cudaGetLastError());
+//    THCudaCheck(cudaGetLastError());
     return;
   }
 
@@ -146,7 +146,7 @@ void THNN_(LookupTable_accGradParameters)(
   );
 
   THCTensor_(free)(state, gradOutput);
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 #define THREADS 256

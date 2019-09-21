@@ -208,9 +208,9 @@ void max_pool2d_with_indices_out_cuda_template(
           kH, kW, dH, dW, padH, padW, dilationH, dilationW, output_data, indices_data); }
   );
 
-  TORCH_CHECK(cudaGetLastError() == cudaSuccess,
-     "max_pool2d_with_indices_out_cuda_frame failed with error code ",
-     cudaGetLastError());
+//  TORCH_CHECK(cudaGetLastError() == cudaSuccess,
+//     "max_pool2d_with_indices_out_cuda_frame failed with error code ",
+//     cudaGetLastError());
 
   if(input.ndimension() == 3) {
     output.resize_({nInputPlane, outputHeight, outputWidth});
@@ -315,9 +315,9 @@ void max_pool2d_with_indices_backward_out_cuda_template(
     }
   );
 
-  TORCH_CHECK(cudaGetLastError() == cudaSuccess,
-    "fractional_max_pool2d_backward_out_cuda failed with error code ",
-    cudaGetLastError());
+//  TORCH_CHECK(cudaGetLastError() == cudaSuccess,
+//    "fractional_max_pool2d_backward_out_cuda failed with error code ",
+//    cudaGetLastError());
 }
 
 } // namespace

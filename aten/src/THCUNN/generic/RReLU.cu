@@ -49,7 +49,7 @@ void THNN_(RReLU_updateOutput)(
       rreluUpdateOutputTrain<<<grid, BLOCK_SIZE, 0, THCState_getCurrentStream(state)>>>(
         n, rng_engine_inputs, input_data, noise_data, output_data, lower, upper);
     }
-    THCudaCheck(cudaGetLastError());
+//    THCudaCheck(cudaGetLastError());
     THCTensor_(free)(state, input);
   }
   else

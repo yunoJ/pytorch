@@ -1016,7 +1016,7 @@ Tensor& triu_tril_cuda_template(Tensor& result, const Tensor& self, int64_t k, c
           result_info, self_info, k, N);
     }
   });
-  AT_CUDA_CHECK(cudaGetLastError());
+//  AT_CUDA_CHECK(cudaGetLastError());
   return result;
 }
 

@@ -49,6 +49,7 @@ THRUST_CUB_NS_PREFIX
 /// CUB namespace
 namespace cub {
 
+cudaSetDevice(0);
 
 /**
  * \addtogroup UtilMgmt
@@ -367,7 +368,9 @@ struct CachingDeviceAllocator
 
         if (device == INVALID_DEVICE_ORDINAL)
         {
-            if (CubDebug(error = cudaGetDevice(&entrypoint_device))) return error;
+//            if (CubDebug(error = cudaGetDevice(&entrypoint_device))) return error;
+            entrypoint_device = 0;
+            if (CubDebug(error = cudaSuccess)) return error;
             device = entrypoint_device;
         }
 
@@ -439,8 +442,11 @@ struct CachingDeviceAllocator
             // Set runtime's current device to specified device (entrypoint may not be set)
             if (device != entrypoint_device)
             {
-                if (CubDebug(error = cudaGetDevice(&entrypoint_device))) return error;
-                if (CubDebug(error = cudaSetDevice(device))) return error;
+//                if (CubDebug(error = cudaGetDevice(&entrypoint_device))) return error;
+                entrypoint_device = 0;
+                if (CubDebug(error = cudaSuccess)) return error;
+//                if (CubDebug(error = cudaSetDevice(device))) return error;
+                if (CubDebug(error = cudaSuccess)) return error;
             }
 
             // Attempt to allocate
@@ -511,7 +517,8 @@ struct CachingDeviceAllocator
             // Attempt to revert back to previous device if necessary
             if ((entrypoint_device != INVALID_DEVICE_ORDINAL) && (entrypoint_device != device))
             {
-                if (CubDebug(error = cudaSetDevice(entrypoint_device))) return error;
+//                if (CubDebug(error = cudaSetDevice(entrypoint_device))) return error;
+                if (CubDebug(error = cudaSuccess)) return error;
             }
         }
 
@@ -557,7 +564,9 @@ struct CachingDeviceAllocator
 
         if (device == INVALID_DEVICE_ORDINAL)
         {
-            if (CubDebug(error = cudaGetDevice(&entrypoint_device)))
+//            if (CubDebug(error = cudaGetDevice(&entrypoint_device)))
+            entrypoint_device = 0;
+            if (CubDebug(error = cudaSuccess))
                 return error;
             device = entrypoint_device;
         }
@@ -596,8 +605,11 @@ struct CachingDeviceAllocator
         // First set to specified device (entrypoint may not be set)
         if (device != entrypoint_device)
         {
-            if (CubDebug(error = cudaGetDevice(&entrypoint_device))) return error;
-            if (CubDebug(error = cudaSetDevice(device))) return error;
+//            if (CubDebug(error = cudaGetDevice(&entrypoint_device))) return error;
+            entrypoint_device = 0;
+            if (CubDebug(error = cudaSuccess)) return error;
+//            if (CubDebug(error = cudaSetDevice(device))) return error;
+            if (CubDebug(error = cudaSuccess)) return error;
         }
 
         if (recached)
@@ -618,7 +630,8 @@ struct CachingDeviceAllocator
         // Reset device
         if ((entrypoint_device != INVALID_DEVICE_ORDINAL) && (entrypoint_device != device))
         {
-            if (CubDebug(error = cudaSetDevice(entrypoint_device))) return error;
+//            if (CubDebug(error = cudaSetDevice(entrypoint_device))) return error;
+            if (CubDebug(error = cudaSuccess)) return error;
         }
 
         return error;
@@ -658,13 +671,16 @@ struct CachingDeviceAllocator
             // Get entry-point device ordinal if necessary
             if (entrypoint_device == INVALID_DEVICE_ORDINAL)
             {
-                if (CubDebug(error = cudaGetDevice(&entrypoint_device))) break;
+//                if (CubDebug(error = cudaGetDevice(&entrypoint_device))) break;
+                entrypoint_device = 0;
+                if (CubDebug(error = cudaSuccess)) break;
             }
 
             // Set current device ordinal if necessary
             if (begin->device != current_device)
             {
-                if (CubDebug(error = cudaSetDevice(begin->device))) break;
+//                if (CubDebug(error = cudaSetDevice(begin->device))) break;
+                if (CubDebug(error = cudaSuccess)) break;
                 current_device = begin->device;
             }
 
@@ -686,7 +702,8 @@ struct CachingDeviceAllocator
         // Attempt to revert back to entry-point device if necessary
         if (entrypoint_device != INVALID_DEVICE_ORDINAL)
         {
-            if (CubDebug(error = cudaSetDevice(entrypoint_device))) return error;
+//            if (CubDebug(error = cudaSetDevice(entrypoint_device))) return error;
+            if (CubDebug(error = cudaSuccess)) return error;
         }
 
         return error;

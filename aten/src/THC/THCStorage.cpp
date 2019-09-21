@@ -20,8 +20,8 @@ void THCStorage_resize(THCState *state, THCStorage *self, ptrdiff_t size, bool r
 {
   THArgCheck(size >= 0, 2, "invalid size");
   THAssert(self->allocator() != nullptr);
-  int device;
-  THCudaCheck(cudaGetDevice(&device));
+  int device = 0;
+//  THCudaCheck(cudaGetDevice(&device));
 
   if (!self->resizable())
     THError("Trying to resize storage that is not resizable");

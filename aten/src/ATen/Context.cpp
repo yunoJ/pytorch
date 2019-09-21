@@ -161,6 +161,7 @@ void Context::ARCGlobalContext::setTid(Tensor& t, int tid) {
 void Context::ARCGlobalContext::updateTid(Tensor& t, int tid) { t.unsafeGetTensorImpl()->tensor_id = tid; }
 void Context::ARCGlobalContext::resetGlobalTid() { 
     if (cycle_gan) at::native::arc_vm.global_tensor_id_ = RESET_TID;
+    else if (bert) at::native::arc_vm.global_tensor_id_ = 2;
     else at::native::arc_vm.global_tensor_id_ = 0; 
 }
 Oid Context::ARCGlobalContext::getCurOid() { return global_operation_id_; }
@@ -178,8 +179,10 @@ void Context::ARCGlobalContext::endForward() { on_forwarding_ = 0; }
 void Context::ARCGlobalContext::endOnDemand() { 
     static int remaining_backward_in_first_iter = BP_NUM_PER_ITER;
     --remaining_backward_in_first_iter;
-    if (remaining_backward_in_first_iter == 0)
+    if (remaining_backward_in_first_iter == 0) {
         on_demand_mode_ = 0;
+        at::native::arc_vm.hard_training = false;
+    }
 }
 // flag checks 
 bool Context::ARCGlobalContext::isForward() { return on_forwarding_; }

@@ -14,7 +14,7 @@ void THNN_(SoftShrink_updateOutput)(
   THCUNN_assertSameGPU(state, 2, input, output);
   THCTensor_(resizeAs)(state, output, input);
   THC_pointwiseApply2<scalar_t, scalar_t>(state, output, input, SoftShrinkUpdateOutput<scalar_t>(lambda));
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 void THNN_(SoftShrink_updateGradInput)(
@@ -29,7 +29,7 @@ void THNN_(SoftShrink_updateGradInput)(
   THCUNN_assertSameGPU(state, 3, input, gradOutput, gradInput);
   THCTensor_(resizeAs)(state, gradInput, input);
   THC_pointwiseApply3<scalar_t, scalar_t, scalar_t>(state, gradInput, input, gradOutput, SoftShrinkUpdateGradInput<scalar_t>(lambda));
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 #endif

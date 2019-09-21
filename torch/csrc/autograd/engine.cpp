@@ -661,7 +661,9 @@ auto Engine::execute(const edge_list& roots,
   at::globalContext().ARCGlobal.endForward();
   ARCCppEngine::joinOffload();
   c10::cuda::CUDACachingAllocator::emptyCache();
-  std::cout << "================Forward end: " << at::globalContext().ARCGlobal.curBackNum() << " ===================" << std::endl;
+
+  if (at::globalContext().ARCGlobal.isDebugMode())
+    std::cout << "================Forward end: " << at::globalContext().ARCGlobal.curBackNum() << " ===================" << std::endl;
 
   if (!at::globalContext().ARCGlobal.isOnDemand()) {
     at::native::arc_vm.pref_it = at::globalContext().ARCGlobal.getBackPath();
@@ -680,8 +682,10 @@ auto Engine::execute(const edge_list& roots,
     p2pfreeBytes = at::native::arc_vm.p2p_occupancy_size();
 //    THCudaMemGetInfo(at::globalContext().getTHCState(), &freeBytes, &dummy1, &dummy2);
 
-    std::cout << "Remaining GPU memory: " << (double)freeBytes/1024/1024 << std::endl;
-    std::cout << "Remaining GPU memory p2p: " << (double)p2pfreeBytes/1024/1024 << std::endl;
+    if (at::globalContext().ARCGlobal.isDebugMode()) {
+      std::cout << "Remaining GPU memory: " << (double)freeBytes/1024/1024 << std::endl;
+      std::cout << "Remaining GPU memory p2p: " << (double)p2pfreeBytes/1024/1024 << std::endl;
+    }
   }
 
   std::call_once(start_threads_flag_, &Engine::start_threads, this);
@@ -762,13 +766,15 @@ auto Engine::execute(const edge_list& roots,
 
 //  cudaDeviceSynchronize();
   c10::cuda::CUDACachingAllocator::emptyCache();
-  std::cout << "================Backward end: " << at::globalContext().ARCGlobal.curBackNum() << " ===================" << std::endl;
 
-  if (at::globalContext().ARCGlobal.isOnDemand()) {
+  if (at::globalContext().ARCGlobal.isDebugMode())
+    std::cout << "================Backward end: " << at::globalContext().ARCGlobal.curBackNum() << " ===================" << std::endl;
+
+  if (at::globalContext().ARCGlobal.isOnDemand() && !at::native::arc_vm.hard_training) {
     double remainSize = 0;
     if (at::native::arc_vm.is_vdnn()) {
       std::cout << "Flush scheduling start" << std::endl;
-      ARCCppEngine::checkTest2((double)freeBytes / 1024 / 1024 * 0.5);
+      ARCCppEngine::checkTest2((double)freeBytes / 1024 / 1024 * 0.6);
 //      remainSize = ARCCppEngine::checkLarge((double)freeBytes / 1024 / 1024 * 0.8);
     }
   }

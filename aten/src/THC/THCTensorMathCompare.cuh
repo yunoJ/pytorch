@@ -79,7 +79,7 @@ void THC_logicalValue(THCState *state,
     THArgCheck(false, 2, CUTORCH_DIM_WARNING);
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 #endif // THC_TENSORMATH_COMPARE_CUH

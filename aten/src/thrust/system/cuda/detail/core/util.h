@@ -491,8 +491,10 @@ namespace core {
   int CUB_RUNTIME_FUNCTION
   inline get_sm_count()
   {
-    int dev_id;
-    cuda_cub::throw_on_error(cudaGetDevice(&dev_id),
+//    int dev_id;
+//    cuda_cub::throw_on_error(cudaGetDevice(&dev_id),
+    int dev_id = 0;
+    cuda_cub::throw_on_error(cudaSuccess,
                              "get_sm_count:"
                              "failed to cudaGetDevice");
 
@@ -510,8 +512,10 @@ namespace core {
   size_t CUB_RUNTIME_FUNCTION
   inline get_max_shared_memory_per_block()
   {
-    int dev_id;
-    cuda_cub::throw_on_error(cudaGetDevice(&dev_id),
+//    int dev_id;
+//    cuda_cub::throw_on_error(cudaGetDevice(&dev_id),
+    int dev_id = 0;
+    cuda_cub::throw_on_error(cudaSuccess,
                              "get_max_shared_memory_per_block :"
                              "failed to cudaGetDevice");
 
@@ -551,8 +555,10 @@ namespace core {
   int CUB_RUNTIME_FUNCTION 
   get_max_block_size(Kernel k)
   {
-    int devId;
-    cuda_cub::throw_on_error(cudaGetDevice(&devId),
+//    int devId;
+//    cuda_cub::throw_on_error(cudaGetDevice(&devId),
+    int devId = 0;
+    cuda_cub::throw_on_error(cudaSuccess,
                    "get_max_block_size :"
                    "failed to cudaGetDevice");
 
@@ -806,7 +812,8 @@ namespace core {
     {
       cudaError_t status = cudaSuccess;
       int         dev_id = 0;
-      status             = cudaGetDevice(&dev_id);
+//      status             = cudaGetDevice(&dev_id);
+      status             = cudaSuccess;
       if (status != cudaSuccess) return cuda_optional<size_t>(0, status);
 
       int max_shmem = 0;

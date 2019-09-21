@@ -30,7 +30,7 @@ void THCTensor_(cbitand)(THCState* state, THCTensor *self_, THCTensor *src1, THC
     }
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 #endif
 }
 
@@ -57,7 +57,7 @@ void THCTensor_(cbitor)(THCState* state, THCTensor *self_, THCTensor *src1, THCT
     }
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 #endif
 }
 
@@ -84,7 +84,7 @@ void THCTensor_(cbitxor)(THCState* state, THCTensor *self_, THCTensor *src1, THC
     }
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 #endif
 }
 
@@ -102,7 +102,7 @@ void THCTensor_(sign)(THCState* state, THCTensor* self_, THCTensor* src) {
     }
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 #ifdef BUILD_NAMEDTENSOR
   at::namedinference::propagate_names(self_, src);
 #endif
@@ -210,9 +210,10 @@ static void propagate_names_if_named_tensor_enabled(THCTensor* result, THCTensor
       }                                                                 \
     }                                                                   \
                                                                         \
-    THCudaCheck(cudaGetLastError());                                    \
     propagate_names_if_named_tensor_enabled(self_, src);                \
   }
+
+//    THCudaCheck(cudaGetLastError());
 
 #define IMPLEMENT_CUDA_TENSOR_BASIC_FUNC(NAME, CFUNC, REAL) \
   IMPLEMENT_CUDA_TENSOR_BASIC_FUNC_(NAME, CFUNC, REAL)
@@ -272,7 +273,7 @@ void THCTensor_(clamp)(THCState *state, THCTensor *self_, THCTensor *src, scalar
     }
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 void THCTensor_(crossKernel)(THCState *state, THCTensor *self, THCTensor *x, THCTensor *y, int dimension)
@@ -306,7 +307,7 @@ void THCTensor_(atan2)(THCState *state, THCTensor *self_, THCTensor *tx, THCTens
     THArgCheck(false, 2, CUTORCH_DIM_WARNING);
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 void THCTensor_(sigmoid)(THCState* state, THCTensor* self_, THCTensor* src) {
@@ -323,7 +324,7 @@ void THCTensor_(sigmoid)(THCState* state, THCTensor* self_, THCTensor* src) {
     }
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 #ifdef BUILD_NAMEDTENSOR
   at::namedinference::propagate_names(self_, src);
 #endif
@@ -338,7 +339,7 @@ void THCTensor_(digamma)(THCState* state, THCTensor* self_, THCTensor* src) {
     THArgCheck(false, 2, CUTORCH_DIM_WARNING);
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 #ifdef BUILD_NAMEDTENSOR
   at::namedinference::propagate_names(self_, src);
 #endif
@@ -364,7 +365,7 @@ void THCTensor_(polygamma)(THCState* state, THCTensor* self_, int64_t n, THCTens
       THError("polygamma(n,x) is not implemented for n>=2");
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 #ifdef BUILD_NAMEDTENSOR
   at::namedinference::propagate_names(self_, src);
 #endif
@@ -427,7 +428,7 @@ void THCTensor_(cpow)(THCState *state, THCTensor *self_, THCTensor *src1, THCTen
     }
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 void THCTensor_(pow)(THCState *state, THCTensor *self_, THCTensor *src, scalar_t value) {
@@ -494,7 +495,7 @@ void THCTensor_(pow)(THCState *state, THCTensor *self_, THCTensor *src, scalar_t
     }
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 void THCTensor_(tpow)(THCState *state, THCTensor *self_, scalar_t value, THCTensor *src)
@@ -512,7 +513,7 @@ void THCTensor_(tpow)(THCState *state, THCTensor *self_, scalar_t value, THCTens
     }
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 void THCTensor_(cdiv)(THCState* state, THCTensor *self_, THCTensor *src1, THCTensor *src2)
 {
@@ -543,7 +544,7 @@ void THCTensor_(clshift)(THCState* state, THCTensor *self_, THCTensor *src1, THC
     }
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 #endif
 }
 
@@ -570,7 +571,7 @@ void THCTensor_(crshift)(THCState* state, THCTensor *self_, THCTensor *src1, THC
     }
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 #endif
 }
 
@@ -631,7 +632,7 @@ void THCTensor_(addcmul)(THCState *state, THCTensor *self_, THCTensor *t, scalar
     THArgCheck(false, 2, CUTORCH_DIM_WARNING);
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 void THCTensor_(addcdiv)(THCState *state, THCTensor *self_, THCTensor *t, scalar_t value, THCTensor *src1, THCTensor *src2)
@@ -654,7 +655,7 @@ void THCTensor_(addcdiv)(THCState *state, THCTensor *self_, THCTensor *t, scalar
     THArgCheck(false, 2, CUTORCH_DIM_WARNING);
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 #endif

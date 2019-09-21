@@ -417,7 +417,7 @@ THC_transformReduceOuterDimIndex(THCState *state,
       src->template data<ScalarTypeK>(),
       num_orows, num_irows, row_size, init, binary_op);
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 /* Reduce the innermost dimension of a tensor (on thrust::pair functors which are (value, index))
@@ -514,7 +514,7 @@ THC_transformReduceInnermostDimIndex(THCState *state,
       src->template data<ScalarTypeK>(),
       num_rows, row_size, init, binary_op);
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 template <typename ScalarTypeK,

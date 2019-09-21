@@ -214,8 +214,9 @@ bool THC_pointwiseApply1(THCState* state,
   dim3 grid;
   ptrdiff_t totalElements = THCTensor_nElement(state, a);
 
-  int curDevice = -1;
-  cudaGetDevice(&curDevice);
+//  int curDevice = -1;
+//  cudaGetDevice(&curDevice);
+  int curDevice = 0;
   if (!getApplyGrid(state, totalElements, grid, curDevice)) {
     return false;
   }
@@ -356,8 +357,9 @@ bool THC_pointwiseApply2(THCState* state,
   const dim3 block = getApplyBlock();
 
   dim3 grid;
-  int curDevice = -1;
-  cudaGetDevice(&curDevice);
+//  int curDevice = -1;
+//  cudaGetDevice(&curDevice);
+  int curDevice = 0;
   if (!getApplyGrid(state, totalElements, grid, curDevice)) {
     return false;
   }
@@ -551,8 +553,9 @@ bool THC_pointwiseApply3(THCState* state,
   const dim3 block = getApplyBlock();
 
   dim3 grid;
-  int curDevice = -1;
-  cudaGetDevice(&curDevice);
+//  int curDevice = -1;
+//  cudaGetDevice(&curDevice);
+  int curDevice = 0;
   if (!getApplyGrid(state, totalElements, grid, curDevice)) {
     return false;
   }

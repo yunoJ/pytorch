@@ -16,7 +16,7 @@ void THCTensor_(maskedFill)(THCState* state,
     THArgCheck(false, 2, CUTORCH_DIM_WARNING);
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 void THCTensor_(maskedFillBool)(THCState* state,
@@ -32,7 +32,7 @@ void THCTensor_(maskedFillBool)(THCState* state,
     THArgCheck(false, 2, CUTORCH_DIM_WARNING);
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 void THCTensor_(maskedFillByte)(THCState* state,
@@ -108,7 +108,7 @@ void THCTensor_(maskedCopy)(THCState* state,
   THCudaLongTensor_free(state, maskPrefixSum);
 
   THArgCheck(status, 2, CUTORCH_DIM_WARNING);
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 void THCTensor_(maskedCopyBool)(THCState* state,
@@ -174,7 +174,7 @@ void THCTensor_(maskedCopyBool)(THCState* state,
   THCudaLongTensor_free(state, maskPrefixSum);
 
   THArgCheck(status, 2, CUTORCH_DIM_WARNING);
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 void THCTensor_(maskedCopyByte)(THCState* state,
@@ -244,7 +244,7 @@ void THCTensor_(maskedSelect)(THCState* state,
   }
 
   THArgCheck(status, 2, CUTORCH_DIM_WARNING);
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 void THCTensor_(maskedSelectBool)(THCState* state,
@@ -305,7 +305,7 @@ void THCTensor_(maskedSelectBool)(THCState* state,
   }
 
   THArgCheck(status, 2, CUTORCH_DIM_WARNING);
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 // FIXME: remove now that we have THCudaByteTensor?

@@ -287,8 +287,9 @@ Tensor& add_out_dense_sparse_cuda(Tensor& r_, const Tensor& dense, const SparseT
     // TODO benchmark to decide whether to remove this special case
     const dim3 block = cuda::getApplyBlock();
     dim3 grid;
-    int curDevice = -1;
-    cudaGetDevice(&curDevice);
+//    int curDevice = -1;
+//    cudaGetDevice(&curDevice);
+    int curDevice = 0;
     cudaStream_t stream = at::cuda::getCurrentCUDAStream(curDevice);
     if (sparse.dense_dim() == 0) {
       TORCH_CHECK(cuda::getApplyGrid(nnz, grid, curDevice), "add: Argument #0: tensor too large or too many dimensions");
@@ -341,7 +342,7 @@ Tensor& add_out_dense_sparse_cuda(Tensor& r_, const Tensor& dense, const SparseT
     values = values.reshape({nnz, view_columns});
     r_view.index_add_(0, indices1D, values);
   }
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 
   return r_;
 }
@@ -440,8 +441,9 @@ SparseTensor& mul_out_sparse_cuda(SparseTensor& r_, const SparseTensor& t_, cons
   int64_t valueSize = t_values_.stride(0);
   const dim3 block = dim3(std::min(static_cast<int64_t>(cuda::getApplyBlock().x), valueSize));
   dim3 grid;
-  int curDevice = -1;
-  cudaGetDevice(&curDevice);
+//  int curDevice = -1;
+//  cudaGetDevice(&curDevice);
+  int curDevice = 0;
   cudaStream_t stream = at::cuda::getCurrentCUDAStream(curDevice);
   TORCH_CHECK(cuda::getApplyGrid(valueSize, grid, curDevice), "mul: Argument #0: tensor too large or too many dimensions");
 
@@ -454,7 +456,7 @@ SparseTensor& mul_out_sparse_cuda(SparseTensor& r_, const SparseTensor& t_, cons
             I_INFO(r_indices_), I_INFO(t_indices_), I_INFO(s_indices_),
             V_INFO(r_values_), V_INFO(t_values_), V_INFO(s_values_),
             static_cast<uint64_t>(t_nnz), static_cast<uint64_t>(s_nnz));
-        THCudaCheck(cudaGetLastError());
+//        THCudaCheck(cudaGetLastError());
 
         apply::indexSparseIntersectionKernel<uint64_t, scalar_t>
           <<<1, 1, 0, stream>>>(
@@ -462,7 +464,7 @@ SparseTensor& mul_out_sparse_cuda(SparseTensor& r_, const SparseTensor& t_, cons
             // reinterpret_cast shenanigans, because we don't actually have
             // unsigned tensors...
             static_cast<uint64_t>(t_nnz), static_cast<uint64_t>(s_nnz), reinterpret_cast<uint64_t*>(resultNnz.data_ptr()));
-        THCudaCheck(cudaGetLastError());
+//        THCudaCheck(cudaGetLastError());
       });
 
   // sync!  (surely there is a more idiomatic way to do this...)
@@ -584,8 +586,9 @@ Tensor _sparse_sum_backward_cuda(const Tensor& grad_, const SparseTensor& input_
       grad_input_values = grad_values_expand;
     }
     else {
-      int curDevice = -1;
-      cudaGetDevice(&curDevice);
+//      int curDevice = -1;
+//      cudaGetDevice(&curDevice);
+      int curDevice = 0;
       cudaStream_t stream = at::cuda::getCurrentCUDAStream(curDevice);
       auto allocator = THCThrustAllocator(globalContext().lazyInitCUDA());
       auto policy = thrust::cuda::par(allocator).on(stream);

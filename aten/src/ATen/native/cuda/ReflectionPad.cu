@@ -199,7 +199,7 @@ void reflection_pad1d_out_template(
     }
   );
 
-  AT_CUDA_CHECK(cudaGetLastError());
+//  AT_CUDA_CHECK(cudaGetLastError());
 }
 
 void reflection_pad1d_backward_out_template(
@@ -247,7 +247,7 @@ void reflection_pad1d_backward_out_template(
     }
   );
 
-  AT_CUDA_CHECK(cudaGetLastError());
+//  AT_CUDA_CHECK(cudaGetLastError());
 }
 
 void reflection_pad2d_out_template(
@@ -320,7 +320,7 @@ void reflection_pad2d_out_template(
     }
   );
 
-  AT_CUDA_CHECK(cudaGetLastError());
+//  AT_CUDA_CHECK(cudaGetLastError());
 }
 
 void reflection_pad2d_backward_out_template(
@@ -377,7 +377,7 @@ void reflection_pad2d_backward_out_template(
     }
   );
 
-  AT_CUDA_CHECK(cudaGetLastError());
+//  AT_CUDA_CHECK(cudaGetLastError());
 }
 
 } // namespace

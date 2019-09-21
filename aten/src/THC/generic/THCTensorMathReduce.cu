@@ -13,7 +13,7 @@ accreal THCTensor_(sumall)(THCState *state, THCTensor *self) {
     THArgCheck(false, 1, CUTORCH_DIM_WARNING);
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
   return val;
 }
 
@@ -70,7 +70,7 @@ scalar_t THCTensor_(minall)(THCState *state, THCTensor *self) {
     THArgCheck(false, 1, CUTORCH_DIM_WARNING);
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
   return scalar_cast<scalar_t>(val);
 }
 
@@ -91,7 +91,7 @@ scalar_t THCTensor_(maxall)(THCState *state, THCTensor *self) {
     THArgCheck(false, 1, CUTORCH_DIM_WARNING);
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
   return scalar_cast<scalar_t>(val);
 }
 
@@ -109,7 +109,7 @@ void THCTensor_(prod)(THCState* state, THCTensor *self, THCTensor *src, int dime
     THArgCheck(false, 2, CUTORCH_DIM_WARNING);
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 #if defined(THC_REAL_IS_FLOAT) || defined(THC_REAL_IS_DOUBLE) || defined(THC_REAL_IS_HALF)
@@ -136,7 +136,8 @@ void THCTensor_(renorm)(THCState *state, THCTensor* self, THCTensor* src, scalar
       <<<grid, threads, 0, THCState_getCurrentStream(state)>>>
       (THCTensor_(data)(state, data), scalar_cast<accreal>(value), size, scalar_cast<accreal>(maxnorm));
 
-    cudaError_t errcode = cudaGetLastError();
+//    cudaError_t errcode = cudaGetLastError();
+    cudaError_t errcode = cudaSuccess;
     if(errcode != cudaSuccess)
       THError(cudaGetErrorString(errcode));
   }
@@ -164,7 +165,7 @@ void THCTensor_(std)(THCState *state, THCTensor *self_, THCTensor *src, int dime
     THArgCheck(false, 2, CUTORCH_DIM_WARNING);
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 void THCTensor_(var)(THCState *state, THCTensor *self_, THCTensor *src, int dimension, int biased, int keepdim)
@@ -183,7 +184,7 @@ void THCTensor_(var)(THCState *state, THCTensor *self_, THCTensor *src, int dime
     THArgCheck(false, 2, CUTORCH_DIM_WARNING);
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 accreal THCTensor_(stdall)(THCState *state, THCTensor *self, int biased)
@@ -211,7 +212,7 @@ accreal THCTensor_(varall)(THCState *state, THCTensor *self, int biased)
     scalar_cast<accreal>(std::max<int64_t>(0, THCTensor_(nElement)(state, self) - (biased ? 0 : 1)))
   );
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
   return val;
 }
 
@@ -263,7 +264,7 @@ void THCTensor_(norm)(THCState *state, THCTensor* self, THCTensor* src, scalar_t
                         dimension, keepdim);
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
 }
 
 accreal THCTensor_(normall)(THCState *state, THCTensor *self, scalar_t _value)
@@ -313,7 +314,7 @@ accreal THCTensor_(normall)(THCState *state, THCTensor *self, scalar_t _value)
                                        THCNumerics<accreal>::cinv(value));
   }
 
-  THCudaCheck(cudaGetLastError());
+//  THCudaCheck(cudaGetLastError());
   return result;
 }
 

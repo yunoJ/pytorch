@@ -28,21 +28,23 @@ inline DeviceIndex device_count() noexcept {
     // Clear out the error state, so we don't spuriously trigger someone else.
     // (This shouldn't really matter, since we won't be running very much CUDA
     // code in this regime.)
-    cudaError_t last_err = cudaGetLastError();
-    (void)last_err;
+//    cudaError_t last_err = cudaGetLastError();
+//    (void)last_err;
     return 0;
   }
   return static_cast<DeviceIndex>(count);
 }
 
 inline DeviceIndex current_device() {
-  int cur_device;
-  C10_CUDA_CHECK(cudaGetDevice(&cur_device));
+//  int cur_device;
+//  C10_CUDA_CHECK(cudaGetDevice(&cur_device));
+  int cur_device = 0;
   return static_cast<DeviceIndex>(cur_device);
 }
 
 inline void set_device(DeviceIndex device) {
-  C10_CUDA_CHECK(cudaSetDevice(static_cast<int>(device)));
+//  C10_CUDA_CHECK(cudaSetDevice(static_cast<int>(device)));
+  C10_CUDA_CHECK(cudaSuccess);
 }
 
 }} // namespace c10::cuda
