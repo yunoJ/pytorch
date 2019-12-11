@@ -1209,6 +1209,7 @@ Tensor VariableType::adaptive_avg_pool3d_backward(const Tensor & grad_output, co
 }
 std::tuple<Tensor,Tensor> VariableType::adaptive_max_pool1d(const Tensor & self, IntArrayRef output_size) {
   RECORD_FUNCTION("adaptive_max_pool1d", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
   Tensor result0;
   Tensor result1;
   torch::jit::Node* node = nullptr;
@@ -1232,6 +1233,9 @@ std::tuple<Tensor,Tensor> VariableType::adaptive_max_pool1d(const Tensor & self,
     jit::tracer::addOutput(node, result0);
     jit::tracer::addOutput(node, result1);
   }
+  if (at::native::arc_vm.is_timer())
+    cout << "adaptive_max_pool1d, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return std::make_tuple(std::move(result0), std::move(result1));
 }
 std::tuple<Tensor &,Tensor &> VariableType::adaptive_max_pool2d_out(Tensor & out, Tensor & indices, const Tensor & self, IntArrayRef output_size) {
@@ -1951,6 +1955,7 @@ Tensor & VariableType::as_strided_(Tensor & self, IntArrayRef size, IntArrayRef 
 }
 Tensor VariableType::batch_norm(const Tensor & input, const Tensor & weight, const Tensor & bias, const Tensor & running_mean, const Tensor & running_var, bool training, double momentum, double eps, bool cudnn_enabled) {
   RECORD_FUNCTION("batch_norm", std::vector<c10::IValue>({input, weight, bias, running_mean, running_var}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
   if (jit::tracer::isTracing()) {
@@ -1977,6 +1982,9 @@ Tensor VariableType::batch_norm(const Tensor & input, const Tensor & weight, con
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
+  if (at::native::arc_vm.is_timer())
+    cout << "batch_norm, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << ", " << input.sizes() << std::endl;
+
   return result;
 }
 Tensor VariableType::batch_norm_elemt(const Tensor & input, const Tensor & weight, const Tensor & bias, const Tensor & mean, const Tensor & invstd, double eps) {
@@ -3158,6 +3166,7 @@ Tensor VariableType::diagflat(const Tensor & self, int64_t offset) {
 }
 Tensor VariableType::div(Tensor & self, Tensor & other) {
   RECORD_FUNCTION("div", std::vector<c10::IValue>({self, other}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
   auto& self_ = unpack(self, "self", 0);
   auto& other_ = unpack(other, "other", 1);
   std::shared_ptr<DivBackward0> grad_fn;
@@ -3234,6 +3243,9 @@ Tensor VariableType::div(Tensor & self, Tensor & other) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "div0, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return result;
 }
 Tensor VariableType::div(const Tensor & self, Scalar other) {
@@ -3269,6 +3281,7 @@ Tensor VariableType::div(const Tensor & self, Scalar other) {
     at::AutoNonVariableTypeMode non_var_type_mode(true);
     return at::div(self_, other);
   })();
+
   auto result = as_variable(std::move(tmp));
   #ifndef NDEBUG
   if (self__storage_saved.has_value())
@@ -5614,6 +5627,7 @@ Tensor & VariableType::log1p_(Tensor & self) {
 }
 std::tuple<Tensor,Tensor,Tensor> VariableType::lstm(const Tensor & input, TensorList hx, TensorList params, bool has_biases, int64_t num_layers, double dropout, bool train, bool bidirectional, bool batch_first) {
   RECORD_FUNCTION("lstm", std::vector<c10::IValue>({input}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
   Tensor result0;
   Tensor result1;
   Tensor result2;
@@ -5645,10 +5659,14 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::lstm(const Tensor & input, Tensor
     jit::tracer::addOutput(node, result1);
     jit::tracer::addOutput(node, result2);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "lstm0, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << ", " << input.sizes() << std::endl;
+
   return std::make_tuple(std::move(result0), std::move(result1), std::move(result2));
 }
 std::tuple<Tensor,Tensor,Tensor> VariableType::lstm(const Tensor & data, const Tensor & batch_sizes, TensorList hx, TensorList params, bool has_biases, int64_t num_layers, double dropout, bool train, bool bidirectional) {
   RECORD_FUNCTION("lstm", std::vector<c10::IValue>({data, batch_sizes}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
   Tensor result0;
   Tensor result1;
   Tensor result2;
@@ -5680,6 +5698,9 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::lstm(const Tensor & data, const T
     jit::tracer::addOutput(node, result1);
     jit::tracer::addOutput(node, result2);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "lstm1, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << ", " << data.sizes() << std::endl;
+
   return std::make_tuple(std::move(result0), std::move(result1), std::move(result2));
 }
 Tensor & VariableType::lt_out(Tensor & out, const Tensor & self, Scalar other) {
@@ -5979,6 +6000,7 @@ Tensor VariableType::matrix_power(const Tensor & self, int64_t n) {
 }
 Tensor VariableType::max_pool2d(const Tensor & self, IntArrayRef kernel_size, IntArrayRef stride, IntArrayRef padding, IntArrayRef dilation, bool ceil_mode) {
   RECORD_FUNCTION("max_pool2d", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
   if (jit::tracer::isTracing()) {
@@ -6002,6 +6024,9 @@ Tensor VariableType::max_pool2d(const Tensor & self, IntArrayRef kernel_size, In
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "max_pool2d, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return result;
 }
 Tensor VariableType::max_pool2d_with_indices_backward(const Tensor & grad_output, const Tensor & self, IntArrayRef kernel_size, IntArrayRef stride, IntArrayRef padding, IntArrayRef dilation, bool ceil_mode, const Tensor & indices) {
@@ -9329,6 +9354,8 @@ std::vector<Tensor> VariableType::split_with_sizes(const Tensor & self, IntArray
 }
 Tensor VariableType::sqrt(const Tensor & self) {
   RECORD_FUNCTION("sqrt", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
+
   auto& self_ = unpack(self, "self", 0);
   std::shared_ptr<SqrtBackward> grad_fn;
   if (compute_requires_grad( self )) {
@@ -9354,6 +9381,7 @@ Tensor VariableType::sqrt(const Tensor & self) {
   c10::intrusive_ptr<TensorImpl> self__impl_saved;
   if (self_.defined()) self__impl_saved = self_.getIntrusivePtr();
   #endif
+
   auto tmp = ([&]() {
     at::AutoNonVariableTypeMode non_var_type_mode(true);
     return at::sqrt(self_);
@@ -9385,6 +9413,9 @@ Tensor VariableType::sqrt(const Tensor & self) {
     if (at::native::arc_vm.is_using_ssd())
       at::native::arc_vm.Arcp2pCompletion(false);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "sqrt, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return result;
 }
 Tensor & VariableType::sqrt_(Tensor & self) {

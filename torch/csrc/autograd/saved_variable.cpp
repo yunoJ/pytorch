@@ -166,11 +166,6 @@ void ARCCppEngine::checkTest2(double freeSize) {
   accumSize = 0;
   int cur_back_num = at::globalContext().ARCGlobal.curBackNum();
 
-  if (remainSize <= 0) {
-    std::cout << "Nothing" << std::endl;
-    return;
-  }
-
   for (int i = 0; i < NUM_TENSOR-1; i++)
     liveness_time[i + 1] += liveness_time[i];
 
@@ -197,6 +192,11 @@ void ARCCppEngine::checkTest2(double freeSize) {
 
     if (at::native::arc_vm.is_csr() && liveness_csr[cur_back_num][i])
       real_trans_time[i] = real_trans_time[i] / 2;
+  }
+
+  if (remainSize <= 0) {
+    std::cout << "Nothing" << std::endl;
+    return;
   }
 
   int previous_i = 0;
@@ -539,6 +539,7 @@ void ARCCppEngine::offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync s
 
   // partial offloading
   auto tid =  t.unsafeGetIntrusivePtr()->tensor_id;
+  at::native::arc_vm.feature_map_accum[tid] = (double)t.nbytes()/1024/1024;
   int cur_back_num = at::globalContext().ARCGlobal.curBackNum();
 
   if (at::native::arc_vm.liveness_result[cur_back_num][tid] == false && !at::globalContext().ARCGlobal.isOnDemand()) {
@@ -581,11 +582,20 @@ void ARCCppEngine::offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync s
 
     liveness_time[tid] = elapsed;
     liveness_size[tid] = (double)t.nbytes() / 1024 / 1024;
-    liveness_csr[cur_back_num][tid] = at::native::arc_vm.relu_thru;
-    if (t.element_size() >= 4)
-      liveness_fp[cur_back_num][tid] = true;
+
+    if (at::native::arc_vm.is_csr())
+      liveness_csr[cur_back_num][tid] = at::native::arc_vm.relu_thru;
     else
+      liveness_csr[cur_back_num][tid] = false;
+
+    if (at::native::arc_vm.is_fp16()) {
+      if (t.element_size() >= 4)
+        liveness_fp[cur_back_num][tid] = true;
+      else
+        liveness_fp[cur_back_num][tid] = false;
+    } else {
       liveness_fp[cur_back_num][tid] = false;
+    }
 
     at::native::arc_vm.relu_thru = false;
   }
@@ -846,7 +856,7 @@ void ARCCppEngine::dropTensor(Oid oid, SavedVariable* fetch_loc) {
   auto fetch_vec = pf_dict_[oid];
   for (auto it = fetch_vec.begin(); it != fetch_vec.end(); it++) {
     auto tid = it->second;
-    if (at::globalContext().ARCGlobal.isOnDemand() && !at::native::arc_vm.hard_training) {
+    if (at::globalContext().ARCGlobal.isOnDemand()) {
       at::Tensor& tref = tensor_dict_[tid]; 
       c10::TensorOptions opt = c10::TensorOptions();
       opt = opt.device(c10::Device(c10::DeviceType::CPU));
@@ -1012,7 +1022,18 @@ void ARCCppEngine::resetCppEngine() {
     at::globalContext().ARCGlobal.resetGlobalTid();
     at::globalContext().ARCGlobal.resetGlobalOid();
 
+    double accum_sum = 0;
+    for(int i = 0; i < NUM_TENSOR; i++) {
+      if (at::native::arc_vm.feature_map_accum[i] > 0) {
+//        std::cout << "accum tid size: " << i << ", " << at::native::arc_vm.feature_map_accum[i] << std::endl;
+        accum_sum += at::native::arc_vm.feature_map_accum[i];
+      }
+
+      at::native::arc_vm.feature_map_accum[i] = 0;
+    }
+
 /*
+    std::cout << "Accumulated feature map: " << accum_sum << " MB" << std::endl;
     std::cout << "Accumulated gradient map: " << at::native::arc_vm.gradient_map_accum << " MB" << std::endl;
     std::cout << "Accumulated weight: " << at::native::arc_vm.weight_accum << " MB" << std::endl;
     std::cout << "Accumulated missing?: " << at::native::arc_vm.misc_accum << " MB" << std::endl;

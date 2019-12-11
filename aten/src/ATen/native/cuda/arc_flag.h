@@ -50,7 +50,8 @@ class ARC_memory {
   ~ARC_memory();
 
   cudaStream_t arc_stream;
-  cudaEvent_t arc_event;
+  cudaEvent_t startEvent;
+  cudaEvent_t endEvent;
 
   int global_tensor_id_;
   int cur_back_num;
@@ -117,11 +118,16 @@ class ARC_memory {
   void Arcp2pSynchronize();
 
   // [JS] flag check
+  bool is_timer();
   bool is_vdnn();
   bool is_fp16();
   bool is_csr();
   bool is_using_ssd();
   bool is_debug();
+
+  float runTime;
+  void kernelTimeStart();
+  float* kernelTimeEnd();
 
   int* pref_it;
   int pref_end;
@@ -151,6 +157,7 @@ class ARC_memory {
   size_t pinit_64m;
 
   struct timeval tv1, tv2;
+  struct timeval startTime, endTime;
 
  private:
   void* deviceAddr;
@@ -210,6 +217,7 @@ class ARC_memory {
   arcp2p *arc_handle;
   uint64_t last_allocated_offset;
 
+  bool isTimer;
   bool isVDNN;
   bool isFP16;
   bool isCSR;

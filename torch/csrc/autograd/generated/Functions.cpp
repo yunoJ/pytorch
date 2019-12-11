@@ -2248,7 +2248,8 @@ variable_list AddBackward0::apply(variable_list&& grads) {
   auto other_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
-  
+
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ other_ix })) {
     auto grad_result = maybe_multiply(grad, alpha);
     copy_range(grad_inputs, other_ix, grad_result);
@@ -2257,6 +2258,8 @@ variable_list AddBackward0::apply(variable_list&& grads) {
     auto grad_result = grad;
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "AddBackward0, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
 
   if (at::native::arc_vm.is_vdnn() && !at::native::arc_vm.hard_training) {
     at::native::arc_vm.Arcp2pCompletion(true);
@@ -2276,11 +2279,15 @@ variable_list AddBackward1::apply(variable_list&& grads) {
   }
   ARCCppEngine::preFetchSync(this->getOid());
   */
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ self_ix })) {
     auto grad_result = grad;
     copy_range(grad_inputs, self_ix, grad_result);
     at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "AddBackward1, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   if (at::native::arc_vm.is_vdnn() && !at::native::arc_vm.hard_training) {
     at::native::arc_vm.Arcp2pCompletion(true);
   }
@@ -2386,6 +2393,8 @@ variable_list AddmmBackward::apply(variable_list&& grads) {
   
   auto mat1 = mat1_.unpack();
   auto mat2 = mat2_.unpack();
+
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ mat1_ix })) {
     auto grad_result = mm_mat1_backward(grad, mat2, mat1, alpha);
     copy_range(grad_inputs, mat1_ix, grad_result);
@@ -2400,6 +2409,8 @@ variable_list AddmmBackward::apply(variable_list&& grads) {
     auto grad_result = maybe_multiply(grad, beta);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "AddmmBackward, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
 
   ARCCppEngine::dropTensor(this->getOid(), &mat1_);
 
@@ -3193,6 +3204,7 @@ variable_list DivBackward0::apply(variable_list&& grads) {
   }
   auto self = self_.unpack();
   auto other = other_.unpack();
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ other_ix })) {
     auto grad_result = -grad * self / (other * other);
     copy_range(grad_inputs, other_ix, grad_result);
@@ -3205,6 +3217,8 @@ variable_list DivBackward0::apply(variable_list&& grads) {
     copy_range(grad_inputs, self_ix, grad_result);
     at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "DivBackward0, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
 
   if ( at::globalContext().ARCGlobal.isBERT() )
     ARCCppEngine::dropTensor(this->getOid(), &other_);
@@ -3272,11 +3286,15 @@ variable_list FusedDropoutBackward::apply(variable_list&& grads) {
   ARCCppEngine::preFetchSync(this->getOid());
 
   auto result1 = result1_.unpack(shared_from_this());
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ self_ix })) {
     auto grad_result = _fused_dropout_backward(grad, result1, p);
     copy_range(grad_inputs, self_ix, grad_result);
     at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "FusedDropoutBackward, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   ARCCppEngine::dropTensor(this->getOid(), &result1_);
 
   if (at::native::arc_vm.is_vdnn() && !at::native::arc_vm.hard_training) {
@@ -3354,11 +3372,14 @@ variable_list ErfBackward::apply(variable_list&& grads) {
   ARCCppEngine::preFetchSync(this->getOid());
 
   auto self = self_.unpack();
+  at::native::arc_vm.kernelTimeStart(); 
   if (should_compute_output({ self_ix })) {
     auto grad_result = 2.0 / sqrt(M_PI) * exp(-(self.pow(2))) * grad;
     copy_range(grad_inputs, self_ix, grad_result);
     at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "ErfBackward, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
   ARCCppEngine::dropTensor(this->getOid(), &self_);
 
   if (at::native::arc_vm.is_vdnn() && !at::native::arc_vm.hard_training) {
@@ -4316,10 +4337,15 @@ variable_list MeanBackward0::apply(variable_list&& grads) {
   auto self_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
+
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ self_ix })) {
     auto grad_result = grad.expand(self_sizes).to(self_scalar_type) / self_numel;
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "MeanBackward0, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return grad_inputs;
 }
 variable_list MeanBackward1::apply(variable_list&& grads) {
@@ -4328,10 +4354,15 @@ variable_list MeanBackward1::apply(variable_list&& grads) {
   auto self_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
+
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ self_ix })) {
     auto grad_result = sum_backward(grad, self_sizes, dim, keepdim).to(self_scalar_type) / _safe_size(self_sizes, dim);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "MeanBackward1, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return grad_inputs;
 }
 variable_list MedianBackward0::apply(variable_list&& grads) {
@@ -4425,6 +4456,7 @@ variable_list MmBackward::apply(variable_list&& grads) {
 
   auto self = self_.unpack();
   auto mat2 = mat2_.unpack();
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ mat2_ix })) {
     auto grad_result = mm_mat2_backward(grad, self, mat2_sizes, mat2.strides(), 1);
     copy_range(grad_inputs, mat2_ix, grad_result);
@@ -4435,7 +4467,8 @@ variable_list MmBackward::apply(variable_list&& grads) {
     copy_range(grad_inputs, self_ix, grad_result);
     at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
-
+  if (at::native::arc_vm.is_timer())
+    std::cout << "MmBackward, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
   ARCCppEngine::dropTensor(this->getOid(), &self_);
   ARCCppEngine::dropTensor(this->getOid(), &mat2_);
 
@@ -4477,15 +4510,22 @@ variable_list MulBackward0::apply(variable_list&& grads) {
 
   auto self = self_.unpack();
   auto other = other_.unpack();
+
   if (should_compute_output({ other_ix })) {
+    at::native::arc_vm.kernelTimeStart();
     auto grad_result = grad * self;
     copy_range(grad_inputs, other_ix, grad_result);
     at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
+    if (at::native::arc_vm.is_timer())
+      std::cout << "MulBackward0_1, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
     ARCCppEngine::dropTensor(this->getOid(), &self_);
   }
   if (should_compute_output({ self_ix })) {
+    at::native::arc_vm.kernelTimeStart();
     auto grad_result = grad * other;
     copy_range(grad_inputs, self_ix, grad_result);
+    if (at::native::arc_vm.is_timer())
+      std::cout << "MulBackward0_2, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
     ARCCppEngine::dropTensor(this->getOid(), &other_);
   }
 
@@ -4501,10 +4541,14 @@ variable_list MulBackward1::apply(variable_list&& grads) {
   auto self_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ self_ix })) {
     auto grad_result = grad * other;
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "MulBackward1, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return grad_inputs;
 }
 variable_list MvBackward::apply(variable_list&& grads) {
@@ -4563,6 +4607,8 @@ variable_list NativeBatchNormBackward::apply(variable_list&& grads) {
   auto running_var = running_var_.unpack();
   auto result1 = result1_.unpack(shared_from_this());
   auto result2 = result2_.unpack(shared_from_this());
+
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ input_ix, weight_ix, bias_ix })) {
       auto grad_input_mask = std::array<bool, 3>{
         should_compute_output({ input_ix }),
@@ -4583,6 +4629,8 @@ variable_list NativeBatchNormBackward::apply(variable_list&& grads) {
         at::native::arc_vm.gradient_map_accum += (double)std::get<2>(grad_result).nbytes() / 1024 / 1024;
       }
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "NativeBatchNormBackward, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
 
   ARCCppEngine::dropTensor(this->getOid(), &input_);
 
@@ -5003,11 +5051,14 @@ variable_list PowBackward0::apply(variable_list&& grads) {
   ARCCppEngine::preFetchSync(this->getOid());
 
   auto self = self_.unpack();
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ self_ix })) {
     auto grad_result = pow_backward(grad, self, exponent);
     copy_range(grad_inputs, self_ix, grad_result);
     at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "PowBackward0, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
 
   ARCCppEngine::dropTensor(this->getOid(), &self_);
 
@@ -5448,11 +5499,14 @@ variable_list SqrtBackward::apply(variable_list&& grads) {
 
   auto result = result_.unpack(shared_from_this());
   
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ self_ix })) {
     auto grad_result = grad / (2 * result);
     copy_range(grad_inputs, self_ix, grad_result);
     at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "SqrtBackward, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
 
   ARCCppEngine::dropTensor(this->getOid(), &result_);
 
@@ -5545,6 +5599,8 @@ variable_list SubBackward0::apply(variable_list&& grads) {
   auto other_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
+
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ other_ix })) {
     auto grad_result = -grad * alpha;
     copy_range(grad_inputs, other_ix, grad_result);
@@ -5553,6 +5609,9 @@ variable_list SubBackward0::apply(variable_list&& grads) {
     auto grad_result = grad;
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "SubBackward0, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return grad_inputs;
 }
 variable_list SubBackward1::apply(variable_list&& grads) {
@@ -5561,10 +5620,14 @@ variable_list SubBackward1::apply(variable_list&& grads) {
   auto self_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
+
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ self_ix })) {
     auto grad_result = grad;
     copy_range(grad_inputs, self_ix, grad_result);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "SubBackward1, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
   return grad_inputs;
 }
 variable_list RsubBackward0::apply(variable_list&& grads) {
@@ -5739,11 +5802,14 @@ variable_list TanhBackward::apply(variable_list&& grads) {
   ARCCppEngine::preFetchSync(this->getOid(), true);
 
   auto result = result_.unpack(shared_from_this());
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ self_ix })) {
     auto grad_result = tanh_backward(grad, result);
     copy_range(grad_inputs, self_ix, grad_result);
     at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "TanhBackward, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
 
   ARCCppEngine::dropTensor(this->getOid(), &result_);
 
@@ -5953,10 +6019,12 @@ variable_list UnsqueezeBackward0::apply(variable_list&& grads) {
   auto self_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
+//  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ self_ix })) {
     auto grad_result = grad.squeeze(dim);
     copy_range(grad_inputs, self_ix, grad_result);
   }
+//  std::cout << "UnsqueezeBackward0, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
   return grad_inputs;
 }
 variable_list UnsqueezeBackward1::apply(variable_list&& grads) {
@@ -6249,11 +6317,14 @@ variable_list EmbeddingBackward::apply(variable_list&& grads) {
 
   auto indices = indices_.unpack();
   
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ weight_ix })) {
     auto grad_result = embedding_backward(grad, indices, weight_argsize_0, padding_idx, scale_grad_by_freq, sparse);
     copy_range(grad_inputs, weight_ix, grad_result);
     at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "EmbeddingBackward, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
 
   ARCCppEngine::dropTensor(this->getOid(), &indices_);
 
@@ -6347,11 +6418,15 @@ variable_list L1LossBackward::apply(variable_list&& grads) {
   
   auto self = self_.unpack();
   auto target = target_.unpack();
+
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ self_ix })) {
     auto grad_result = l1_loss_backward(grad, self, target, reduction);
     copy_range(grad_inputs, self_ix, grad_result);
     at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "L1LossBackward, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
 
   ARCCppEngine::dropTensor(this->getOid(), &self_);
 
@@ -6480,14 +6555,16 @@ variable_list ReluBackward0::apply(variable_list&& grads) {
   }
   ARCCppEngine::preFetchSync(this->getOid(), true);
 
-
-  
   auto self = self_.unpack();
+
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ self_ix })) {
     auto grad_result = threshold_backward(grad, self, 0);
     copy_range(grad_inputs, self_ix, grad_result);
     at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "ReluBackward0, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
   
   ARCCppEngine::dropTensor(this->getOid(), &self_);
 
@@ -6514,11 +6591,14 @@ variable_list ReluBackward1::apply(variable_list&& grads) {
 
   auto result = result_.unpack(shared_from_this());
   
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ self_ix })) {
     auto grad_result = threshold_backward(grad, result, 0);
     copy_range(grad_inputs, self_ix, grad_result);
     at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "ReluBackward1, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
   
   ARCCppEngine::dropTensor(this->getOid(), &result_);
 
@@ -6673,11 +6753,14 @@ variable_list LeakyReluBackward1::apply(variable_list&& grads) {
   ARCCppEngine::preFetchSync(this->getOid()); 
   
   auto result = result_.unpack(shared_from_this());
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ self_ix })) {
     auto grad_result = leaky_relu_backward(grad, result, negative_slope);
     copy_range(grad_inputs, self_ix, grad_result);
     at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "LeakyReluBackward1, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
 
   ARCCppEngine::dropTensor(this->getOid(), &result_);
 
@@ -6885,11 +6968,15 @@ variable_list ReflectionPad2DBackward::apply(variable_list&& grads) {
   ARCCppEngine::preFetchSync(this->getOid()); 
   
   auto self = self_.unpack();
+  at::native::arc_vm.kernelTimeStart();
+
   if (should_compute_output({ self_ix })) {
     auto grad_result = reflection_pad2d_backward(grad, self, padding);
     copy_range(grad_inputs, self_ix, grad_result);
     at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "ReflectionPad2DBackward, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
 
   ARCCppEngine::dropTensor(this->getOid(), &self_);
 
@@ -7104,13 +7191,15 @@ variable_list AvgPool2DBackward::apply(variable_list&& grads) {
   ARCCppEngine::preFetchSync(this->getOid());
 
   auto self = self_.unpack();
-  
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ self_ix })) {
     auto grad_result = avg_pool2d_backward(grad, self, kernel_size, stride, padding, ceil_mode, count_include_pad, divisor_override);
     copy_range(grad_inputs, self_ix, grad_result);
     at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
-  
+  if (at::native::arc_vm.is_timer())
+    std::cout << "AvgPool2DBackward, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   ARCCppEngine::dropTensor(this->getOid(), &self_);
 
   if (at::native::arc_vm.is_vdnn() && !at::native::arc_vm.hard_training) {
@@ -7178,12 +7267,16 @@ variable_list MaxPool2DWithIndicesBackward::apply(variable_list&& grads) {
  
   auto self = self_.unpack();
   auto result1 = result1_.unpack(shared_from_this());
+  at::native::arc_vm.kernelTimeStart();
+
   if (should_compute_output({ self_ix })) {
     auto grad_result = max_pool2d_with_indices_backward(grad, self, kernel_size, stride, padding, dilation, ceil_mode, result1);
     copy_range(grad_inputs, self_ix, grad_result);
     at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
   }
-  
+  if (at::native::arc_vm.is_timer())
+    std::cout << "MaxPool2DWithIndicesBackward, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   ARCCppEngine::dropTensor(this->getOid(), &self_);
 
   if (at::native::arc_vm.is_vdnn() && !at::native::arc_vm.hard_training) {
@@ -7254,6 +7347,7 @@ variable_list ConvTranspose2DBackward::apply(variable_list&& grads) {
 
   auto self = self_.unpack();
   auto weight = weight_.unpack();
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ self_ix, weight_ix, bias_ix })) {
     auto grad_input_mask = std::array<bool, 3>{
       should_compute_output({ self_ix }),
@@ -7274,6 +7368,8 @@ variable_list ConvTranspose2DBackward::apply(variable_list&& grads) {
       at::native::arc_vm.gradient_map_accum += (double)std::get<2>(grad_result).nbytes() / 1024 / 1024;
     }
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "ConvTranspose2DBackward, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
 
   ARCCppEngine::dropTensor(this->getOid(), &self_);
 
@@ -7391,6 +7487,7 @@ variable_list ThnnConv2DBackward::apply(variable_list&& grads) {
   auto weight = weight_.unpack();
   auto finput = finput_.unpack(shared_from_this());
   auto fgrad_input = fgrad_input_.unpack(shared_from_this());
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ self_ix, weight_ix, bias_ix })) {
       auto grad_input_mask = std::array<bool, 3>{
         should_compute_output({ self_ix }),
@@ -7411,6 +7508,8 @@ variable_list ThnnConv2DBackward::apply(variable_list&& grads) {
         at::native::arc_vm.gradient_map_accum += (double)std::get<2>(grad_result).nbytes() / 1024 / 1024;
       }
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "AddmmBackward, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
   ARCCppEngine::dropTensor(this->getOid(), &self_);
 
   if (at::native::arc_vm.is_vdnn() && !at::native::arc_vm.hard_training) {
@@ -8551,6 +8650,7 @@ variable_list CudnnConvolutionBackward::apply(variable_list&& grads) {
 
   auto self = self_.unpack();
   auto weight = weight_.unpack();
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ self_ix, weight_ix, bias_ix })) {
       auto grad_input_mask = std::array<bool, 3>{
         should_compute_output({ self_ix }),
@@ -8571,7 +8671,8 @@ variable_list CudnnConvolutionBackward::apply(variable_list&& grads) {
         at::native::arc_vm.gradient_map_accum += (double)std::get<2>(grad_result).nbytes() / 1024 / 1024;
       }
   }
-
+  if (at::native::arc_vm.is_timer())
+    std::cout << "CudnnConvolutionBackward, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
   ARCCppEngine::dropTensor(this->getOid(), &self_);
 
   if (at::native::arc_vm.is_vdnn() && !at::native::arc_vm.hard_training) {
@@ -8666,6 +8767,7 @@ variable_list CudnnBatchNormBackward::apply(variable_list&& grads) {
   auto running_var = running_var_.unpack();
   auto result1 = result1_.unpack(shared_from_this());
   auto result2 = result2_.unpack(shared_from_this());
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ input_ix, weight_ix, bias_ix })) {
       auto grad_input_mask = std::array<bool, 3>{
         should_compute_output({ input_ix }),
@@ -8686,7 +8788,9 @@ variable_list CudnnBatchNormBackward::apply(variable_list&& grads) {
         at::native::arc_vm.gradient_map_accum += (double)std::get<2>(grad_result).nbytes() / 1024 / 1024;
       }
   }
-  //ARCCppEngine::dropTensor(this->getOid()); 
+  if (at::native::arc_vm.is_timer())
+    std::cout << "CudnnBatchNormBackward, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   ARCCppEngine::dropTensor(this->getOid(), &input_);
 
   if (at::native::arc_vm.is_vdnn() && !at::native::arc_vm.hard_training) {
@@ -8787,6 +8891,8 @@ variable_list CudnnRnnBackward::apply(variable_list&& grads) {
   auto result0 = result0_.unpack(shared_from_this());
   auto result3 = result3_.unpack(shared_from_this());
   auto result4 = result4_.unpack(shared_from_this());
+
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ input_ix, hx_ix, cx_ix, weight_ix })) {
       auto grad_input_mask = std::array<bool, 4>{
         should_compute_output({ input_ix }),
@@ -8812,7 +8918,9 @@ variable_list CudnnRnnBackward::apply(variable_list&& grads) {
 //        at::native::arc_vm.gradient_map_accum += (double)std::get<3>(grad_result).nbytes() / 1024 / 1024;
       }
   }
-  
+  if (at::native::arc_vm.is_timer())
+    std::cout << "CudnnRnnBackward, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   ARCCppEngine::dropTensor(this->getOid(), &input_);
   ARCCppEngine::dropTensor(this->getOid(), &hx_);
   ARCCppEngine::dropTensor(this->getOid(), &cx_);

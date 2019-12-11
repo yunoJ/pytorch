@@ -2,6 +2,8 @@
 
 #include <ATen/TypeDefault.h>
 #include <ATen/native/cuda/arc_flag.h>
+#include <c10/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAStream.h>
 
 // @generated from tools/autograd/templates/VariableType.cpp
 
@@ -1540,6 +1542,7 @@ Tensor & VariableType::adaptive_avg_pool3d_backward_out(Tensor & grad_input, con
 }
 Tensor VariableType::add(const Tensor & self, const Tensor & other, Scalar alpha) {
   RECORD_FUNCTION("add", std::vector<c10::IValue>({self, other, alpha}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
   auto& self_ = unpack(self, "self", 0);
   auto& other_ = unpack(other, "other", 1);
   std::shared_ptr<AddBackward0> grad_fn;
@@ -1573,11 +1576,12 @@ Tensor VariableType::add(const Tensor & self, const Tensor & other, Scalar alpha
   c10::intrusive_ptr<TensorImpl> other__impl_saved;
   if (other_.defined()) other__impl_saved = other_.getIntrusivePtr();
   #endif
+
   auto tmp = ([&]() {
     at::AutoNonVariableTypeMode non_var_type_mode(true);
     return at::add(self_, other_, alpha);
   })();
-
+  
   int tid = at::globalContext().ARCGlobal.getTid(tmp);
   auto result = as_variable(std::move(tmp));
   if (tid != 0)  at::globalContext().ARCGlobal.setTid(result, tid);
@@ -1597,10 +1601,15 @@ Tensor VariableType::add(const Tensor & self, const Tensor & other, Scalar alpha
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
+
+  if (at::native::arc_vm.is_timer())
+    std::cout << "add0, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return result;
 }
 Tensor VariableType::add(const Tensor & self, Scalar other, Scalar alpha) {
   RECORD_FUNCTION("add", std::vector<c10::IValue>({self, other, alpha}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
   auto& self_ = unpack(self, "self", 0);
   std::shared_ptr<AddBackward1> grad_fn;
   if (compute_requires_grad( self )) {
@@ -1628,6 +1637,7 @@ Tensor VariableType::add(const Tensor & self, Scalar other, Scalar alpha) {
   c10::intrusive_ptr<TensorImpl> self__impl_saved;
   if (self_.defined()) self__impl_saved = self_.getIntrusivePtr();
   #endif
+
   auto tmp = ([&]() {
     at::AutoNonVariableTypeMode non_var_type_mode(true);
     return at::add(self_, other, alpha);
@@ -1649,6 +1659,9 @@ Tensor VariableType::add(const Tensor & self, Scalar other, Scalar alpha) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "add1, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return result;
 }
 Tensor & VariableType::add_(Tensor & self, const Tensor & other, Scalar alpha) {
@@ -2049,6 +2062,8 @@ Tensor & VariableType::any_out(Tensor & out, const Tensor & self, int64_t dim, b
 }
 Tensor VariableType::arange(Scalar end, const TensorOptions & options) {
   RECORD_FUNCTION("arange", std::vector<c10::IValue>({end}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
+
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
   if (jit::tracer::isTracing()) {
@@ -2064,14 +2079,19 @@ Tensor VariableType::arange(Scalar end, const TensorOptions & options) {
     jit::tracer::setTracingState(nullptr);
   }
   auto result = TypeDefault::arange(end, options);
+
   if (tracer_state) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "arange0, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return result;
 }
 Tensor VariableType::arange(Scalar start, Scalar end, const TensorOptions & options) {
   RECORD_FUNCTION("arange", std::vector<c10::IValue>({start, end}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
   if (jit::tracer::isTracing()) {
@@ -2088,14 +2108,21 @@ Tensor VariableType::arange(Scalar start, Scalar end, const TensorOptions & opti
     jit::tracer::setTracingState(nullptr);
   }
   auto result = TypeDefault::arange(start, end, options);
+  
   if (tracer_state) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
+
+  if (at::native::arc_vm.is_timer())
+    std::cout << "arange1, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return result;
 }
 Tensor VariableType::arange(Scalar start, Scalar end, Scalar step, const TensorOptions & options) {
   RECORD_FUNCTION("arange", std::vector<c10::IValue>({start, end, step}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
+
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
   if (jit::tracer::isTracing()) {
@@ -2117,6 +2144,9 @@ Tensor VariableType::arange(Scalar start, Scalar end, Scalar step, const TensorO
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "arange2, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return result;
 }
 Tensor VariableType::asin(const Tensor & self) {
@@ -2639,6 +2669,8 @@ Tensor VariableType::binary_cross_entropy_with_logits_backward(const Tensor & gr
 }
 Tensor VariableType::cat(TensorList tensors, int64_t dim) {
   RECORD_FUNCTION("cat", std::vector<c10::IValue>({}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
+
   auto tensors_ = unpack(tensors, "tensors", 0);
   std::shared_ptr<CatBackward> grad_fn;
   if (compute_requires_grad( tensors )) {
@@ -2695,6 +2727,10 @@ Tensor VariableType::cat(TensorList tensors, int64_t dim) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
+
+  if (at::native::arc_vm.is_timer())
+    std::cout << "cat, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return result;
 }
 Tensor & VariableType::cauchy_(Tensor & self, double median, double sigma, Generator * generator) {
@@ -3154,6 +3190,8 @@ Tensor VariableType::cudnn_affine_grid_generator(const Tensor & theta, int64_t N
 }
 Tensor VariableType::cudnn_convolution(Tensor & self, const Tensor & weight, const Tensor & bias, IntArrayRef padding, IntArrayRef stride, IntArrayRef dilation, int64_t groups, bool benchmark, bool deterministic) {
   RECORD_FUNCTION("cudnn_convolution", std::vector<c10::IValue>({self, weight, bias}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
+
   auto& self_ = unpack(self, "self", 0);
   auto& weight_ = unpack(weight, "weight", 1);
   auto bias_ = unpack_opt(bias, "bias", 2);
@@ -3240,6 +3278,10 @@ Tensor VariableType::cudnn_convolution(Tensor & self, const Tensor & weight, con
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
+
+  if (at::native::arc_vm.is_timer())
+    cout << "cudnn_convolution, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << ", " << self.sizes() << std::endl;
+
   return result;
 }
 Tensor VariableType::cudnn_convolution_transpose_backward_weight(IntArrayRef weight_size, const Tensor & grad_output, const Tensor & self, IntArrayRef padding, IntArrayRef stride, IntArrayRef dilation, int64_t groups, bool benchmark, bool deterministic) {
@@ -3670,6 +3712,8 @@ Tensor VariableType::elu_backward(const Tensor & grad_output, Scalar alpha, Scal
 }
 Tensor VariableType::embedding(const Tensor & weight, Tensor & indices, int64_t padding_idx, bool scale_grad_by_freq, bool sparse) {
   RECORD_FUNCTION("embedding", std::vector<c10::IValue>({weight, indices}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
+
   auto& weight_ = unpack(weight, "weight", 0);
   auto& indices_ = unpack(indices, "indices", 1);
   std::shared_ptr<EmbeddingBackward> grad_fn;
@@ -3722,6 +3766,7 @@ Tensor VariableType::embedding(const Tensor & weight, Tensor & indices, int64_t 
     at::AutoNonVariableTypeMode non_var_type_mode(true);
     return at::embedding(weight_, indices_, padding_idx, scale_grad_by_freq, sparse);
   })();
+
   auto result = as_variable(std::move(tmp));
   #ifndef NDEBUG
   if (weight__storage_saved.has_value()) {
@@ -3740,6 +3785,10 @@ Tensor VariableType::embedding(const Tensor & weight, Tensor & indices, int64_t 
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
+
+  if (at::native::arc_vm.is_timer())
+    std::cout << "embedding, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return result;
 }
 Tensor VariableType::embedding_sparse_backward(const Tensor & grad, const Tensor & indices, int64_t num_weights, int64_t padding_idx, bool scale_grad_by_freq) {
@@ -3770,6 +3819,7 @@ Tensor VariableType::embedding_sparse_backward(const Tensor & grad, const Tensor
 }
 Tensor VariableType::erf(const Tensor & self) {
   RECORD_FUNCTION("erf", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
   auto& self_ = unpack(self, "self", 0);
   std::shared_ptr<ErfBackward> grad_fn;
   if (compute_requires_grad( self )) {
@@ -3821,6 +3871,8 @@ Tensor VariableType::erf(const Tensor & self) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "erf, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
   return result;
 }
 Tensor & VariableType::erf_(Tensor & self) {
@@ -3938,6 +3990,7 @@ Tensor & VariableType::exp_out(Tensor & out, const Tensor & self) {
 }
 Tensor VariableType::expand_as(const Tensor & self, const Tensor & other) {
   RECORD_FUNCTION("expand_as", std::vector<c10::IValue>({self, other}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
   if (jit::tracer::isTracing()) {
@@ -3953,10 +4006,14 @@ Tensor VariableType::expand_as(const Tensor & self, const Tensor & other) {
     jit::tracer::setTracingState(nullptr);
   }
   auto result = TypeDefault::expand_as(self, other);
+  
   if (tracer_state) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "expand_as, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return result;
 }
 Tensor & VariableType::eye_out(Tensor & out, int64_t n) {
@@ -6792,6 +6849,7 @@ Tensor VariableType::max_values(const Tensor & self, IntArrayRef dim, bool keepd
 }
 Tensor VariableType::mean(const Tensor & self, c10::optional<ScalarType> dtype) {
   RECORD_FUNCTION("mean", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
   auto& self_ = unpack(self, "self", 0);
   std::shared_ptr<MeanBackward0> grad_fn;
   if (compute_requires_grad( self )) {
@@ -6800,6 +6858,7 @@ Tensor VariableType::mean(const Tensor & self, c10::optional<ScalarType> dtype) 
     grad_fn->self_sizes = self.sizes().vec();
     grad_fn->self_numel = self.numel();
     grad_fn->self_scalar_type = self.scalar_type();
+    grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
   }
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
@@ -6842,10 +6901,14 @@ Tensor VariableType::mean(const Tensor & self, c10::optional<ScalarType> dtype) 
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "mean0, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return result;
 }
 Tensor VariableType::mean(const Tensor & self, IntArrayRef dim, bool keepdim, c10::optional<ScalarType> dtype) {
   RECORD_FUNCTION("mean", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
   auto& self_ = unpack(self, "self", 0);
   std::shared_ptr<MeanBackward1> grad_fn;
   if (compute_requires_grad( self )) {
@@ -6855,6 +6918,7 @@ Tensor VariableType::mean(const Tensor & self, IntArrayRef dim, bool keepdim, c1
     grad_fn->self_scalar_type = self.scalar_type();
     grad_fn->dim = dim.vec();
     grad_fn->keepdim = keepdim;
+    grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
   }
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
@@ -6899,6 +6963,9 @@ Tensor VariableType::mean(const Tensor & self, IntArrayRef dim, bool keepdim, c1
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "mean1, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return result;
 }
 std::tuple<Tensor,Tensor> VariableType::median(const Tensor & self, int64_t dim, bool keepdim) {
@@ -10714,6 +10781,7 @@ Tensor & VariableType::tan_out(Tensor & out, const Tensor & self) {
 }
 Tensor VariableType::tanh(Tensor & self) {
   RECORD_FUNCTION("tanh", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
   auto& self_ = unpack(self, "self", 0);
   std::shared_ptr<TanhBackward> grad_fn;
   if (compute_requires_grad( self )) {
@@ -10777,6 +10845,8 @@ Tensor VariableType::tanh(Tensor & self) {
     if (at::native::arc_vm.is_using_ssd())
       at::native::arc_vm.Arcp2pCompletion(false);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "tanh, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
   return result;
 }
 Tensor & VariableType::tanh_(Tensor & self) {
@@ -11710,6 +11780,7 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::unique_dim(const Tensor & self, i
 }
 Tensor VariableType::unsqueeze(const Tensor & self, int64_t dim) {
   RECORD_FUNCTION("unsqueeze", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
   auto& self_ = unpack(self, "self", 0);
   std::shared_ptr<UnsqueezeBackward0> grad_fn;
   if (compute_requires_grad( self )) {
@@ -11758,6 +11829,9 @@ Tensor VariableType::unsqueeze(const Tensor & self, int64_t dim) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "unsqueeze, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return result;
 }
 Tensor & VariableType::unsqueeze_(Tensor & self, int64_t dim) {

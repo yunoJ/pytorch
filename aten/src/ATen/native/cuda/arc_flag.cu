@@ -33,6 +33,7 @@
 #define ARC_MEMSIZE_MASK  (0x00000F80)
 // 12~16 bit will be used for arc_vm (p2p) cudamalloc size
 #define ARC_P2PSIZE_MASK  (0x0001F000)
+#define ARC_FLAG_TIMER (1U << 17)
 #define ARC_MEMSIZE_SHIFT (7)
 
 using namespace at::cuda;
@@ -120,12 +121,13 @@ typedef struct {
 std::queue<req_element> req_queue;
 
 ARC_memory::ARC_memory(): global_tensor_id_(0), cur_back_num(0), hard_training(false), relu_thru(false), mapping(false),
-    gradient_map_accum(0), weight_accum(0), misc_accum(0),
+    gradient_map_accum(0), weight_accum(0), misc_accum(0), isTimer(false),
     isVDNN(false), isFP16(false), isCSR(false), isUsingSSD(false), isTesla(false), isDebug(false),
     device_sz(0), max_device(0), p2p_sz(0), max_p2p(0) {
 
   on_the_fly = 0;
-  cudaEventCreate(&arc_event);
+  cudaEventCreate(&startEvent);
+  cudaEventCreate(&endEvent);
 
   /*
   liveness_result = new bool[3][NUM_TENSOR];
@@ -156,6 +158,7 @@ ARC_memory::ARC_memory(): global_tensor_id_(0), cur_back_num(0), hard_training(f
   for(int i = 0; i < NUM_TENSOR; i++) {
     event_arr_d2h[i] = false;
     event_arr_h2d[i] = false;
+    feature_map_accum[i] = 0;
   }
 
   memset(dir_arr, 0, sizeof(arcp2p_dir) * NUM_TENSOR);
@@ -246,7 +249,9 @@ void ARC_memory::device_malloc(void** gpu_ptr, size_t size) {
     *devStartBlk = 0;
 
     if (retryCnt++ > 2) {
-      std::cout << "dev malloc failed: " << (double)size / 1024 / 1024 << ", " << device_occupancy() << std::endl;
+      if (isDebug) {
+        std::cout << "dev malloc failed: " << (double)size / 1024 / 1024 << ", " << device_occupancy() << std::endl;
+      }
       *gpu_ptr = NULL;
       return;
     }
@@ -554,6 +559,10 @@ void ARC_memory::set_dir(int tid, arcp2p_dir dir) {
   dir_arr[tid] = dir;
 }
 
+bool ARC_memory::is_timer(void) {
+  return isTimer;
+}
+
 bool ARC_memory::is_vdnn(void) {
   return isVDNN;
 }
@@ -663,6 +672,11 @@ void ARC_memory::Arcp2pSetting(int flags) {
     }
 
     p2p_freeBlk = (double)max_p2p;
+  }
+
+  if (flags & ARC_FLAG_TIMER) {
+    printf("Timer profiler set\n");
+    isTimer = true;
   }
 
   if (flags & ARC_FLAG_VDNN) {
@@ -970,4 +984,31 @@ void ARC_memory::Arcp2pSynchronize() {
   arcp2p_synchronize(arc_handle);
 }
 
+void ARC_memory::kernelTimeStart() {
+  if (isTimer) {
+    auto str = c10::cuda::getStreamFromPool(false, 0);
+    c10::cuda::CUDAStreamGuard csg(str);
+    cudaEventRecord(startEvent, csg.original_stream());
+//    cudaDeviceSynchronize();
+//    gettimeofday(&tv1, NULL);
+  }
+}
+
+float* ARC_memory::kernelTimeEnd() {
+  if (isTimer) {
+    auto str = c10::cuda::getStreamFromPool(false, 0);
+    c10::cuda::CUDAStreamGuard csg(str);
+    cudaEventRecord(endEvent, csg.original_stream());
+    cudaEventSynchronize(endEvent);
+    cudaEventElapsedTime(&runTime, startEvent, endEvent);
+    /*
+    cudaDeviceSynchronize();
+    gettimeofday(&tv2, NULL);
+    runTime = (tv2.tv_sec - tv1.tv_sec) * 1000 + (double)(tv2.tv_usec - tv1.tv_usec) / 1000;
+    */
+  } else {
+    runTime = -1;
+  }
+  return &runTime;
+}
 }}

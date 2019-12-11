@@ -1881,6 +1881,7 @@ Tensor & VariableType::acos_out(Tensor & out, const Tensor & self) {
 }
 Tensor VariableType::adaptive_avg_pool2d(const Tensor & self, IntArrayRef output_size) {
   RECORD_FUNCTION("adaptive_avg_pool2d", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
   if (jit::tracer::isTracing()) {
@@ -1895,11 +1896,15 @@ Tensor VariableType::adaptive_avg_pool2d(const Tensor & self, IntArrayRef output
   
     jit::tracer::setTracingState(nullptr);
   }
+
   auto result = TypeDefault::adaptive_avg_pool2d(self, output_size);
   if (tracer_state) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "adaptive_avg_pool2d, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return result;
 }
 Tensor & VariableType::adaptive_avg_pool3d_out(Tensor & out, const Tensor & self, IntArrayRef output_size) {
@@ -4334,6 +4339,7 @@ Tensor & VariableType::dot_out(Tensor & out, const Tensor & self, const Tensor &
 }
 Tensor VariableType::dropout(const Tensor & input, double p, bool train) {
   RECORD_FUNCTION("dropout", std::vector<c10::IValue>({input}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
   if (jit::tracer::isTracing()) {
@@ -4354,6 +4360,8 @@ Tensor VariableType::dropout(const Tensor & input, double p, bool train) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "dropout, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
   return result;
 }
 Tensor & VariableType::dropout_(Tensor & self, double p, bool train) {
@@ -6701,6 +6709,7 @@ Tensor VariableType::logsumexp(const Tensor & self, IntArrayRef dim, bool keepdi
 }
 Tensor VariableType::matmul(const Tensor & self, const Tensor & other) {
   RECORD_FUNCTION("matmul", std::vector<c10::IValue>({self, other}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
   if (jit::tracer::isTracing()) {
@@ -6720,6 +6729,8 @@ Tensor VariableType::matmul(const Tensor & self, const Tensor & other) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "matmul, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << ", " << self.sizes() << ", " << other.sizes() << std::endl;
   return result;
 }
 std::tuple<Tensor,Tensor> VariableType::max(const Tensor & self, int64_t dim, bool keepdim) {

@@ -37,10 +37,7 @@
 //by sam SNU-ARC
 #include <c10/cuda/CUDAGuard.h>
 #include <c10/cuda/CUDAStream.h>
-
-
-
-
+#include <ATen/native/cuda/arc_flag.h>
 
 using namespace at;
 using namespace torch;
@@ -616,6 +613,10 @@ bool THPVariable_initModule(PyObject *module)
 
 //Note: Not referecne but copy a tensor to make it alive
 void ARCPyEngine::offLoad(Tensor& t) {
+  int tid = t.unsafeGetTensorImpl()->tensor_id;
+  at::native::arc_vm.feature_map_accum[tid] = (double)t.nbytes()/1024/1024;
+  std::cout << "python_variable tid: " << tid << ", " << (double)t.nbytes()/1024/1024;
+
   return;
   /*
   c10::TensorOptions opt = c10::TensorOptions();

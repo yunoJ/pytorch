@@ -3212,6 +3212,7 @@ Tensor VariableType::clone(const Tensor & self) {
 }
 Tensor VariableType::contiguous(const Tensor & self, MemoryFormat memory_format) {
   RECORD_FUNCTION("contiguous", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
   if (jit::tracer::isTracing()) {
@@ -3231,6 +3232,8 @@ Tensor VariableType::contiguous(const Tensor & self, MemoryFormat memory_format)
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "contiguous, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
   return result;
 }
 Tensor VariableType::conv3d(const Tensor & input, const Tensor & weight, const Tensor & bias, IntArrayRef stride, IntArrayRef padding, IntArrayRef dilation, int64_t groups) {
@@ -5150,12 +5153,14 @@ Tensor & VariableType::ge_(Tensor & self, const Tensor & other) {
 }
 Tensor VariableType::gelu(const Tensor & self) {
   RECORD_FUNCTION("gelu", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
   auto& self_ = unpack(self, "self", 0);
   std::shared_ptr<GeluBackward> grad_fn;
   if (compute_requires_grad( self )) {
     grad_fn = std::shared_ptr<GeluBackward>(new GeluBackward(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self ));
     grad_fn->self_ = SavedVariable(self, false);
+    grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
   }
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
@@ -5193,6 +5198,9 @@ Tensor VariableType::gelu(const Tensor & self) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "leaky_relu, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return result;
 }
 Tensor & VariableType::geometric_(Tensor & self, double p, Generator * generator) {
@@ -6525,6 +6533,7 @@ Tensor & VariableType::le_(Tensor & self, const Tensor & other) {
 }
 Tensor VariableType::leaky_relu(const Tensor & self, Scalar negative_slope) {
   RECORD_FUNCTION("leaky_relu", std::vector<c10::IValue>({self, negative_slope}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
   auto& self_ = unpack(self, "self", 0);
   std::shared_ptr<LeakyReluBackward0> grad_fn;
   if (compute_requires_grad( self )) {
@@ -6581,6 +6590,9 @@ Tensor VariableType::leaky_relu(const Tensor & self, Scalar negative_slope) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "leaky_relu, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return result;
 }
 Tensor & VariableType::leaky_relu_(Tensor & self, Scalar negative_slope) {
@@ -8071,6 +8083,7 @@ Tensor & VariableType::mse_loss_backward_out(Tensor & grad_input, const Tensor &
 }
 Tensor VariableType::mul(Tensor & self, Tensor & other) {
   RECORD_FUNCTION("mul", std::vector<c10::IValue>({self, other}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
   auto& self_ = unpack(self, "self", 0);
   auto& other_ = unpack(other, "other", 1);
   std::shared_ptr<MulBackward0> grad_fn;
@@ -8158,10 +8171,14 @@ Tensor VariableType::mul(Tensor & self, Tensor & other) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "mul0, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return result;
 }
 Tensor VariableType::mul(const Tensor & self, Scalar other) {
   RECORD_FUNCTION("mul", std::vector<c10::IValue>({self, other}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
   auto& self_ = unpack(self, "self", 0);
   std::shared_ptr<MulBackward1> grad_fn;
   if (compute_requires_grad( self )) {
@@ -8206,6 +8223,9 @@ Tensor VariableType::mul(const Tensor & self, Scalar other) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
+  if (at::native::arc_vm.is_timer())
+    std::cout << "mul1, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return result;
 }
 Tensor & VariableType::mul_(Tensor & self, const Tensor & other) {

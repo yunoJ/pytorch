@@ -45,7 +45,6 @@ static inline Tensor ARCto_impl(const Tensor& self, const TensorOptions& options
   //} else {
   auto tid = self.getIntrusivePtr().get()->tensor_id;
 
-//  std::cout << "device: " << options.device().type() << ", off: " << at::native::arc_vm.liveness_result[0][tid] << ", demand: " << at::globalContext().ARCGlobal.isOnDemand() << std::endl;
   if (options.device().type() == c10::DeviceType::CPU) {
     r = at::empty(self.sizes(), options);
   } else {
@@ -55,7 +54,6 @@ static inline Tensor ARCto_impl(const Tensor& self, const TensorOptions& options
       r = at::empty(self.sizes(), options);
     }
   }
-
   r.ARCcopy_(self, non_blocking, is_csr);
   r.unsafeGetTensorImpl()->tensor_id = tid;
   return r;

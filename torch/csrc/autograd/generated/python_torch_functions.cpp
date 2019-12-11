@@ -120,6 +120,9 @@ static PyObject * THPVariable_arange(PyObject* self, PyObject* args, PyObject* k
   auto r = parser.parse(args, kwargs, parsed_args);
 
   auto oid = at::globalContext().ARCGlobal.getNewOid(); 
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION ARRANGE, OPID: " << oid << std::endl;
+  }
 
   bool inputNone = true;
   Tensor input;
@@ -137,7 +140,6 @@ static PyObject * THPVariable_arange(PyObject* self, PyObject* args, PyObject* k
   }
   
   if (at::globalContext().ARCGlobal.isDebugMode()) {
-    std::cout << "OPERATION ARRANGE, OPID: " << oid << std::endl;
     if (inputNone == false)
       std::cout << "ARRANGE INPUT TENSOR ID: " << at::globalContext().ARCGlobal.getTid(input) << std::endl;
   }
@@ -230,6 +232,11 @@ static PyObject * THPVariable_range(PyObject* self, PyObject* args, PyObject* kw
 
   ParsedArgs<8> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
+  auto oid = at::globalContext().ARCGlobal.getNewOid(); 
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION range, OPID: " << oid << std::endl;
+  }
+
   if (r.idx == 0) {
     PyErr_WarnEx(PyExc_UserWarning, "torch.range is deprecated in favor of torch.arange "
         "and will be removed in 0.5. Note that arange generates values in [start; end), "
@@ -611,6 +618,11 @@ static PyObject * THPVariable__adaptive_avg_pool2d(PyObject* self_, PyObject* ar
 
   ParsedArgs<2> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
+  auto oid = at::globalContext().ARCGlobal.getNewOid(); 
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION _adaptive_avg_pool2d, OPID: " << oid << std::endl;
+  }
+
 
   if (r.idx == 0) {
     return wrap(dispatch__adaptive_avg_pool2d(r.tensor(0), r.intlist(1)));
@@ -627,6 +639,10 @@ static PyObject * THPVariable__addmm(PyObject* self_, PyObject* args, PyObject* 
 
   ParsedArgs<6> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
+  auto oid = at::globalContext().ARCGlobal.getNewOid(); 
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION _addmm, OPID: " << oid << std::endl;
+  }
 
   if (r.idx == 0) {
     if (r.isNone(5)) {
@@ -647,6 +663,10 @@ static PyObject * THPVariable__addmm_(PyObject* self_, PyObject* args, PyObject*
 
   ParsedArgs<5> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
+  auto oid = at::globalContext().ARCGlobal.getNewOid(); 
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION _addmm_, OPID: " << oid << std::endl;
+  }
 
   if (r.idx == 0) {
     return wrap(dispatch__addmm_(r.tensor(0), r.tensor(1), r.tensor(2), r.scalar(3), r.scalar(4)));
@@ -663,6 +683,10 @@ static PyObject * THPVariable__addr(PyObject* self_, PyObject* args, PyObject* k
 
   ParsedArgs<6> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
+  auto oid = at::globalContext().ARCGlobal.getNewOid(); 
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION _addr, OPID: " << oid << std::endl;
+  }
 
   if (r.idx == 0) {
     if (r.isNone(5)) {
@@ -683,6 +707,10 @@ static PyObject * THPVariable__addr_(PyObject* self_, PyObject* args, PyObject* 
 
   ParsedArgs<5> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
+  auto oid = at::globalContext().ARCGlobal.getNewOid(); 
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION _addr_, OPID: " << oid << std::endl;
+  }
 
   if (r.idx == 0) {
     return wrap(dispatch__addr_(r.tensor(0), r.tensor(1), r.tensor(2), r.scalar(3), r.scalar(4)));
@@ -715,6 +743,10 @@ static PyObject * THPVariable__batch_norm_impl_index(PyObject* self_, PyObject* 
 
   ParsedArgs<9> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
+  auto oid = at::globalContext().ARCGlobal.getNewOid(); 
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION _batch_norm_impl_index, OPID: " << oid << std::endl;
+  }
 
   if (r.idx == 0) {
     return wrap(dispatch__batch_norm_impl_index(r.tensor(0), r.tensor(1), r.tensor(2), r.tensor(3), r.tensor(4), r.toBool(5), r.toDouble(6), r.toDouble(7), r.toBool(8)));
@@ -859,6 +891,10 @@ static PyObject * THPVariable__cat(PyObject* self_, PyObject* args, PyObject* kw
 
   ParsedArgs<3> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
+  auto oid = at::globalContext().ARCGlobal.getNewOid(); 
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION _cat, OPID: " << oid << std::endl;
+  }
 
   if (r.idx == 0) {
     if (r.isNone(2)) {
@@ -879,6 +915,10 @@ static PyObject * THPVariable__convolution(PyObject* self_, PyObject* args, PyOb
 
   ParsedArgs<12> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
+  auto oid = at::globalContext().ARCGlobal.getNewOid(); 
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION _convolution, OPID: " << oid << std::endl;
+  }
 
   if (r.idx == 0) {
     return wrap(dispatch__convolution(r.tensor(0), r.tensor(1), r.tensor(2), r.intlist(3), r.intlist(4), r.intlist(5), r.toBool(6), r.intlist(7), r.toInt64(8), r.toBool(9), r.toBool(10), r.toBool(11)));
@@ -927,6 +967,10 @@ static PyObject * THPVariable__ctc_loss(PyObject* self_, PyObject* args, PyObjec
 
   ParsedArgs<6> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
+  auto oid = at::globalContext().ARCGlobal.getNewOid(); 
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION _ctc_loss, OPID: " << oid << std::endl;
+  }
 
   if (r.idx == 0) {
     return wrap(dispatch__ctc_loss(r.tensor(0), r.tensor(1), r.intlist(2), r.intlist(3), r.toInt64(4), r.toBool(5)));
@@ -943,6 +987,10 @@ static PyObject * THPVariable__cudnn_ctc_loss(PyObject* self_, PyObject* args, P
 
   ParsedArgs<7> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
+  auto oid = at::globalContext().ARCGlobal.getNewOid(); 
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION _cudnn_ctc_loss, OPID: " << oid << std::endl;
+  }
 
   if (r.idx == 0) {
     return wrap(dispatch__cudnn_ctc_loss(r.tensor(0), r.tensor(1), r.intlist(2), r.intlist(3), r.toInt64(4), r.toBool(5), r.toBool(6)));
@@ -959,6 +1007,10 @@ static PyObject * THPVariable__cudnn_init_dropout_state(PyObject* self_, PyObjec
 
   ParsedArgs<9> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
+  auto oid = at::globalContext().ARCGlobal.getNewOid(); 
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION _cudnn_init_dropout_state, OPID: " << oid << std::endl;
+  }
 
   if (r.idx == 0) {
     auto dropout = r.toDouble(0);
@@ -1002,6 +1054,11 @@ static PyObject * THPVariable__cudnn_rnn_flatten_weight(PyObject* self_, PyObjec
 
   ParsedArgs<8> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
+  auto oid = at::globalContext().ARCGlobal.getNewOid(); 
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION _cudnn_rnn_flatten_weight, OPID: " << oid << std::endl;
+  }
+
 
   if (r.idx == 0) {
     return wrap(dispatch__cudnn_rnn_flatten_weight(r.tensorlist(0), r.toInt64(1), r.toInt64(2), r.toInt64(3), r.toInt64(4), r.toInt64(5), r.toBool(6), r.toBool(7)));
@@ -1100,6 +1157,10 @@ static PyObject * THPVariable__dequantize_linear(PyObject* self_, PyObject* args
 
   ParsedArgs<4> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
+  auto oid = at::globalContext().ARCGlobal.getNewOid(); 
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION _dequantize_linear, OPID: " << oid << std::endl;
+  }
 
   if (r.idx == 0) {
     return wrap(dispatch__dequantize_linear(r.tensor(0), r.toDouble(1), r.toInt64(2), r.scalartype(3)));
@@ -1132,6 +1193,10 @@ static PyObject * THPVariable__dirichlet_grad(PyObject* self_, PyObject* args, P
 
   ParsedArgs<3> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
+  auto oid = at::globalContext().ARCGlobal.getNewOid(); 
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION _dirichlet_grad, OPID: " << oid << std::endl;
+  }
 
   if (r.idx == 0) {
     return wrap(dispatch__dirichlet_grad(r.tensor(0), r.tensor(1), r.tensor(2)));
@@ -1148,6 +1213,10 @@ static PyObject * THPVariable__embedding_bag(PyObject* self_, PyObject* args, Py
 
   ParsedArgs<7> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
+  auto oid = at::globalContext().ARCGlobal.getNewOid(); 
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION _embedding_bag, OPID: " << oid << std::endl;
+  }
 
   if (r.idx == 0) {
     return wrap(dispatch__embedding_bag(r.tensor(0), r.tensor(1), r.tensor(2), r.toBool(3), r.toInt64(4), r.toBool(5), r.tensor(6)));
@@ -1164,6 +1233,10 @@ static PyObject * THPVariable__empty_affine_quantized(PyObject* self_, PyObject*
 
   ParsedArgs<10> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
+  auto oid = at::globalContext().ARCGlobal.getNewOid(); 
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION _empty_affine_quantized, OPID: " << oid << std::endl;
+  }
 
   if (r.idx == 0) {
     auto size = r.intlist(0);
@@ -1211,7 +1284,7 @@ static PyObject * THPVariable__fused_dropout(PyObject* self_, PyObject* args, Py
 
   auto oid = at::globalContext().ARCGlobal.getNewOid();
   if (at::globalContext().ARCGlobal.isDebugMode()) {
-    std::cout << "OPERATION FUSED DROPOUT, OPID: ";
+    std::cout << "OPERATION _fused_dropout, OPID: ";
     std::cout << oid << std::endl;
   }
   Tensor input = r.tensor(0);
@@ -1302,6 +1375,10 @@ static PyObject * THPVariable__log_softmax(PyObject* self_, PyObject* args, PyOb
 
   ParsedArgs<3> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
+  auto oid = at::globalContext().ARCGlobal.getNewOid(); 
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION _log_softmax, OPID: " << oid << std::endl;
+  }
 
   if (r.idx == 0) {
     return wrap(dispatch__log_softmax(r.tensor(0), r.toInt64(1), r.toBool(2)));
@@ -1934,6 +2011,10 @@ static PyObject * THPVariable__weight_norm(PyObject* self_, PyObject* args, PyOb
 
   ParsedArgs<3> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
+  auto oid = at::globalContext().ARCGlobal.getNewOid(); 
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION _weight_norm, OPID: " << oid << std::endl;
+  }
 
   if (r.idx == 0) {
     return wrap(dispatch__weight_norm(r.tensor(0), r.tensor(1), r.toInt64(2)));
@@ -2038,6 +2119,10 @@ static PyObject * THPVariable_adaptive_avg_pool1d(PyObject* self_, PyObject* arg
 
   ParsedArgs<2> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
+  auto oid = at::globalContext().ARCGlobal.getNewOid(); 
+  if (at::globalContext().ARCGlobal.isDebugMode()) {
+    std::cout << "OPERATION adaptive_avg_pool1d, OPID: " << oid << std::endl;
+  }
 
   if (r.idx == 0) {
     return wrap(dispatch_adaptive_avg_pool1d(r.tensor(0), r.intlist(1)));
@@ -6189,9 +6274,8 @@ static PyObject * THPVariable_layer_norm(PyObject* self_, PyObject* args, PyObje
 
   ParsedArgs<6> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
-
   if (r.idx == 0) {
-    return wrap(dispatch_layer_norm(r.tensor(0), r.intlist(1), r.tensor(2), r.tensor(3), r.toDouble(4), r.toBool(5)));
+     return wrap(dispatch_layer_norm(r.tensor(0), r.intlist(1), r.tensor(2), r.tensor(3), r.toDouble(4), r.toBool(5)));
   }
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
@@ -8574,7 +8658,7 @@ static PyObject * THPVariable_relu_(PyObject* self_, PyObject* args, PyObject* k
 
   auto oid = at::globalContext().ARCGlobal.getNewOid();
   if (at::globalContext().ARCGlobal.isDebugMode()) {
-    std::cout << "OPERATION ReLU(inplace), OPID: ";
+    std::cout << "OPERATION ReLU_(inplace), OPID: ";
     std::cout << oid << std::endl;
   }
   Tensor input = r.tensor(0);

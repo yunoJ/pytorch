@@ -775,7 +775,7 @@ auto Engine::execute(const edge_list& roots,
     if (at::native::arc_vm.is_vdnn()) {
       std::cout << "Flush scheduling start" << std::endl;
       ARCCppEngine::checkTest2((double)freeBytes / 1024 / 1024 * 0.6);
-//      remainSize = ARCCppEngine::checkLarge((double)freeBytes / 1024 / 1024 * 0.8);
+//      remainSize = ARCCppEngine::checkLarge((double)freeBytes / 1024 / 1024 * 0.6);
     }
   }
 
