@@ -3173,28 +3173,6 @@ Tensor VariableType::div(Tensor & self, Tensor & other) {
   int sfid = at::globalContext().ARCGlobal.getTid(self);
   int otid = at::globalContext().ARCGlobal.getTid(other);
   
-  if (compute_requires_grad( self, other )) {
-    grad_fn = std::shared_ptr<DivBackward0>(new DivBackward0(), deleteNode);
-    grad_fn->set_next_edges(collect_next_edges( self, other ));
-    if (grad_fn->should_compute_output(1)) {
-      if (at::globalContext().ARCGlobal.isForward() && sfid != 0 && at::globalContext().ARCGlobal.isBERT()) {
-          ARCCppEngine::offLoad(self, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
-          grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
-      }
-      else {
-        grad_fn->self_ = SavedVariable(self, false);
-      }
-    }
-    if (at::globalContext().ARCGlobal.isForward() && otid != 0 && at::globalContext().ARCGlobal.isBERT()) {
-      ARCCppEngine::offLoad(other, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->other_), false);
-      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
-    }
-    else
-      grad_fn->other_ = SavedVariable(other, false);
-
-    if (at::native::arc_vm.is_using_ssd())
-      at::native::arc_vm.Arcp2pCompletion(false);
-  }
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
   if (jit::tracer::isTracing()) {
@@ -3236,6 +3214,33 @@ Tensor VariableType::div(Tensor & self, Tensor & other) {
     AT_ASSERT(other__storage_saved.value().is_alias_of(other_.storage()));
   if (other__impl_saved) AT_ASSERT(other__impl_saved == other_.getIntrusivePtr());
   #endif
+
+  if (at::native::arc_vm.is_timer())
+    std::cout << "div0, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
+  if (compute_requires_grad( self, other )) {
+    grad_fn = std::shared_ptr<DivBackward0>(new DivBackward0(), deleteNode);
+    grad_fn->set_next_edges(collect_next_edges( self, other ));
+    if (grad_fn->should_compute_output(1)) {
+      if (at::globalContext().ARCGlobal.isForward() && sfid != 0 && at::globalContext().ARCGlobal.isBERT()) {
+          ARCCppEngine::offLoad(self, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
+          grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+      }
+      else {
+        grad_fn->self_ = SavedVariable(self, false);
+      }
+    }
+    if (at::globalContext().ARCGlobal.isForward() && otid != 0 && at::globalContext().ARCGlobal.isBERT()) {
+      ARCCppEngine::offLoad(other, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->other_), false);
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else
+      grad_fn->other_ = SavedVariable(other, false);
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
+  }
+
   if (grad_fn) {
       set_history(flatten_tensor_args( result ), grad_fn);
   }
@@ -3243,8 +3248,6 @@ Tensor VariableType::div(Tensor & self, Tensor & other) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
-  if (at::native::arc_vm.is_timer())
-    std::cout << "div0, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
 
   return result;
 }
@@ -9396,13 +9399,10 @@ Tensor VariableType::sqrt(const Tensor & self) {
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));
   if (self__impl_saved) AT_ASSERT(self__impl_saved == self_.getIntrusivePtr());
   #endif
-  if (grad_fn) {
-      set_history(flatten_tensor_args( result ), grad_fn);
-  }
-  if (tracer_state) {
-    jit::tracer::setTracingState(std::move(tracer_state));
-    jit::tracer::addOutput(node, result);
-  }
+
+  if (at::native::arc_vm.is_timer())
+    std::cout << "sqrt, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   if (grad_fn) {
     if (at::globalContext().ARCGlobal.isForward()) {
       ARCCppEngine::offLoad(self, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result_), true);
@@ -9413,8 +9413,15 @@ Tensor VariableType::sqrt(const Tensor & self) {
     if (at::native::arc_vm.is_using_ssd())
       at::native::arc_vm.Arcp2pCompletion(false);
   }
-  if (at::native::arc_vm.is_timer())
-    std::cout << "sqrt, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
+  if (grad_fn) {
+      set_history(flatten_tensor_args( result ), grad_fn);
+  }
+  if (tracer_state) {
+    jit::tracer::setTracingState(std::move(tracer_state));
+    jit::tracer::addOutput(node, result);
+  }
+
 
   return result;
 }

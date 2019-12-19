@@ -1004,7 +1004,6 @@ std::tuple<Tensor,Tensor,Tensor,Tensor,Tensor> VariableType::_cudnn_rnn(const Te
  
     if (at::native::arc_vm.is_using_ssd())
       at::native::arc_vm.Arcp2pCompletion(false);
-
   }
 
   for (int i = 0; i < weight_.size(); i++) {
@@ -2941,6 +2940,7 @@ Tensor VariableType::addmm(Tensor & self, Tensor & mat1, Tensor & mat2, Scalar b
     if (at::native::arc_vm.is_using_ssd())
       at::native::arc_vm.Arcp2pCompletion(false);
   }
+
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
   if (jit::tracer::isTracing()) {
@@ -2989,17 +2989,18 @@ Tensor VariableType::addmm(Tensor & self, Tensor & mat1, Tensor & mat2, Scalar b
     AT_ASSERT(mat2__storage_saved.value().is_alias_of(mat2_.storage()));
   if (mat2__impl_saved) AT_ASSERT(mat2__impl_saved == mat2_.getIntrusivePtr());
   #endif
+
+  if (at::native::arc_vm.is_timer()) {
+    std::cout << "addmm, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << ", " << self.sizes() << ", " << mat1.sizes() << ", " << mat2.sizes() << std::endl;
+  }
+
+
   if (grad_fn) {
       set_history(flatten_tensor_args( result ), grad_fn);
   }
   if (tracer_state) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
-  }
-
-  if (at::native::arc_vm.is_timer()) {
-    std::cout << "addmm, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
-    std::cout << "addmm, " << at::globalContext().ARCGlobal.getCurOid() << ", " << self.sizes() << ", " << mat1.sizes() << ", " << mat2.sizes() << std::endl;
   }
 
   return result;
@@ -3452,6 +3453,7 @@ Tensor VariableType::avg_pool2d(Tensor & self, IntArrayRef kernel_size, IntArray
     if (at::native::arc_vm.is_using_ssd())
       at::native::arc_vm.Arcp2pCompletion(false);
   }
+
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
   if (jit::tracer::isTracing()) {
@@ -3487,16 +3489,19 @@ Tensor VariableType::avg_pool2d(Tensor & self, IntArrayRef kernel_size, IntArray
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));
   if (self__impl_saved) AT_ASSERT(self__impl_saved == self_.getIntrusivePtr());
   #endif
+
+  if (at::native::arc_vm.is_timer()) {
+    std::cout << "avg_pool2d, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+    std::cout << "avg_pool2d, " << at::globalContext().ARCGlobal.getCurOid() << ", " << self.sizes() << std::endl;
+  }
+
+
   if (grad_fn) {
       set_history(flatten_tensor_args( result ), grad_fn);
   }
   if (tracer_state) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
-  }
-  if (at::native::arc_vm.is_timer()) {
-    std::cout << "avg_pool2d, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
-    std::cout << "avg_pool2d, " << at::globalContext().ARCGlobal.getCurOid() << ", " << self.sizes() << std::endl;
   }
 
   return result;
@@ -8370,6 +8375,7 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::native_batch_norm(Tensor & input,
   check_no_requires_grad(running_mean, "running_mean");
   check_no_requires_grad(running_var, "running_var");
   std::shared_ptr<NativeBatchNormBackward> grad_fn;
+
   if (compute_requires_grad( input, weight, bias )) {
     grad_fn = std::shared_ptr<NativeBatchNormBackward>(new NativeBatchNormBackward(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( input, weight, bias ));
@@ -8392,6 +8398,7 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::native_batch_norm(Tensor & input,
     if (at::native::arc_vm.is_using_ssd())
       at::native::arc_vm.Arcp2pCompletion(false);
   }
+
   Tensor result0;
   Tensor result1;
   Tensor result2;
@@ -8479,15 +8486,19 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::native_batch_norm(Tensor & input,
     AT_ASSERT(running_var__storage_saved.value().is_alias_of(running_var_.storage()));
   if (running_var__impl_saved) AT_ASSERT(running_var__impl_saved == running_var_.getIntrusivePtr());
   #endif
+
+
   if (grad_fn) {
       set_history(flatten_tensor_args( result0 ), grad_fn);
   }
+
   if (tracer_state) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result0);
     jit::tracer::addOutput(node, result1);
     jit::tracer::addOutput(node, result2);
   }
+
   if (grad_fn) {
     if (at::globalContext().ARCGlobal.isForward()) {
       ARCCppEngine::offLoad(result1, /* (TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->result1_), true);
@@ -9111,6 +9122,7 @@ Tensor VariableType::permute(const Tensor & self, IntArrayRef dims) {
   }
   if (at::native::arc_vm.is_timer())
     cout << "permute, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return result;
 }
 Tensor VariableType::pixel_shuffle(const Tensor & self, int64_t upscale_factor) {
@@ -9826,6 +9838,12 @@ Tensor VariableType::relu(const Tensor & self) {
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));
   if (self__impl_saved) AT_ASSERT(self__impl_saved == self_.getIntrusivePtr());
   #endif
+
+  if (at::native::arc_vm.is_timer()) {
+    cout << "relu, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+  }
+
+
   if (grad_fn) {
     set_history(flatten_tensor_args( result ), grad_fn);
   }
@@ -9833,8 +9851,6 @@ Tensor VariableType::relu(const Tensor & self) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
-  if (at::native::arc_vm.is_timer())
-    cout << "relu, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
 
   return result;
 }
@@ -9883,6 +9899,10 @@ Tensor & VariableType::relu_(Tensor & self) {
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));
   if (self__impl_saved) AT_ASSERT(self__impl_saved == self_.getIntrusivePtr());
   #endif
+
+  if (at::native::arc_vm.is_timer())
+    std::cout << "relu_, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << ", " << self.sizes() << std::endl;
+
   increment_version(self);
   if (grad_fn) {
       rebase_history(flatten_tensor_args( self ), grad_fn);
@@ -9904,9 +9924,6 @@ Tensor & VariableType::relu_(Tensor & self) {
 
   if (at::native::arc_vm.is_using_ssd())
     at::native::arc_vm.Arcp2pCompletion(false);
-
-  if (at::native::arc_vm.is_timer())
-    std::cout << "relu_, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << ", " << self.sizes() << std::endl;
 
   return self;
 }
@@ -11524,7 +11541,6 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::thnn_conv2d_forward(Tensor & self
       grad_fn->self_ = SavedVariable(self, false);
     }
 
-
     grad_fn->weight_ = SavedVariable(weight, false);
     grad_fn->kernel_size = kernel_size.vec();
     grad_fn->stride = stride.vec();
@@ -11573,9 +11589,6 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::thnn_conv2d_forward(Tensor & self
     return at::thnn_conv2d_forward(self_, weight_, kernel_size, bias_, stride, padding);
   })();
   std::tie(output, finput, fgrad_input) = as_variable(std::move(tmp));
-
-//  for (int i = 0; i < weight_.size(); i++) {
-//  }
 
   #ifndef NDEBUG
   if (self__storage_saved.has_value())

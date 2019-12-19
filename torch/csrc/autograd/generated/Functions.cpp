@@ -2243,13 +2243,14 @@ variable_list AcosBackward::apply(variable_list&& grads) {
 }
 variable_list AddBackward0::apply(variable_list&& grads) {
 
+  at::native::arc_vm.kernelTimeStart();
+
   IndexRangeGenerator gen;
   auto self_ix = gen.range(1);
   auto other_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
 
-  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ other_ix })) {
     auto grad_result = maybe_multiply(grad, alpha);
     copy_range(grad_inputs, other_ix, grad_result);
@@ -2269,17 +2270,18 @@ variable_list AddBackward0::apply(variable_list&& grads) {
 }
 variable_list AddBackward1::apply(variable_list&& grads) {
 
+  at::native::arc_vm.kernelTimeStart();
+
   IndexRangeGenerator gen;
   auto self_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
   /*
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
   }
   ARCCppEngine::preFetchSync(this->getOid());
   */
-  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ self_ix })) {
     auto grad_result = grad;
     copy_range(grad_inputs, self_ix, grad_result);
@@ -2375,6 +2377,14 @@ variable_list AddcmulBackward::apply(variable_list&& grads) {
   return grad_inputs;
 }
 variable_list AddmmBackward::apply(variable_list&& grads) {
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCCppEngine::preFetch(this->getOid());
+  } else if (at::native::arc_vm.hard_training) {
+    ARCCppEngine::preFetch(this->getOid());
+  }
+  ARCCppEngine::preFetchSync(this->getOid());
+
+  at::native::arc_vm.kernelTimeStart();
 
   IndexRangeGenerator gen;
   auto self_ix = gen.range(1);
@@ -2382,19 +2392,10 @@ variable_list AddmmBackward::apply(variable_list&& grads) {
   auto mat2_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
-
-  if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
-  } else if (at::native::arc_vm.hard_training) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
-//    at::native::arc_vm.Arcp2pCompletion(true);
-  }
-  ARCCppEngine::preFetchSync(this->getOid());
   
   auto mat1 = mat1_.unpack();
   auto mat2 = mat2_.unpack();
 
-  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ mat1_ix })) {
     auto grad_result = mm_mat1_backward(grad, mat2, mat1, alpha);
     copy_range(grad_inputs, mat1_ix, grad_result);
@@ -3187,24 +3188,27 @@ variable_list DistBackward::apply(variable_list&& grads) {
 }
 variable_list DivBackward0::apply(variable_list&& grads) {
 
+  if ( at::globalContext().ARCGlobal.isBERT() ) {
+    if (at::globalContext().ARCGlobal.isOnDemand()) {
+      ARCCppEngine::preFetch(this->getOid());
+    } else if (at::native::arc_vm.hard_training) {
+      ARCCppEngine::preFetch(this->getOid());
+//      at::native::arc_vm.Arcp2pCompletion(true);
+    }
+    ARCCppEngine::preFetchSync(this->getOid());
+  }
+
+  at::native::arc_vm.kernelTimeStart();
+
   IndexRangeGenerator gen;
   auto self_ix = gen.range(1);
   auto other_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
 
-  if ( at::globalContext().ARCGlobal.isBERT() ) {
-    if (at::globalContext().ARCGlobal.isOnDemand()) {
-      ARCCppEngine::preFetch(this->getOid(), Sync);
-    } else if (at::native::arc_vm.hard_training) {
-      ARCCppEngine::preFetch(this->getOid(), Sync);
-//      at::native::arc_vm.Arcp2pCompletion(true);
-    }
-    ARCCppEngine::preFetchSync(this->getOid());
-  }
   auto self = self_.unpack();
   auto other = other_.unpack();
-  at::native::arc_vm.kernelTimeStart();
+
   if (should_compute_output({ other_ix })) {
     auto grad_result = -grad * self / (other * other);
     copy_range(grad_inputs, other_ix, grad_result);
@@ -3272,21 +3276,22 @@ variable_list DotBackward::apply(variable_list&& grads) {
 }
 variable_list FusedDropoutBackward::apply(variable_list&& grads) {
 
-  IndexRangeGenerator gen;
-  auto self_ix = gen.range(1);
-  variable_list grad_inputs(gen.size());
-  auto& grad = grads[0];
-  
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
   } else if (at::native::arc_vm.hard_training) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
 //    at::native::arc_vm.Arcp2pCompletion(true);
   }
   ARCCppEngine::preFetchSync(this->getOid());
 
-  auto result1 = result1_.unpack(shared_from_this());
   at::native::arc_vm.kernelTimeStart();
+
+  IndexRangeGenerator gen;
+  auto self_ix = gen.range(1);
+  variable_list grad_inputs(gen.size());
+  auto& grad = grads[0];
+ 
+  auto result1 = result1_.unpack(shared_from_this());
   if (should_compute_output({ self_ix })) {
     auto grad_result = _fused_dropout_backward(grad, result1, p);
     copy_range(grad_inputs, self_ix, grad_result);
@@ -3358,21 +3363,22 @@ variable_list EqBackward1::apply(variable_list&& grads) {
 }
 variable_list ErfBackward::apply(variable_list&& grads) {
 
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCCppEngine::preFetch(this->getOid());
+  } else if (at::native::arc_vm.hard_training) {
+    ARCCppEngine::preFetch(this->getOid());
+//    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+  ARCCppEngine::preFetchSync(this->getOid());
+
+  at::native::arc_vm.kernelTimeStart(); 
+
   IndexRangeGenerator gen;
   auto self_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
   
-  if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
-  } else if (at::native::arc_vm.hard_training) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
-//    at::native::arc_vm.Arcp2pCompletion(true);
-  }
-  ARCCppEngine::preFetchSync(this->getOid());
-
   auto self = self_.unpack();
-  at::native::arc_vm.kernelTimeStart(); 
   if (should_compute_output({ self_ix })) {
     auto grad_result = 2.0 / sqrt(M_PI) * exp(-(self.pow(2))) * grad;
     copy_range(grad_inputs, self_ix, grad_result);
@@ -4333,12 +4339,13 @@ variable_list MaxBackward2::apply(variable_list&& grads) {
 }
 variable_list MeanBackward0::apply(variable_list&& grads) {
 
+  at::native::arc_vm.kernelTimeStart();
+
   IndexRangeGenerator gen;
   auto self_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
 
-  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ self_ix })) {
     auto grad_result = grad.expand(self_sizes).to(self_scalar_type) / self_numel;
     copy_range(grad_inputs, self_ix, grad_result);
@@ -4350,12 +4357,13 @@ variable_list MeanBackward0::apply(variable_list&& grads) {
 }
 variable_list MeanBackward1::apply(variable_list&& grads) {
 
+  at::native::arc_vm.kernelTimeStart();
+
   IndexRangeGenerator gen;
   auto self_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
 
-  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ self_ix })) {
     auto grad_result = sum_backward(grad, self_sizes, dim, keepdim).to(self_scalar_type) / _safe_size(self_sizes, dim);
     copy_range(grad_inputs, self_ix, grad_result);
@@ -4447,9 +4455,9 @@ variable_list MmBackward::apply(variable_list&& grads) {
   auto& grad = grads[0];
    
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
   } else if (at::native::arc_vm.hard_training) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
 //    at::native::arc_vm.Arcp2pCompletion(true);
   }
   ARCCppEngine::preFetchSync(this->getOid());
@@ -4501,9 +4509,9 @@ variable_list MulBackward0::apply(variable_list&& grads) {
  
    
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
   } else if (at::native::arc_vm.hard_training) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
 //    at::native::arc_vm.Arcp2pCompletion(true);
   }
   ARCCppEngine::preFetchSync(this->getOid());
@@ -4593,9 +4601,9 @@ variable_list NativeBatchNormBackward::apply(variable_list&& grads) {
   auto& grad = grads[0];
 
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
   } else if (at::native::arc_vm.hard_training) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
 //    at::native::arc_vm.Arcp2pCompletion(true);
   }
 
@@ -5043,9 +5051,9 @@ variable_list PowBackward0::apply(variable_list&& grads) {
   auto& grad = grads[0];
   
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
   } else if (at::native::arc_vm.hard_training) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
 //    at::native::arc_vm.Arcp2pCompletion(true);
   }
   ARCCppEngine::preFetchSync(this->getOid());
@@ -5489,9 +5497,9 @@ variable_list SqrtBackward::apply(variable_list&& grads) {
   auto& grad = grads[0];
 
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
   } else if (at::native::arc_vm.hard_training) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
 //    at::native::arc_vm.Arcp2pCompletion(true);
   }
 
@@ -5794,9 +5802,9 @@ variable_list TanhBackward::apply(variable_list&& grads) {
   auto& grad = grads[0];
   
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
   } else if (at::native::arc_vm.hard_training) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
 //    at::native::arc_vm.Arcp2pCompletion(true);
   }
   ARCCppEngine::preFetchSync(this->getOid(), true);
@@ -6217,9 +6225,9 @@ variable_list TrilinearBackward::apply(variable_list&& grads) {
  
   //SNU-ARC
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
   } else if (at::native::arc_vm.hard_training) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
 //    at::native::arc_vm.Arcp2pCompletion(true);
   }
   
@@ -6308,9 +6316,9 @@ variable_list EmbeddingBackward::apply(variable_list&& grads) {
   auto& grad = grads[0];
   
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
   } else if (at::native::arc_vm.hard_training) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
 //    at::native::arc_vm.Arcp2pCompletion(true);
   }
   ARCCppEngine::preFetchSync(this->getOid());
@@ -6409,9 +6417,9 @@ variable_list L1LossBackward::apply(variable_list&& grads) {
   auto& grad = grads[0];
   
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
   } else if (at::native::arc_vm.hard_training) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
 //    at::native::arc_vm.Arcp2pCompletion(true);
   }
   ARCCppEngine::preFetchSync(this->getOid());
@@ -6548,9 +6556,9 @@ variable_list ReluBackward0::apply(variable_list&& grads) {
   auto& grad = grads[0];
   
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
   } else if (at::native::arc_vm.hard_training) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
 //    at::native::arc_vm.Arcp2pCompletion(true);
   }
   ARCCppEngine::preFetchSync(this->getOid(), true);
@@ -6582,9 +6590,9 @@ variable_list ReluBackward1::apply(variable_list&& grads) {
   auto& grad = grads[0];
   //SNU-ARC
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
   } else if (at::native::arc_vm.hard_training) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
 //    at::native::arc_vm.Arcp2pCompletion(true);
   }
   ARCCppEngine::preFetchSync(this->getOid(), true);
@@ -6712,9 +6720,9 @@ variable_list LeakyReluBackward0::apply(variable_list&& grads) {
   auto& grad = grads[0];
  
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
   } else if (at::native::arc_vm.hard_training) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
 //    at::native::arc_vm.Arcp2pCompletion(true);
   }
   ARCCppEngine::preFetchSync(this->getOid()); 
@@ -6745,9 +6753,9 @@ variable_list LeakyReluBackward1::apply(variable_list&& grads) {
   auto& grad = grads[0];
   
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
   } else if (at::native::arc_vm.hard_training) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
 //    at::native::arc_vm.Arcp2pCompletion(true);
   }
   ARCCppEngine::preFetchSync(this->getOid()); 
@@ -6960,9 +6968,9 @@ variable_list ReflectionPad2DBackward::apply(variable_list&& grads) {
   auto& grad = grads[0];
   
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
   } else if (at::native::arc_vm.hard_training) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
 //    at::native::arc_vm.Arcp2pCompletion(true);
   }
   ARCCppEngine::preFetchSync(this->getOid()); 
@@ -7118,9 +7126,9 @@ variable_list AdaptiveAvgPool2DBackward::apply(variable_list&& grads) {
   
   //SNU-ARC
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
   } else if (at::native::arc_vm.hard_training) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
 //    at::native::arc_vm.Arcp2pCompletion(true);
   }
   //ARCCppEngine::preFetchSync(this->getOid());
@@ -7183,9 +7191,9 @@ variable_list AvgPool2DBackward::apply(variable_list&& grads) {
   
   //SNU-ARC
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
   } else if (at::native::arc_vm.hard_training) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
 //    at::native::arc_vm.Arcp2pCompletion(true);
   }
   ARCCppEngine::preFetchSync(this->getOid());
@@ -7258,9 +7266,9 @@ variable_list MaxPool2DWithIndicesBackward::apply(variable_list&& grads) {
   
   //SNU-ARC
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
   } else if (at::native::arc_vm.hard_training) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
 //    at::native::arc_vm.Arcp2pCompletion(true);
   }
   ARCCppEngine::preFetchSync(this->getOid());
@@ -7337,9 +7345,9 @@ variable_list ConvTranspose2DBackward::apply(variable_list&& grads) {
   auto& grad = grads[0];
   
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
   } else if (at::native::arc_vm.hard_training) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
 //    at::native::arc_vm.Arcp2pCompletion(true);
   }
   ARCCppEngine::preFetchSync(this->getOid()); 
@@ -7476,9 +7484,9 @@ variable_list ThnnConv2DBackward::apply(variable_list&& grads) {
   auto& grad = grads[0];
 
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
   } else if (at::native::arc_vm.hard_training) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
 //    at::native::arc_vm.Arcp2pCompletion(true);
   }
   ARCCppEngine::preFetchSync(this->getOid());
@@ -8640,9 +8648,9 @@ variable_list CudnnConvolutionBackward::apply(variable_list&& grads) {
   
   //SNU-ARC
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
   } else if (at::native::arc_vm.hard_training) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
 //    at::native::arc_vm.Arcp2pCompletion(true);
   }
   ARCCppEngine::preFetchSync(this->getOid());
@@ -8754,9 +8762,9 @@ variable_list CudnnBatchNormBackward::apply(variable_list&& grads) {
   
   //SNU-ARC
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
   } else if (at::native::arc_vm.hard_training) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
 //    at::native::arc_vm.Arcp2pCompletion(true);
   }
   ARCCppEngine::preFetchSync(this->getOid());
@@ -8876,9 +8884,9 @@ variable_list CudnnRnnBackward::apply(variable_list&& grads) {
   variable_list grad_inputs(gen.size());
 
   if (at::globalContext().ARCGlobal.isOnDemand()) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
   } else if (at::native::arc_vm.hard_training) {
-    ARCCppEngine::preFetch(this->getOid(), Sync);
+    ARCCppEngine::preFetch(this->getOid());
 //    at::native::arc_vm.Arcp2pCompletion(true);
   }
   ARCCppEngine::preFetchSync(this->getOid());

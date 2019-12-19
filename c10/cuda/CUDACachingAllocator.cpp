@@ -512,7 +512,7 @@ struct THCCachingAllocator
           return err;
         }
       }
-    //}
+//    }
 
     return cudaSuccess;
   }
@@ -544,13 +544,13 @@ struct THCCachingAllocator
     while (it != end) {
       Block* block = *it;
       if (!block->prev && !block->next) {
-      /*
+        /*
         if (at::native::arc_vm.is_vdnn()) {
           at::native::arc_vm.device_free((void *)block->ptr, block->size);
         } else {
-      */
+        */
           C10_CUDA_CHECK(cudaFree((void*)block->ptr));
-      //  }
+        //}
         get_stats_for_device(block->device).decreaseCached(block->size);
         auto cur = it;
         ++it;

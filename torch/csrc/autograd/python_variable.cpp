@@ -615,7 +615,7 @@ bool THPVariable_initModule(PyObject *module)
 void ARCPyEngine::offLoad(Tensor& t) {
   int tid = t.unsafeGetTensorImpl()->tensor_id;
   at::native::arc_vm.feature_map_accum[tid] = (double)t.nbytes()/1024/1024;
-  std::cout << "python_variable tid: " << tid << ", " << (double)t.nbytes()/1024/1024;
+  std::cout << "python_variable tid: " << tid << ", " << (double)t.nbytes()/1024/1024 << std::endl;
 
   return;
   /*

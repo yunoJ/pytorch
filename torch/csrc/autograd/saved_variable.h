@@ -84,10 +84,8 @@ public:
 
   // basic fetch/offload operation
   static void offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync sync,*/ Oid curOid, SavedVariable* fetch_loc, bool isOutput);
-  static void explicitAllSync();
   // prefetching at curOid
-  static void preFetch(Oid curOid, ARCSync sync);
-  static bool preFetchAsync(Oid curOid);
+  static bool preFetch(Oid oid);
   static void preFetchSync(Oid curOid, bool isOutput=false);
 
   static void resetCppEngine();
@@ -97,11 +95,7 @@ public:
   static void joinOffload();
 
 private:
-  static void offLoadAsync(at::Tensor tensor);
   static void insertToPFDict_(Oid oid, SavedVariable* loc, Tid tid);
- 
-  // internal function implementing prefetching
-  static bool fetchRequiredTensors_(Oid oid, ARCSync sync); 
 };
 
 // end ARC

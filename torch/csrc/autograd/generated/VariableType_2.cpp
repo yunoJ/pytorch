@@ -3196,6 +3196,7 @@ Tensor VariableType::cudnn_convolution(Tensor & self, const Tensor & weight, con
   auto& weight_ = unpack(weight, "weight", 1);
   auto bias_ = unpack_opt(bias, "bias", 2);
   std::shared_ptr<CudnnConvolutionBackward> grad_fn;
+
   if (compute_requires_grad( self, weight, bias )) {
     grad_fn = std::shared_ptr<CudnnConvolutionBackward>(new CudnnConvolutionBackward(), deleteNode);
     grad_fn->set_next_edges(collect_next_edges( self, weight, bias ));
@@ -3217,6 +3218,7 @@ Tensor VariableType::cudnn_convolution(Tensor & self, const Tensor & weight, con
     if (at::native::arc_vm.is_using_ssd())
       at::native::arc_vm.Arcp2pCompletion(false);
   }
+
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
   if (jit::tracer::isTracing()) {
@@ -3271,6 +3273,10 @@ Tensor VariableType::cudnn_convolution(Tensor & self, const Tensor & weight, con
   }
   if (bias__impl_saved) AT_ASSERT(bias__impl_saved == bias_.getIntrusivePtr());
   #endif
+
+  if (at::native::arc_vm.is_timer())
+    cout << "cudnn_convolution, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << ", " << self.sizes() << std::endl;
+
   if (grad_fn) {
       set_history(flatten_tensor_args( result ), grad_fn);
   }
@@ -3278,9 +3284,6 @@ Tensor VariableType::cudnn_convolution(Tensor & self, const Tensor & weight, con
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
-
-  if (at::native::arc_vm.is_timer())
-    cout << "cudnn_convolution, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << ", " << self.sizes() << std::endl;
 
   return result;
 }
@@ -3717,24 +3720,6 @@ Tensor VariableType::embedding(const Tensor & weight, Tensor & indices, int64_t 
   auto& weight_ = unpack(weight, "weight", 0);
   auto& indices_ = unpack(indices, "indices", 1);
   std::shared_ptr<EmbeddingBackward> grad_fn;
-  if (compute_requires_grad( weight )) {
-    grad_fn = std::shared_ptr<EmbeddingBackward>(new EmbeddingBackward(), deleteNode);
-    grad_fn->set_next_edges(collect_next_edges( weight ));
-    if (at::globalContext().ARCGlobal.isForward()) {
-      ARCCppEngine::offLoad(indices, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->indices_), false);
-      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
-    }
-    else {
-      grad_fn->indices_ = SavedVariable(indices, false);
-    }
-    grad_fn->weight_argsize_0 = weight.size(0);
-    grad_fn->padding_idx = padding_idx;
-    grad_fn->scale_grad_by_freq = scale_grad_by_freq;
-    grad_fn->sparse = sparse;
-
-    if (at::native::arc_vm.is_using_ssd())
-      at::native::arc_vm.Arcp2pCompletion(false);
-  }
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
   if (jit::tracer::isTracing()) {
@@ -3778,6 +3763,29 @@ Tensor VariableType::embedding(const Tensor & weight, Tensor & indices, int64_t 
     AT_ASSERT(indices__storage_saved.value().is_alias_of(indices_.storage()));
   if (indices__impl_saved) AT_ASSERT(indices__impl_saved == indices_.getIntrusivePtr());
   #endif
+
+  if (at::native::arc_vm.is_timer())
+    std::cout << "embedding, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
+  if (compute_requires_grad( weight )) {
+    grad_fn = std::shared_ptr<EmbeddingBackward>(new EmbeddingBackward(), deleteNode);
+    grad_fn->set_next_edges(collect_next_edges( weight ));
+    if (at::globalContext().ARCGlobal.isForward()) {
+      ARCCppEngine::offLoad(indices, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->indices_), false);
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else {
+      grad_fn->indices_ = SavedVariable(indices, false);
+    }
+    grad_fn->weight_argsize_0 = weight.size(0);
+    grad_fn->padding_idx = padding_idx;
+    grad_fn->scale_grad_by_freq = scale_grad_by_freq;
+    grad_fn->sparse = sparse;
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
+  }
+
   if (grad_fn) {
       set_history(flatten_tensor_args( result ), grad_fn);
   }
@@ -3785,9 +3793,6 @@ Tensor VariableType::embedding(const Tensor & weight, Tensor & indices, int64_t 
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
-
-  if (at::native::arc_vm.is_timer())
-    std::cout << "embedding, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
 
   return result;
 }
@@ -3822,19 +3827,7 @@ Tensor VariableType::erf(const Tensor & self) {
   at::native::arc_vm.kernelTimeStart();
   auto& self_ = unpack(self, "self", 0);
   std::shared_ptr<ErfBackward> grad_fn;
-  if (compute_requires_grad( self )) {
-    grad_fn = std::shared_ptr<ErfBackward>(new ErfBackward(), deleteNode);
-    grad_fn->set_next_edges(collect_next_edges( self ));
-    if (at::globalContext().ARCGlobal.isForward()) {
-      ARCCppEngine::offLoad(self, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
-      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
-    }
-    else
-      grad_fn->self_ = SavedVariable(self, false);
 
-    if (at::native::arc_vm.is_using_ssd())
-      at::native::arc_vm.Arcp2pCompletion(false);
-  }
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
   if (jit::tracer::isTracing()) {
@@ -3864,6 +3857,23 @@ Tensor VariableType::erf(const Tensor & self) {
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));
   if (self__impl_saved) AT_ASSERT(self__impl_saved == self_.getIntrusivePtr());
   #endif
+
+  if (at::native::arc_vm.is_timer())
+    std::cout << "erf, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
+  if (compute_requires_grad( self )) {
+    grad_fn = std::shared_ptr<ErfBackward>(new ErfBackward(), deleteNode);
+    grad_fn->set_next_edges(collect_next_edges( self ));
+    if (at::globalContext().ARCGlobal.isForward()) {
+      ARCCppEngine::offLoad(self, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else
+      grad_fn->self_ = SavedVariable(self, false);
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
+  }
   if (grad_fn) {
       set_history(flatten_tensor_args( result ), grad_fn);
   }
@@ -3871,8 +3881,7 @@ Tensor VariableType::erf(const Tensor & self) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
-  if (at::native::arc_vm.is_timer())
-    std::cout << "erf, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return result;
 }
 Tensor & VariableType::erf_(Tensor & self) {
@@ -10845,8 +10854,10 @@ Tensor VariableType::tanh(Tensor & self) {
     if (at::native::arc_vm.is_using_ssd())
       at::native::arc_vm.Arcp2pCompletion(false);
   }
+
   if (at::native::arc_vm.is_timer())
     std::cout << "tanh, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return result;
 }
 Tensor & VariableType::tanh_(Tensor & self) {

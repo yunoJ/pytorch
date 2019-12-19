@@ -6536,23 +6536,7 @@ Tensor VariableType::leaky_relu(const Tensor & self, Scalar negative_slope) {
   at::native::arc_vm.kernelTimeStart();
   auto& self_ = unpack(self, "self", 0);
   std::shared_ptr<LeakyReluBackward0> grad_fn;
-  if (compute_requires_grad( self )) {
-    grad_fn = std::shared_ptr<LeakyReluBackward0>(new LeakyReluBackward0(), deleteNode);
-    grad_fn->set_next_edges(collect_next_edges( self ));
-    
-    if (at::globalContext().ARCGlobal.isForward()){
-      ARCCppEngine::offLoad(self, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
-      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
-    }
-    else {
-      grad_fn->self_ = SavedVariable(self, false);
-    }
 
-    if (at::native::arc_vm.is_using_ssd())
-      at::native::arc_vm.Arcp2pCompletion(false);
-
-    grad_fn->negative_slope = negative_slope;
-  }
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
   if (jit::tracer::isTracing()) {
@@ -6583,6 +6567,28 @@ Tensor VariableType::leaky_relu(const Tensor & self, Scalar negative_slope) {
     AT_ASSERT(self__storage_saved.value().is_alias_of(self_.storage()));
   if (self__impl_saved) AT_ASSERT(self__impl_saved == self_.getIntrusivePtr());
   #endif
+
+  if (at::native::arc_vm.is_timer())
+    std::cout << "leaky_relu, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
+  if (compute_requires_grad( self )) {
+    grad_fn = std::shared_ptr<LeakyReluBackward0>(new LeakyReluBackward0(), deleteNode);
+    grad_fn->set_next_edges(collect_next_edges( self ));
+    
+    if (at::globalContext().ARCGlobal.isForward()){
+      ARCCppEngine::offLoad(self, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else {
+      grad_fn->self_ = SavedVariable(self, false);
+    }
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
+
+    grad_fn->negative_slope = negative_slope;
+  }
+
   if (grad_fn) {
       set_history(flatten_tensor_args( result ), grad_fn);
   }
@@ -6590,8 +6596,6 @@ Tensor VariableType::leaky_relu(const Tensor & self, Scalar negative_slope) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
-  if (at::native::arc_vm.is_timer())
-    std::cout << "leaky_relu, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
 
   return result;
 }
@@ -8090,39 +8094,7 @@ Tensor VariableType::mul(Tensor & self, Tensor & other) {
   int oid = at::globalContext().ARCGlobal.getCurOid(); 
   int sfid = at::globalContext().ARCGlobal.getTid(self);
   int ofid = at::globalContext().ARCGlobal.getTid(other);
-  if (compute_requires_grad( self, other )) {
-    grad_fn = std::shared_ptr<MulBackward0>(new MulBackward0(), deleteNode);
-    grad_fn->set_next_edges(collect_next_edges( self, other ));
-    if (grad_fn->should_compute_output(1)) {
-      if (at::globalContext().ARCGlobal.isForward() && at::globalContext().ARCGlobal.isBERT()) {
-        if (sfid != 0) {
-          ARCCppEngine::offLoad(self, oid, &(grad_fn->self_), false);
-          grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
-        }
-        else
-          grad_fn->self_ = SavedVariable(self, false);
-      }
-      else {
-        grad_fn->self_ = SavedVariable(self, false);
-      }
-    }
-    if (grad_fn->should_compute_output(0)) {
-      if (at::globalContext().ARCGlobal.isForward() && at::globalContext().ARCGlobal.isBERT()) {
-        if (ofid != 0) {
-          ARCCppEngine::offLoad(other, oid, &(grad_fn->other_), false);
-          grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
-        }
-        else
-          grad_fn->other_ = SavedVariable(other, false);
-      }
-      else {
-        grad_fn->other_ = SavedVariable(other, false);
-      }
-    }
 
-    if (at::native::arc_vm.is_using_ssd())
-      at::native::arc_vm.Arcp2pCompletion(false);
-  }
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
   if (jit::tracer::isTracing()) {
@@ -8164,6 +8136,43 @@ Tensor VariableType::mul(Tensor & self, Tensor & other) {
     AT_ASSERT(other__storage_saved.value().is_alias_of(other_.storage()));
   if (other__impl_saved) AT_ASSERT(other__impl_saved == other_.getIntrusivePtr());
   #endif
+
+  if (at::native::arc_vm.is_timer())
+    std::cout << "mul0, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
+  if (compute_requires_grad( self, other )) {
+    grad_fn = std::shared_ptr<MulBackward0>(new MulBackward0(), deleteNode);
+    grad_fn->set_next_edges(collect_next_edges( self, other ));
+    if (grad_fn->should_compute_output(1)) {
+      if (at::globalContext().ARCGlobal.isForward() && at::globalContext().ARCGlobal.isBERT()) {
+        if (sfid != 0) {
+          ARCCppEngine::offLoad(self, oid, &(grad_fn->self_), false);
+          grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+        }
+        else
+          grad_fn->self_ = SavedVariable(self, false);
+      }
+      else {
+        grad_fn->self_ = SavedVariable(self, false);
+      }
+    }
+    if (grad_fn->should_compute_output(0)) {
+      if (at::globalContext().ARCGlobal.isForward() && at::globalContext().ARCGlobal.isBERT()) {
+        if (ofid != 0) {
+          ARCCppEngine::offLoad(other, oid, &(grad_fn->other_), false);
+          grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+        }
+        else
+          grad_fn->other_ = SavedVariable(other, false);
+      }
+      else {
+        grad_fn->other_ = SavedVariable(other, false);
+      }
+    }
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
+  }
   if (grad_fn) {
       set_history(flatten_tensor_args( result ), grad_fn);
   }
@@ -8171,8 +8180,6 @@ Tensor VariableType::mul(Tensor & self, Tensor & other) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
-  if (at::native::arc_vm.is_timer())
-    std::cout << "mul0, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
 
   return result;
 }

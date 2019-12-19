@@ -846,7 +846,7 @@ void ARC_memory::Arcp2pCompletion(bool prefCall) {
       if (isDebug) {
         std::cout << "Prefetching oid call: " << pref_it[pref_idx] << std::endl;
       }
-      bool d2h_finish = torch::autograd::ARCCppEngine::preFetchAsync(pref_it[pref_idx]);
+      bool d2h_finish = torch::autograd::ARCCppEngine::preFetch(pref_it[pref_idx]);
       if (d2h_finish) {
         pref_idx++;
       }
@@ -1001,11 +1001,6 @@ float* ARC_memory::kernelTimeEnd() {
     cudaEventRecord(endEvent, csg.original_stream());
     cudaEventSynchronize(endEvent);
     cudaEventElapsedTime(&runTime, startEvent, endEvent);
-    /*
-    cudaDeviceSynchronize();
-    gettimeofday(&tv2, NULL);
-    runTime = (tv2.tv_sec - tv1.tv_sec) * 1000 + (double)(tv2.tv_usec - tv1.tv_usec) / 1000;
-    */
   } else {
     runTime = -1;
   }

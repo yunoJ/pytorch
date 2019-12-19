@@ -121,31 +121,23 @@ const char* ERR_BACKWARD_TWICE =
 // Implemented by SNU-ARC Function/Data Structures///
 // //////////////////////////////////////////////////
 
-// thread vector(it may cause system slower. Need an optimization such as pooling) 
-
-static std::vector<std::thread> memcpy_threads_;
 // dictionaries for prefetching
 // Note: C++ standard containers are thread-safe.
-static std::map<Oid,std::vector<PFInfo>> pf_dict_;
-static std::map<Oid, c10::StreamId> pf_sync_dict_;
+static std::map<Oid, std::vector<PFInfo>> op_tensor_list;
+static std::map<Oid, c10::StreamId> stream_occupied;
 
-static at::Tensor tensor_dict_[NUM_TENSOR];
-static bool tensor_dict_check_[NUM_TENSOR] = {false};
-static bool tensor_pf_sync_dict_[NUM_TENSOR] = {false};
+static at::Tensor target_tensor[NUM_TENSOR];
+static bool target_tensor_valid[NUM_TENSOR] = {false};
 
-static bool tensor_sync_dict_[NUM_TENSOR] = {false};
-//static std::map<Tid, Oid> last_op_dict_;
-static int last_op_dict_[3][NUM_TENSOR] = {-1};
+static bool offload_sync[NUM_TENSOR] = {false};
+static bool prefetch_sync[NUM_TENSOR] = {false};
+static int last_use_forward[3][NUM_TENSOR] = {-1};
+static int last_use_backward[3][NUM_TENSOR] = {-1};
 
 static double liveness_time[NUM_TENSOR] = {0.0};
 static double liveness_size[NUM_TENSOR] = {0.0};
 static bool liveness_csr[3][NUM_TENSOR] = {false};
 static bool liveness_fp[3][NUM_TENSOR] = {false};
-
-static std::map<Tid, std::pair<double, bool>> liveness_temp;
-
-static bool liveness_result[3][NUM_TENSOR] = {false};
-static bool liveness_result_csr[3][NUM_TENSOR] = {false};
 
 static double last_time_slot = 0;
 
@@ -404,133 +396,9 @@ void ARCCppEngine::checkTest2(double freeSize) {
   }
 }
 
-double ARCCppEngine::checkCSR(double freeSize) {
-  double remainSize = accumSize - freeSize;
-  accumSize = 0;
-  int cur_back_num = at::globalContext().ARCGlobal.curBackNum();
-
-  if (remainSize <= 0) {
-    std::cout << "Nothing flush" << std::endl;
-    return 0;
-  }
-
-  for (auto it = liveness_temp.begin(); it != liveness_temp.end(); ++it) {
-    if ((it->second).second) {
-      std::cout << "\tcheckCSR tid: " << it->first << ", size: " << (it->second).first << std::endl;
-      remainSize -= (it->second).first;
-      liveness_result[cur_back_num][it->first] = true;
-      liveness_result_csr[cur_back_num][it->first] = (it->second).second;
-    }
-
-    if (remainSize <= 0) {
-      break;
-    }
-  }
-
-  return remainSize;
-}
-
-double ARCCppEngine::checkLarge(double freeSize) {
-  double remainSize = accumSize - freeSize;
-  double delay_time[NUM_TENSOR] = {0};
-  double real_trans_time[NUM_TENSOR] = {0};
-  double real_trans_start[NUM_TENSOR] = {0};
-  int cur_back_num = at::globalContext().ARCGlobal.curBackNum();
-  int previous_i = 0;
-
-  accumSize = 0;
-
-  if (remainSize <= 0) {
-    std::cout << "Nothing flush" << std::endl;
-    return 0;
-  }
-
-  double hi = 0;
-
-  for (int i = 0; i < NUM_TENSOR-1; i++)
-    liveness_time[i + 1] += liveness_time[i];
-
-  last_time_slot += liveness_time[NUM_TENSOR - 1];
-
-  if (at::globalContext().ARCGlobal.isDebugMode()) {
-    std::cout << "Possible resoure time: " << last_time_slot << ", mem: " << freeSize << ", remained size: " << remainSize << std::endl;
-
-    if (last_time_slot / 1000 * ssd_w > remainSize) {
-      std::cout << "\tNo overhead maybe" << std::endl;
-    } else {
-      std::cout << "\tOverhead maybe" << std::endl;
-    }
-  }
-
-  for (int i = 0; i < NUM_TENSOR; i++) {
-    if (at::native::arc_vm.is_using_ssd())
-      real_trans_time[i] = liveness_size[i] * 1000 / ssd_w;
-    else
-      real_trans_time[i] = liveness_size[i] * 1000 / mem_wr;
-
-    if (at::native::arc_vm.is_fp16() && liveness_fp[cur_back_num][i])
-      real_trans_time[i] = real_trans_time[i] / 2;
-
-    if (at::native::arc_vm.is_csr() && liveness_csr[cur_back_num][i])
-      real_trans_time[i] = real_trans_time[i] / 2;
-  }
-
-
-  for (auto it = liveness_temp.begin(); it != liveness_temp.end(); ++it) {
-    if (at::native::arc_vm.liveness_result[cur_back_num][it->first] == false) {
-      if ((it->second).first > 1) {
-        std::cout << "\tcheckLarge tid: " << it->first << ", size: " << (it->second).first << std::endl;
-        remainSize -= (it->second).first;
-        at::native::arc_vm.liveness_result[cur_back_num][it->first] = true;
-        hi += (it->second).first;
-
-        if (previous_i != 0) {
-          double delay_maybe = liveness_time[previous_i] + real_trans_time[previous_i] + delay_time[previous_i] - liveness_time[it->first];
-
-          if (delay_maybe <= 0)
-            delay_time[it->first] = 0;
-          else
-            delay_time[it->first] = delay_maybe;
-        }
-        previous_i = it->first;
-
-        //liveness_result_csr[cur_back_num][it->first] = (it->second).second;
-      }
-    }
-
-    if (remainSize <= 0) {
-      std::cout << "remain zero: " << hi << "MB" << std::endl;
-      break;
-    }
-  }
-
-  for (int i = 0; i < NUM_TENSOR; i++) {
-    if (at::native::arc_vm.liveness_result[cur_back_num][i]) {
-      std::cout << i << ", " << liveness_size[i] << ", " << liveness_csr[cur_back_num][i] << ", " << liveness_fp[cur_back_num][i] << ", " << liveness_time[i] << ", " << delay_time[i] << ", " << real_trans_time[i] << ", " << std::endl;
-    }
-  }
-
-
-  return remainSize;
-}
-
-double ARCCppEngine::checkFirst(double remainSize) {
-  int cur_back_num = at::globalContext().ARCGlobal.curBackNum();
-  for (auto it = liveness_temp.begin(); it != liveness_temp.end(); ++it) {
-    if (liveness_result[cur_back_num][it->first] == false) {
-      std::cout << "\tcheckFirst tid: " << it->first << ", size: " << (it->second).first << std::endl;
-      remainSize -= (it->second).first;
-      liveness_result[cur_back_num][it->first] = true;
-      liveness_result_csr[cur_back_num][it->first] = (it->second).second;
-    }
-
-    if (remainSize <= 0)  break;
-  }
-  return remainSize;
-}
 
 //Note: Not referecne but copy a tensor to make it alive
-void ARCCppEngine::offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync sync,*/ Oid curOid, SavedVariable* fetch_loc, bool isOutput) {
+void ARCCppEngine::offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync sync,*/ Oid oid, SavedVariable* fetch_loc, bool isOutput) {
 
   if (!at::native::arc_vm.is_vdnn()) {
     *fetch_loc = SavedVariable(t, isOutput);
@@ -539,7 +407,7 @@ void ARCCppEngine::offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync s
 
   // partial offloading
   auto tid =  t.unsafeGetIntrusivePtr()->tensor_id;
-  at::native::arc_vm.feature_map_accum[tid] = (double)t.nbytes()/1024/1024;
+  at::native::arc_vm.feature_map_accum[tid] = (double)t.nbytes() / 1024 / 1024;
   int cur_back_num = at::globalContext().ARCGlobal.curBackNum();
 
   if (at::native::arc_vm.liveness_result[cur_back_num][tid] == false && !at::globalContext().ARCGlobal.isOnDemand()) {
@@ -552,9 +420,9 @@ void ARCCppEngine::offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync s
     return;
   }
 
-  insertToPFDict_(curOid, fetch_loc, tid);
+  insertToPFDict_(oid, fetch_loc, tid);
   // save the information required for prefetching
-  if (tensor_sync_dict_[tid]) {// this tensor is alredy offloaded
+  if (offload_sync[tid]) {// this tensor is alredy offloaded
     if (at::globalContext().ARCGlobal.isDebugMode())
       std::cout << tid <<  ": this tensor is already offloaded" << std::endl;
 
@@ -563,9 +431,6 @@ void ARCCppEngine::offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync s
   }
 
   if (at::globalContext().ARCGlobal.isOnDemand() && at::globalContext().ARCGlobal.isForward()) {
-
-    liveness_temp.insert(std::pair<Tid, std::pair<double, bool>>(
-        tid, std::pair<double, bool>((double)t.nbytes() / 1024 / 1024, at::native::arc_vm.relu_thru)));
 
     double elapsed = 0;
     if (accumSize > 0) {
@@ -600,8 +465,46 @@ void ARCCppEngine::offLoad(at::Tensor t, /*TraceableFunction* grad_fn, ARCSync s
     at::native::arc_vm.relu_thru = false;
   }
 
-  tensor_sync_dict_[tid] = true;
-  offLoadAsync(t);
+  offload_sync[tid] = true;
+
+  auto str = c10::cuda::getStreamFromPool(false, 0);
+//  str.synchronize();
+  c10::cuda::CUDAStreamGuard csg(str);
+  c10::TensorOptions opt = c10::TensorOptions();
+  opt = opt.device(c10::Device(c10::DeviceType::CPU));
+  opt = opt.dtype(t.dtype());
+  opt = opt.pinned_memory(true);
+
+  // [JS] p2p setting if ssd mode is on
+  if (at::native::arc_vm.is_using_ssd()) {
+    at::native::arc_vm.set_dir(tid, at::native::arcp2p_gputossd);
+    at::native::arcp2p_cpl *p_cpl = new at::native::arcp2p_cpl;
+    at::native::arc_vm.set_cpl_addr(tid, at::native::arcp2p_gputossd, (void *)p_cpl);
+  }
+
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    target_tensor[tid] = t.ARCto(opt, false, true, false);
+    target_tensor_valid[tid] = true;
+
+    while (at::native::arc_vm.event_arr_d2h[tid]) {
+      if (at::native::arc_vm.is_using_ssd()) {
+        at::native::arc_vm.Arcp2pCompletion(false);
+      }
+    }
+
+    last_use_forward[cur_back_num][tid] = oid;   
+
+  } else {
+    if (last_use_forward[cur_back_num][tid] == oid) {
+      target_tensor[tid] = t.ARCto(opt, false, true, liveness_csr[cur_back_num][tid]);
+      target_tensor_valid[tid] = true;
+    }
+  }
+
+  if (at::native::arc_vm.is_using_ssd())
+    at::native::arc_vm.Arcp2pCompletion(false);
+
+  csg.reset_stream(csg.original_stream());
 
   if (at::globalContext().ARCGlobal.isOnDemand() && at::globalContext().ARCGlobal.isForward()) {
     gettimeofday(&at::native::arc_vm.tv1, NULL);
@@ -612,7 +515,7 @@ void ARCCppEngine::joinOffload() {
   if (at::globalContext().ARCGlobal.isDebugMode())
     std::cout << "Wait until all offloading is done" << std::endl;
 
-   if (at::globalContext().ARCGlobal.isOnDemand()) {
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
     gettimeofday(&at::native::arc_vm.tv2, NULL);
     last_time_slot = (at::native::arc_vm.tv2.tv_sec - at::native::arc_vm.tv1.tv_sec) * 1000 +
           (double)(at::native::arc_vm.tv2.tv_usec - at::native::arc_vm.tv1.tv_usec) / 1000;
@@ -620,69 +523,6 @@ void ARCCppEngine::joinOffload() {
 
   if (at::globalContext().ARCGlobal.isDebugMode())
     std::cout << "Wait end" << std::endl;
-}
-
-void ARCCppEngine::offLoadAsync(at::Tensor tensor) {
-  int cur_back_num = at::globalContext().ARCGlobal.curBackNum();
-  auto str = c10::cuda::getStreamFromPool(false, 0);
-//  str.synchronize();
-  c10::cuda::CUDAStreamGuard csg(str);
-  c10::TensorOptions opt = c10::TensorOptions();
-  opt = opt.device(c10::Device(c10::DeviceType::CPU));
-  opt = opt.dtype(tensor.dtype());
-  opt = opt.pinned_memory(true);
-
-  auto tid = tensor.unsafeGetIntrusivePtr()->tensor_id;
-
-  // [JS] p2p setting if ssd mode is on
-  if (at::native::arc_vm.is_using_ssd()) {
-    at::native::arc_vm.set_dir(tid, at::native::arcp2p_gputossd);
-    at::native::arcp2p_cpl *p_cpl = new at::native::arcp2p_cpl;
-    at::native::arc_vm.set_cpl_addr(tid, at::native::arcp2p_gputossd, (void *)p_cpl);
-  }
-
-  if (at::globalContext().ARCGlobal.isOnDemand()) {
-    tensor_dict_[tid] = tensor.ARCto(opt, false, true, false);
-    tensor_dict_check_[tid] = true;
-
-    while (at::native::arc_vm.event_arr_d2h[tid]) {
-      if (at::native::arc_vm.is_using_ssd()) {
-        at::native::arc_vm.Arcp2pCompletion(false);
-      }
-    }
-  } else {
-    tensor_dict_[tid] = tensor.ARCto(opt, false, true, liveness_csr[cur_back_num][tid]);
-    tensor_dict_check_[tid] = true;
-  }
-
-  if (at::native::arc_vm.is_using_ssd())
-    at::native::arc_vm.Arcp2pCompletion(false);
-
-  csg.reset_stream(csg.original_stream());
-}
-
-// doing nothing really
-void ARCCppEngine::explicitAllSync() {
-  for (auto it = memcpy_threads_.begin(); it != memcpy_threads_.end(); ++it)
-    it->join();
-
-  memcpy_threads_.clear();
-}
-
-// prefetch all tensors required for back prop of curOid
-void ARCCppEngine::preFetch(Oid curOid, ARCSync sync) {//int required_tensor_num, ARCSync sync) {
-  if (curOid == 0)
-    return;
-
-  if (!at::native::arc_vm.is_vdnn()) {
-    return;
-  }
-
-  bool notused = fetchRequiredTensors_(curOid, sync); 
-}
-
-bool ARCCppEngine::preFetchAsync(Oid curOid) {//int required_tensor_num, ARCSync sync) {
-  return fetchRequiredTensors_(curOid, Sync); 
 }
 
 void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) { 
@@ -694,35 +534,35 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
     return;
   }
 
-  if (pf_dict_.find(oid) == pf_dict_.end()) {
+  if (op_tensor_list.find(oid) == op_tensor_list.end()) {
     return;
   }
 
   while (1) {
-    auto check = pf_sync_dict_.find(oid);
-    if (check != pf_sync_dict_.end())
+    auto check = stream_occupied.find(oid);
+    if (check != stream_occupied.end())
       break;
   }
 
-  auto sid = pf_sync_dict_[oid];
+  auto sid = stream_occupied[oid];
   c10::cuda::CUDAStream str(c10::Stream(c10::Stream::UNSAFE, c10::Device(c10::DeviceType::CUDA, 0), sid));
   str.synchronize();
   cudaStreamSynchronize(at::native::arc_vm.arc_stream);
 
-  auto fetch_vec = pf_dict_[oid];
+  auto fetch_vec = op_tensor_list[oid];
   for (auto it = fetch_vec.begin(); it != fetch_vec.end(); it++) {
     auto tid = it->second;
     auto fetch_loc = it->first;
 
-    if (tensor_pf_sync_dict_[tid] == true) {
-      *fetch_loc = SavedVariable(tensor_dict_[tid], isOutput);
+    if (prefetch_sync[tid] == true) {
+      *fetch_loc = SavedVariable(target_tensor[tid], isOutput);
       continue;
     }
 
     if (at::globalContext().ARCGlobal.isDebugMode())
       std::cout << "tid " << tid << " in oid " << oid << " pf sync start" << std::endl;
 
-    if (tensor_dict_check_[tid] == false) {
+    if (target_tensor_valid[tid] == false) {
       std::cerr << "sync tensor dictionary lookup miss" << std::endl;
       return;
     }
@@ -779,12 +619,12 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
           at::native::arc_vm.set_cpl_addr(tid, at::native::arcp2p_gputossd, NULL);
           at::native::arc_vm.set_cpl_addr(tid, at::native::arcp2p_ssdtogpu, NULL);
 
-          tensor_pf_sync_dict_[tid] = true;
+          prefetch_sync[tid] = true;
           break;
         }
         at::native::arc_vm.Arcp2pCompletion(true);
       } else {
-        if (tensor_dict_[tid].device().type() == c10::DeviceType::CUDA) {
+        if (target_tensor[tid].device().type() == c10::DeviceType::CUDA) {
           int resize = at::native::arc_vm.get_resize(tid);
           size_t bit_elements, pos_elements, pos_elements_before;
           bit_elements = (size_t)((numel + 1024 - 1) / 1024) * 32;
@@ -821,26 +661,26 @@ void ARCCppEngine::preFetchSync(Oid oid, bool isOutput) {
             }
           }
 
-          tensor_pf_sync_dict_[tid] = true;
+          prefetch_sync[tid] = true;
           at::native::arc_vm.event_arr_h2d[tid] = false;
           break;
         }
       }
     }
 
-    *fetch_loc = SavedVariable(tensor_dict_[tid], isOutput);
+    *fetch_loc = SavedVariable(target_tensor[tid], isOutput);
   }
 }
 
 void ARCCppEngine::insertToPFDict_(Oid oid, SavedVariable* loc, Tid tid) {
-  //lookup and insert pf_dict_
-  auto it = pf_dict_.find(oid);
-  if (it != pf_dict_.end()) {
-    pf_dict_[oid].emplace_back(loc, tid);
+  //lookup and insert op_tensor_list
+  auto it = op_tensor_list.find(oid);
+  if (it != op_tensor_list.end()) {
+    op_tensor_list[oid].emplace_back(loc, tid);
   } else {
     std::vector<PFInfo> tmp;
     tmp.emplace_back(loc, tid);
-    pf_dict_.insert(std::pair<Oid, std::vector<PFInfo>>(oid, tmp));
+    op_tensor_list.insert(std::pair<Oid, std::vector<PFInfo>>(oid, tmp));
   }
 }
 
@@ -848,16 +688,16 @@ void ARCCppEngine::insertToPFDict_(Oid oid, SavedVariable* loc, Tid tid) {
 // this function should be called at the end of back prop of each layer
 void ARCCppEngine::dropTensor(Oid oid, SavedVariable* fetch_loc) { 
   //this operation has nothing to prefetch 
-  if (pf_dict_.find(oid) == pf_dict_.end()) {
+  if (op_tensor_list.find(oid) == op_tensor_list.end()) {
     //std::cerr << oid << " Prefetching dictionary lookup miss" << std::endl;
     return;
   }
 
-  auto fetch_vec = pf_dict_[oid];
+  auto fetch_vec = op_tensor_list[oid];
   for (auto it = fetch_vec.begin(); it != fetch_vec.end(); it++) {
     auto tid = it->second;
     if (at::globalContext().ARCGlobal.isOnDemand()) {
-      at::Tensor& tref = tensor_dict_[tid]; 
+      at::Tensor& tref = target_tensor[tid]; 
       c10::TensorOptions opt = c10::TensorOptions();
       opt = opt.device(c10::Device(c10::DeviceType::CPU));
       opt = opt.dtype(tref.dtype());
@@ -878,7 +718,7 @@ void ARCCppEngine::dropTensor(Oid oid, SavedVariable* fetch_loc) {
       }
 
       tref = tref.ARCto(opt, false, true, false);
-      tensor_pf_sync_dict_[tid] = false;
+      prefetch_sync[tid] = false;
 
       while (at::native::arc_vm.event_arr_d2h[tid]) {
         if (at::native::arc_vm.is_using_ssd()) {
@@ -887,9 +727,9 @@ void ARCCppEngine::dropTensor(Oid oid, SavedVariable* fetch_loc) {
       }
     } else {
       int cur_back_num = at::globalContext().ARCGlobal.curBackNum();
-      if ((oid == last_op_dict_[cur_back_num][tid]) && tensor_dict_check_[tid]) {
+      if ((oid == last_use_backward[cur_back_num][tid]) && target_tensor_valid[tid]) {
 //        std::cout << "dropTensor: " << tid << std::endl;
-        tensor_dict_check_[tid] = false;
+        target_tensor_valid[tid] = false;
         fetch_loc->reset_data();
         c10::cuda::CUDACachingAllocator::emptyCache();
 
@@ -900,9 +740,16 @@ void ARCCppEngine::dropTensor(Oid oid, SavedVariable* fetch_loc) {
   }
 }
 
-bool ARCCppEngine::fetchRequiredTensors_(Oid oid, ARCSync sync) {
+bool ARCCppEngine::preFetch(Oid oid) {
+  if (oid == 0)
+    return false;
+
+  if (!at::native::arc_vm.is_vdnn()) {
+    return false;
+  }
+
   //this operation has nothing to prefetch 
-  if (pf_dict_.find(oid) == pf_dict_.end()) {
+  if (op_tensor_list.find(oid) == op_tensor_list.end()) {
     //std::cerr << oid << " Prefetching dictionary lookup miss" << std::endl;
     return true;
   }
@@ -911,22 +758,22 @@ bool ARCCppEngine::fetchRequiredTensors_(Oid oid, ARCSync sync) {
     at::globalContext().ARCGlobal.pushBackOid(oid);
   }
   
-  auto fetch_vec = pf_dict_[oid];
+  auto fetch_vec = op_tensor_list[oid];
   int cur_back_num = at::globalContext().ARCGlobal.curBackNum();
 
   auto str = c10::cuda::getStreamFromPool(false, 0);
   c10::cuda::CUDAStreamGuard csg(str);
-  pf_sync_dict_.insert(std::pair<Oid, c10::StreamId>(oid, str.id()));
+  stream_occupied.insert(std::pair<Oid, c10::StreamId>(oid, str.id()));
 
   for (auto it = fetch_vec.begin(); it != fetch_vec.end(); it++) {
     auto tid = it->second;
 
-    if (tensor_dict_check_[tid] == false) {
+    if (target_tensor_valid[tid] == false) {
       //std::cerr << "tensor dictionary lookup miss" << std::endl;
       return true;
     }
 
-    at::Tensor& tref = tensor_dict_[tid];
+    at::Tensor& tref = target_tensor[tid];
     c10::TensorOptions opt = c10::TensorOptions();
     opt = opt.device(c10::Device(c10::DeviceType::CUDA));
     opt = opt.dtype(tref.dtype());
@@ -964,7 +811,7 @@ bool ARCCppEngine::fetchRequiredTensors_(Oid oid, ARCSync sync) {
       }
 
       if (at::globalContext().ARCGlobal.isOnDemand()) {
-        last_op_dict_[cur_back_num][tid] = oid;   
+        last_use_backward[cur_back_num][tid] = oid;   
       }
 
       if (at::globalContext().ARCGlobal.isOnDemand()) {
@@ -999,23 +846,22 @@ void ARCCppEngine::resetCppEngine() {
   
 
   for(auto i = 0; i < NUM_TENSOR; i ++) {
-    if (tensor_pf_sync_dict_[i] == true) {
-      tensor_dict_[i].reset();
+    if (prefetch_sync[i] == true) {
+      target_tensor[i].reset();
     }
   }
 
-  memset(tensor_dict_check_, 0, sizeof(bool) * NUM_TENSOR);
-  memset(tensor_sync_dict_, 0, sizeof(bool) * NUM_TENSOR);
-  memset(tensor_pf_sync_dict_, 0, sizeof(bool) * NUM_TENSOR);
+  memset(target_tensor_valid, 0, sizeof(bool) * NUM_TENSOR);
+  memset(offload_sync, 0, sizeof(bool) * NUM_TENSOR);
+  memset(prefetch_sync, 0, sizeof(bool) * NUM_TENSOR);
 
   memset(liveness_time, 0, sizeof(double) * NUM_TENSOR);
   memset(liveness_size, 0, sizeof(double) * NUM_TENSOR);
 //  memset(liveness_csr, 0, sizeof(bool) * NUM_TENSOR);
 //  memset(liveness_fp, 0, sizeof(bool) * NUM_TENSOR);
 
-  pf_dict_.clear();
-  pf_sync_dict_.clear();
-  liveness_temp.clear();
+  op_tensor_list.clear();
+  stream_occupied.clear();
 
   --remaining_backward;
   if (remaining_backward == 0) {
