@@ -3,6 +3,7 @@
 #include <ATen/TypeDefault.h>
 
 #include <ATen/native/cuda/arc_flag.h>
+#include <cuda_profiler_api.h>
 
 // @generated from tools/autograd/templates/VariableType.cpp
 
@@ -3133,16 +3134,11 @@ Tensor VariableType::bmm(const Tensor & self, const Tensor & mat2) {
   auto& self_ = unpack(self, "self", 0);
   auto& mat2_ = unpack(mat2, "mat2", 1);
   std::shared_ptr<BmmBackward> grad_fn;
-  if (compute_requires_grad( self, mat2 )) {
-    grad_fn = std::shared_ptr<BmmBackward>(new BmmBackward(), deleteNode);
-    grad_fn->set_next_edges(collect_next_edges( self, mat2 ));
-    if (grad_fn->should_compute_output(1)) {
-      grad_fn->self_ = SavedVariable(self, false);
-    }
-    if (grad_fn->should_compute_output(0)) {
-      grad_fn->mat2_ = SavedVariable(mat2, false);
-    }
-  }
+
+  int oid = at::globalContext().ARCGlobal.getCurOid();
+
+  at::native::arc_vm.kernelTimeStart();
+
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
   if (jit::tracer::isTracing()) {
@@ -3180,6 +3176,34 @@ Tensor VariableType::bmm(const Tensor & self, const Tensor & mat2) {
     AT_ASSERT(mat2__storage_saved.value().is_alias_of(mat2_.storage()));
   if (mat2__impl_saved) AT_ASSERT(mat2__impl_saved == mat2_.getIntrusivePtr());
   #endif
+  
+  if (at::native::arc_vm.is_timer())
+    std::cout << "bmm, " << oid << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
+  if (compute_requires_grad( self, mat2 )) {
+    grad_fn = std::shared_ptr<BmmBackward>(new BmmBackward(), deleteNode);
+    grad_fn->set_next_edges(collect_next_edges( self, mat2 ));
+
+    if (grad_fn->should_compute_output(1)) {
+      if (at::globalContext().ARCGlobal.isForward()) {
+        ARCCppEngine::offLoad(self, oid, &(grad_fn->self_), false);
+        grad_fn->setOid(oid);
+      } else {
+        grad_fn->self_ = SavedVariable(self, false);
+      }
+    }
+
+    if (at::globalContext().ARCGlobal.isForward()) {
+      ARCCppEngine::offLoad(mat2, oid, &(grad_fn->mat2_), false);
+      grad_fn->setOid(oid);
+    } else {
+      grad_fn->mat2_ = SavedVariable(mat2, false);
+    }
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
+  }
+
   if (grad_fn) {
       set_history(flatten_tensor_args( result ), grad_fn);
   }
@@ -6709,7 +6733,6 @@ Tensor VariableType::logsumexp(const Tensor & self, IntArrayRef dim, bool keepdi
 }
 Tensor VariableType::matmul(const Tensor & self, const Tensor & other) {
   RECORD_FUNCTION("matmul", std::vector<c10::IValue>({self, other}), Node::peek_at_next_sequence_nr());
-  at::native::arc_vm.kernelTimeStart();
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
   if (jit::tracer::isTracing()) {
@@ -6729,8 +6752,6 @@ Tensor VariableType::matmul(const Tensor & self, const Tensor & other) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
-  if (at::native::arc_vm.is_timer())
-    std::cout << "matmul, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << ", " << self.sizes() << ", " << other.sizes() << std::endl;
   return result;
 }
 std::tuple<Tensor,Tensor> VariableType::max(const Tensor & self, int64_t dim, bool keepdim) {

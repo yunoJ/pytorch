@@ -3,6 +3,7 @@
 #include <ATen/TypeDefault.h>
 
 #include <ATen/native/cuda/arc_flag.h>
+#include <cuda_profiler_api.h>
 
 // @generated from tools/autograd/templates/VariableType.cpp
 
@@ -3721,25 +3722,11 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::cudnn_batch_norm(Tensor & input, 
   check_no_requires_grad(running_mean, "running_mean");
   check_no_requires_grad(running_var, "running_var");
   std::shared_ptr<CudnnBatchNormBackward> grad_fn;
-  if (compute_requires_grad( input, weight, bias )) {
-    grad_fn = std::shared_ptr<CudnnBatchNormBackward>(new CudnnBatchNormBackward(), deleteNode);
-    grad_fn->set_next_edges(collect_next_edges( input, weight, bias ));
-    if (at::globalContext().ARCGlobal.isForward()) {
-      ARCCppEngine::offLoad(input, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->input_), false);
-      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
-    }
-    else {
-      grad_fn->input_ = SavedVariable(input, false);
-    }
-    grad_fn->weight_ = SavedVariable(weight, false);
-    grad_fn->running_mean_ = SavedVariable(running_mean, false);
-    grad_fn->running_var_ = SavedVariable(running_var, false);
-    grad_fn->training = training;
-    grad_fn->epsilon = epsilon;
 
-    if (at::native::arc_vm.is_using_ssd())
-      at::native::arc_vm.Arcp2pCompletion(false);
-  }
+  at::native::arc_vm.kernelTimeStart();
+//  if (at::native::arc_vm.is_timer())
+//    cudaProfilerStart();
+
   Tensor result0;
   Tensor result1;
   Tensor result2;
@@ -3820,9 +3807,35 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::cudnn_batch_norm(Tensor & input, 
     AT_ASSERT(running_var__storage_saved.value().is_alias_of(running_var_.storage()));
   if (running_var__impl_saved) AT_ASSERT(running_var__impl_saved == running_var_.getIntrusivePtr());
   #endif
+
+  if (at::native::arc_vm.is_timer())
+    std::cout << "batch_norm, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+//    cudaProfilerStop();
+
+  if (compute_requires_grad( input, weight, bias )) {
+    grad_fn = std::shared_ptr<CudnnBatchNormBackward>(new CudnnBatchNormBackward(), deleteNode);
+    grad_fn->set_next_edges(collect_next_edges( input, weight, bias ));
+    if (at::globalContext().ARCGlobal.isForward()) {
+      ARCCppEngine::offLoad(input, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->input_), false);
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else {
+      grad_fn->input_ = SavedVariable(input, false);
+    }
+    grad_fn->weight_ = SavedVariable(weight, false);
+    grad_fn->running_mean_ = SavedVariable(running_mean, false);
+    grad_fn->running_var_ = SavedVariable(running_var, false);
+    grad_fn->training = training;
+    grad_fn->epsilon = epsilon;
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
+  }
+
   if (grad_fn) {
       set_history(flatten_tensor_args( result0 ), grad_fn);
   }
+
   if (tracer_state) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result0);
@@ -5199,7 +5212,7 @@ Tensor VariableType::gelu(const Tensor & self) {
     jit::tracer::addOutput(node, result);
   }
   if (at::native::arc_vm.is_timer())
-    std::cout << "leaky_relu, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+    std::cout << "gelu, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
 
   return result;
 }
@@ -8095,6 +8108,9 @@ Tensor VariableType::mul(Tensor & self, Tensor & other) {
   int sfid = at::globalContext().ARCGlobal.getTid(self);
   int ofid = at::globalContext().ARCGlobal.getTid(other);
 
+//  if (at::native::arc_vm.is_timer())
+//    cudaProfilerStart();
+
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
   if (jit::tracer::isTracing()) {
@@ -8139,6 +8155,7 @@ Tensor VariableType::mul(Tensor & self, Tensor & other) {
 
   if (at::native::arc_vm.is_timer())
     std::cout << "mul0, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+//    cudaProfilerStop();
 
   if (compute_requires_grad( self, other )) {
     grad_fn = std::shared_ptr<MulBackward0>(new MulBackward0(), deleteNode);

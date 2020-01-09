@@ -4,6 +4,7 @@
 
 #include <ATen/native/cuda/arc_flag.h>
 #include <sys/time.h>
+#include <cuda_profiler_api.h>
 
 // @generated from tools/autograd/templates/VariableType.cpp
 
@@ -846,40 +847,11 @@ std::tuple<Tensor,Tensor,Tensor,Tensor,Tensor> VariableType::_cudnn_rnn(const Te
   auto dropout_state_ = unpack_opt(dropout_state, "dropout_state", 14);
   check_no_requires_grad(weight_buf, "weight_buf");
   std::shared_ptr<CudnnRnnBackward> grad_fn;
-  if (compute_requires_grad( input, weight, hx, cx )) {
-    grad_fn = std::shared_ptr<CudnnRnnBackward>(new CudnnRnnBackward(), deleteNode);
-    grad_fn->set_next_edges(collect_next_edges( input, weight, hx, cx ));
-    if (at::globalContext().ARCGlobal.isForward()) {
-      ARCCppEngine::offLoad(input, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->input_), false);
-      ARCCppEngine::offLoad(hx, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->hx_), false);
-      ARCCppEngine::offLoad(cx, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->cx_), false);
 
-      int tid0 = input.unsafeGetTensorImpl()->tensor_id;
-      at::native::arc_vm.feature_map_accum[tid0] = input.nbytes();
+  at::native::arc_vm.kernelTimeStart();
+//  if (at::native::arc_vm.is_timer())
+//    cudaProfilerStart();
 
-      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
-    }
-    else {
-      grad_fn->input_ = SavedVariable(input, false);
-      grad_fn->hx_ = SavedVariable(hx, false);
-      grad_fn->cx_ = SavedVariable(cx, false);
-    }
- 
-    grad_fn->weight_ = make_saved_variable_list(weight);
-    grad_fn->weight_stride0 = weight_stride0; 
-    grad_fn->mode = mode;
-    grad_fn->hidden_size = hidden_size;
-    grad_fn->num_layers = num_layers;
-    grad_fn->batch_first = batch_first;
-    grad_fn->dropout = dropout;
-    grad_fn->train = train;
-    grad_fn->bidirectional = bidirectional;
-    grad_fn->batch_sizes = batch_sizes.vec();
-    grad_fn->dropout_state_ = SavedVariable(dropout_state, false);
-    grad_fn->weight_size_ = weight.size();
-    if (at::native::arc_vm.is_using_ssd())
-      at::native::arc_vm.Arcp2pCompletion(false);
-  }
   Tensor result0;
   Tensor result1;
   Tensor result2;
@@ -976,7 +948,47 @@ std::tuple<Tensor,Tensor,Tensor,Tensor,Tensor> VariableType::_cudnn_rnn(const Te
   if (dropout_state__storage_saved.has_value())
     AT_ASSERT(dropout_state__storage_saved.value().is_alias_of(dropout_state_.storage()));
   if (dropout_state__impl_saved) AT_ASSERT(dropout_state__impl_saved == dropout_state_.getIntrusivePtr());
-  #endif
+
+#endif
+
+  if (at::native::arc_vm.is_timer())
+    std::cout << "cudnn_rnn, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+//    cudaProfilerStop();
+
+  if (compute_requires_grad( input, weight, hx, cx )) {
+    grad_fn = std::shared_ptr<CudnnRnnBackward>(new CudnnRnnBackward(), deleteNode);
+    grad_fn->set_next_edges(collect_next_edges( input, weight, hx, cx ));
+    if (at::globalContext().ARCGlobal.isForward()) {
+      ARCCppEngine::offLoad(input, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->input_), false);
+      ARCCppEngine::offLoad(hx, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->hx_), false);
+      ARCCppEngine::offLoad(cx, at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->cx_), false);
+
+      int tid0 = input.unsafeGetTensorImpl()->tensor_id;
+      at::native::arc_vm.feature_map_accum[tid0] = input.nbytes();
+
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else {
+      grad_fn->input_ = SavedVariable(input, false);
+      grad_fn->hx_ = SavedVariable(hx, false);
+      grad_fn->cx_ = SavedVariable(cx, false);
+    }
+ 
+    grad_fn->weight_ = make_saved_variable_list(weight);
+    grad_fn->weight_stride0 = weight_stride0; 
+    grad_fn->mode = mode;
+    grad_fn->hidden_size = hidden_size;
+    grad_fn->num_layers = num_layers;
+    grad_fn->batch_first = batch_first;
+    grad_fn->dropout = dropout;
+    grad_fn->train = train;
+    grad_fn->bidirectional = bidirectional;
+    grad_fn->batch_sizes = batch_sizes.vec();
+    grad_fn->dropout_state_ = SavedVariable(dropout_state, false);
+    grad_fn->weight_size_ = weight.size();
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
+  }
   if (grad_fn) {
       set_history(flatten_tensor_args( result0, result1, result2 ), grad_fn);
   }
@@ -2897,6 +2909,7 @@ Tensor & VariableType::addcmul_(Tensor & self, const Tensor & tensor1, const Ten
 Tensor VariableType::addmm(Tensor & self, Tensor & mat1, Tensor & mat2, Scalar beta, Scalar alpha) {
   RECORD_FUNCTION("addmm", std::vector<c10::IValue>({self, mat1, mat2, beta, alpha}), Node::peek_at_next_sequence_nr());
   at::native::arc_vm.kernelTimeStart();
+
   auto& self_ = unpack(self, "self", 0);
   auto& mat1_ = unpack(mat1, "mat1", 1);
   auto& mat2_ = unpack(mat2, "mat2", 2);
@@ -2990,10 +3003,8 @@ Tensor VariableType::addmm(Tensor & self, Tensor & mat1, Tensor & mat2, Scalar b
   if (mat2__impl_saved) AT_ASSERT(mat2__impl_saved == mat2_.getIntrusivePtr());
   #endif
 
-  if (at::native::arc_vm.is_timer()) {
+  if (at::native::arc_vm.is_timer())
     std::cout << "addmm, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << ", " << self.sizes() << ", " << mat1.sizes() << ", " << mat2.sizes() << std::endl;
-  }
-
 
   if (grad_fn) {
       set_history(flatten_tensor_args( result ), grad_fn);
@@ -3430,29 +3441,10 @@ Tensor & VariableType::atan_(Tensor & self) {
 }
 Tensor VariableType::avg_pool2d(Tensor & self, IntArrayRef kernel_size, IntArrayRef stride, IntArrayRef padding, bool ceil_mode, bool count_include_pad, c10::optional<int64_t> divisor_override) {
   at::native::arc_vm.kernelTimeStart();
+
   RECORD_FUNCTION("avg_pool2d", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
   auto& self_ = unpack(self, "self", 0);
   std::shared_ptr<AvgPool2DBackward> grad_fn;
-  if (compute_requires_grad( self )) {
-    grad_fn = std::shared_ptr<AvgPool2DBackward>(new AvgPool2DBackward(), deleteNode);
-    grad_fn->set_next_edges(collect_next_edges( self ));
-    if (at::globalContext().ARCGlobal.isForward()) {
-      ARCCppEngine::offLoad(self, /* (TraceableFunction* )(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
-      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
-    }
-    else {
-      grad_fn->self_ = SavedVariable(self, false);
-    }
-    grad_fn->kernel_size = kernel_size.vec();
-    grad_fn->stride = stride.vec();
-    grad_fn->padding = padding.vec();
-    grad_fn->ceil_mode = ceil_mode;
-    grad_fn->count_include_pad = count_include_pad;
-    grad_fn->divisor_override = divisor_override;
-
-    if (at::native::arc_vm.is_using_ssd())
-      at::native::arc_vm.Arcp2pCompletion(false);
-  }
 
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
@@ -3490,11 +3482,29 @@ Tensor VariableType::avg_pool2d(Tensor & self, IntArrayRef kernel_size, IntArray
   if (self__impl_saved) AT_ASSERT(self__impl_saved == self_.getIntrusivePtr());
   #endif
 
-  if (at::native::arc_vm.is_timer()) {
+  if (at::native::arc_vm.is_timer())
     std::cout << "avg_pool2d, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
-    std::cout << "avg_pool2d, " << at::globalContext().ARCGlobal.getCurOid() << ", " << self.sizes() << std::endl;
-  }
 
+  if (compute_requires_grad( self )) {
+    grad_fn = std::shared_ptr<AvgPool2DBackward>(new AvgPool2DBackward(), deleteNode);
+    grad_fn->set_next_edges(collect_next_edges( self ));
+    if (at::globalContext().ARCGlobal.isForward()) {
+      ARCCppEngine::offLoad(self, /* (TraceableFunction* )(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else {
+      grad_fn->self_ = SavedVariable(self, false);
+    }
+    grad_fn->kernel_size = kernel_size.vec();
+    grad_fn->stride = stride.vec();
+    grad_fn->padding = padding.vec();
+    grad_fn->ceil_mode = ceil_mode;
+    grad_fn->count_include_pad = count_include_pad;
+    grad_fn->divisor_override = divisor_override;
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
+  }
 
   if (grad_fn) {
       set_history(flatten_tensor_args( result ), grad_fn);
@@ -5879,6 +5889,7 @@ Tensor VariableType::fft(const Tensor & self, int64_t signal_ndim, bool normaliz
 Tensor VariableType::flatten(const Tensor & self, int64_t start_dim, int64_t end_dim) {
   RECORD_FUNCTION("flatten", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
   at::native::arc_vm.kernelTimeStart();
+
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
   if (jit::tracer::isTracing()) {
@@ -5899,9 +5910,8 @@ Tensor VariableType::flatten(const Tensor & self, int64_t start_dim, int64_t end
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
-  if (at::native::arc_vm.is_timer()) {
+  if (at::native::arc_vm.is_timer())
     std::cout << "flatten, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
-  }
 
   return result;
 }
@@ -6834,8 +6844,11 @@ Tensor & VariableType::lerp_(Tensor & self, const Tensor & end, const Tensor & w
 Tensor VariableType::linear(const Tensor & input, const Tensor & weight, const Tensor & bias) {
   RECORD_FUNCTION("linear", std::vector<c10::IValue>({input, weight, bias}), Node::peek_at_next_sequence_nr());
   at::native::arc_vm.kernelTimeStart();
+
   auto result = TypeDefault::linear(input, weight, bias);
-  std::cout << "linear, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
+  if (at::native::arc_vm.is_timer())
+    std::cout << "linear, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
   return result;
 }
 Tensor VariableType::log_sigmoid(const Tensor & self) {
@@ -7073,6 +7086,7 @@ Tensor & VariableType::matmul_out(Tensor & out, const Tensor & self, const Tenso
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, out);
   }
+  cout << "matmul_out, " << endl;
   return out;
 }
 std::tuple<Tensor &,Tensor &> VariableType::max_out(Tensor & max, Tensor & max_values, const Tensor & self, int64_t dim, bool keepdim) {
@@ -8376,29 +8390,6 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::native_batch_norm(Tensor & input,
   check_no_requires_grad(running_var, "running_var");
   std::shared_ptr<NativeBatchNormBackward> grad_fn;
 
-  if (compute_requires_grad( input, weight, bias )) {
-    grad_fn = std::shared_ptr<NativeBatchNormBackward>(new NativeBatchNormBackward(), deleteNode);
-    grad_fn->set_next_edges(collect_next_edges( input, weight, bias ));
-
-    if (at::globalContext().ARCGlobal.isForward()){
-      ARCCppEngine::offLoad(input, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->input_), false);
-
-      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
-    }
-    else {
-      grad_fn->input_ = SavedVariable(input, false);
-    }
-
-    grad_fn->weight_ = SavedVariable(weight, false);
-    grad_fn->running_mean_ = SavedVariable(running_mean, false);
-    grad_fn->running_var_ = SavedVariable(running_var, false);
-    grad_fn->training = training;
-    grad_fn->eps = eps;
-
-    if (at::native::arc_vm.is_using_ssd())
-      at::native::arc_vm.Arcp2pCompletion(false);
-  }
-
   Tensor result0;
   Tensor result1;
   Tensor result2;
@@ -8487,6 +8478,28 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::native_batch_norm(Tensor & input,
   if (running_var__impl_saved) AT_ASSERT(running_var__impl_saved == running_var_.getIntrusivePtr());
   #endif
 
+  if (compute_requires_grad( input, weight, bias )) {
+    grad_fn = std::shared_ptr<NativeBatchNormBackward>(new NativeBatchNormBackward(), deleteNode);
+    grad_fn->set_next_edges(collect_next_edges( input, weight, bias ));
+
+    if (at::globalContext().ARCGlobal.isForward()){
+      ARCCppEngine::offLoad(input, /*(TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->input_), false);
+
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else {
+      grad_fn->input_ = SavedVariable(input, false);
+    }
+
+    grad_fn->weight_ = SavedVariable(weight, false);
+    grad_fn->running_mean_ = SavedVariable(running_mean, false);
+    grad_fn->running_var_ = SavedVariable(running_var, false);
+    grad_fn->training = training;
+    grad_fn->eps = eps;
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
+  }
 
   if (grad_fn) {
       set_history(flatten_tensor_args( result0 ), grad_fn);
@@ -8511,8 +8524,7 @@ std::tuple<Tensor,Tensor,Tensor> VariableType::native_batch_norm(Tensor & input,
 
     if (at::native::arc_vm.is_using_ssd())
         at::native::arc_vm.Arcp2pCompletion(false);
-
-    
+ 
   }
   return std::make_tuple(std::move(result0), std::move(result1), std::move(result2));
 }
@@ -8629,6 +8641,7 @@ Tensor & VariableType::ne_out(Tensor & out, const Tensor & self, const Tensor & 
 Tensor VariableType::nll_loss(const Tensor & self, const Tensor & target, const Tensor & weight, int64_t reduction, int64_t ignore_index) {
   RECORD_FUNCTION("nll_loss", std::vector<c10::IValue>({self, target, weight}), Node::peek_at_next_sequence_nr());
   at::native::arc_vm.kernelTimeStart();
+
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
   if (jit::tracer::isTracing()) {
@@ -8651,6 +8664,7 @@ Tensor VariableType::nll_loss(const Tensor & self, const Tensor & target, const 
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
+
   if (at::native::arc_vm.is_timer())
     std::cout << "nll_loss, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
 
@@ -9074,6 +9088,7 @@ Tensor & VariableType::ormqr_out(Tensor & out, const Tensor & self, const Tensor
 Tensor VariableType::permute(const Tensor & self, IntArrayRef dims) {
   RECORD_FUNCTION("permute", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
   at::native::arc_vm.kernelTimeStart();
+
   auto& self_ = unpack(self, "self", 0);
   std::shared_ptr<PermuteBackward> grad_fn;
   if (compute_requires_grad( self )) {
@@ -9793,21 +9808,9 @@ Tensor & VariableType::reflection_pad2d_out(Tensor & out, const Tensor & self, I
 Tensor VariableType::relu(const Tensor & self) {
   RECORD_FUNCTION("relu", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
   at::native::arc_vm.kernelTimeStart();
+
   auto& self_ = unpack(self, "self", 0);
   std::shared_ptr<ReluBackward0> grad_fn;
-  if (compute_requires_grad( self )) {
-    grad_fn = std::shared_ptr<ReluBackward0>(new ReluBackward0(), deleteNode);
-    grad_fn->set_next_edges(collect_next_edges( self ));
-
-    if (at::globalContext().ARCGlobal.isForward()) {
-      ARCCppEngine::offLoad(self, /* (TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
-    }
-    else
-      grad_fn->self_ = SavedVariable(self, false);
-
-    if (at::native::arc_vm.is_using_ssd())
-        at::native::arc_vm.Arcp2pCompletion(false);
-  }
 
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
@@ -9839,11 +9842,22 @@ Tensor VariableType::relu(const Tensor & self) {
   if (self__impl_saved) AT_ASSERT(self__impl_saved == self_.getIntrusivePtr());
   #endif
 
-  if (at::native::arc_vm.is_timer()) {
+  if (at::native::arc_vm.is_timer())
     cout << "relu, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
+  if (compute_requires_grad( self )) {
+    grad_fn = std::shared_ptr<ReluBackward0>(new ReluBackward0(), deleteNode);
+    grad_fn->set_next_edges(collect_next_edges( self ));
+
+    if (at::globalContext().ARCGlobal.isForward()) {
+      ARCCppEngine::offLoad(self, /* (TraceableFunction*)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
+    }
+    else
+      grad_fn->self_ = SavedVariable(self, false);
+
+    if (at::native::arc_vm.is_using_ssd())
+        at::native::arc_vm.Arcp2pCompletion(false);
   }
-
-
   if (grad_fn) {
     set_history(flatten_tensor_args( result ), grad_fn);
   }
@@ -9857,6 +9871,9 @@ Tensor VariableType::relu(const Tensor & self) {
 Tensor & VariableType::relu_(Tensor & self) {
   RECORD_FUNCTION("relu_", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
   at::native::arc_vm.kernelTimeStart();
+//  if (at::native::arc_vm.is_timer())
+//    cudaProfilerStart();
+
   auto& self_ = unpack(self, "self", 0);
   check_inplace(self);
   std::shared_ptr<ReluBackward1> grad_fn;
@@ -9902,6 +9919,7 @@ Tensor & VariableType::relu_(Tensor & self) {
 
   if (at::native::arc_vm.is_timer())
     std::cout << "relu_, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << ", " << self.sizes() << std::endl;
+//    cudaProfilerStop();
 
   increment_version(self);
   if (grad_fn) {
@@ -9911,6 +9929,7 @@ Tensor & VariableType::relu_(Tensor & self) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, self);
   }
+
   if (grad_fn) {
     if (at::globalContext().ARCGlobal.isForward()) {
       // ARC check flag if relu is computed
@@ -10929,12 +10948,16 @@ Tensor VariableType::squeeze(const Tensor & self) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
-  std::cout << "squeeze0, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
+  if (at::native::arc_vm.is_timer())
+    std::cout << "squeeze0, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return result;
 }
 Tensor VariableType::squeeze(const Tensor & self, int64_t dim) {
   RECORD_FUNCTION("squeeze", std::vector<c10::IValue>({self}), Node::peek_at_next_sequence_nr());
   at::native::arc_vm.kernelTimeStart();
+
   auto& self_ = unpack(self, "self", 0);
   std::shared_ptr<SqueezeBackward1> grad_fn;
   if (compute_requires_grad( self )) {

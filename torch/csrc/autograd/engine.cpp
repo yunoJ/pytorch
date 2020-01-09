@@ -678,9 +678,9 @@ auto Engine::execute(const edge_list& roots,
   size_t p2pfreeBytes;
   if (at::globalContext().ARCGlobal.isOnDemand()) {
     size_t dummy1, dummy2;
-//    freeBytes = at::native::arc_vm.device_occupancy_size();
+    freeBytes = at::native::arc_vm.device_occupancy_size();
     p2pfreeBytes = at::native::arc_vm.p2p_occupancy_size();
-    THCudaMemGetInfo(at::globalContext().getTHCState(), &freeBytes, &dummy1, &dummy2);
+//    THCudaMemGetInfo(at::globalContext().getTHCState(), &freeBytes, &dummy1, &dummy2);
 
     if (at::globalContext().ARCGlobal.isDebugMode()) {
       std::cout << "Remaining GPU memory: " << (double)freeBytes/1024/1024 << std::endl;

@@ -33028,6 +33028,7 @@ Tensor & VariableType::masked_select_out(Tensor & out, const Tensor & self, cons
 }
 Tensor VariableType::matmul(const Tensor & self, const Tensor & other) {
   RECORD_FUNCTION("matmul", std::vector<c10::IValue>({self, other}), Node::peek_at_next_sequence_nr());
+  at::native::arc_vm.kernelTimeStart();
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
   if (jit::tracer::isTracing()) {
@@ -33047,6 +33048,10 @@ Tensor VariableType::matmul(const Tensor & self, const Tensor & other) {
     jit::tracer::setTracingState(std::move(tracer_state));
     jit::tracer::addOutput(node, result);
   }
+
+  if (at::native::arc_vm.is_timer())
+    std::cout << "default matmul, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
   return result;
 }
 Tensor & VariableType::matmul_out(Tensor & out, const Tensor & self, const Tensor & other) {

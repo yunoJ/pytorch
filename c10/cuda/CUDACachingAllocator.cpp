@@ -59,8 +59,8 @@ namespace {
 using stream_set = std::unordered_set<cuda::CUDAStream>;
 
 constexpr size_t kMinBlockSize = 512;       // all sizes are rounded to at least 512 bytes
-constexpr size_t kSmallSize = 1048576;      // largest "small" allocation is 1 MiB
-//constexpr size_t kSmallSize = 1;      // largest "small" allocation is 1 MiB
+//constexpr size_t kSmallSize = 1048576;      // largest "small" allocation is 1 MiB
+constexpr size_t kSmallSize = 1;      // largest "small" allocation is 1 MiB
 constexpr size_t kSmallBuffer = 2097152;    // "small" allocations are packed in 2 MiB blocks
 constexpr size_t kLargeBuffer = 20971520;   // "large" allocations may be packed in 20 MiB blocks
 constexpr size_t kMinLargeAlloc = 10485760; // allocations between 1 and 10 MiB may use kLargeBuffer
@@ -234,8 +234,8 @@ struct THCCachingAllocator
     }
     if (block == nullptr) {
       void* ptr;
-      size_t alloc_size = get_allocation_size(size);
-//      size_t alloc_size = size;
+//      size_t alloc_size = get_allocation_size(size);
+      size_t alloc_size = size;
       cudaError_t err = cuda_malloc_retry(device, &ptr, alloc_size, reverse);
       if (err != cudaSuccess) {
         if (err == cudaErrorMemoryAllocation) {
@@ -475,7 +475,6 @@ struct THCCachingAllocator
   {
     // Try cudaMalloc. If cudaMalloc fails, frees all non-split cached blocks
     // and retries.
-    /*
     if (at::native::arc_vm.is_vdnn()) {
       at::native::arc_vm.device_malloc(devPtr, size);
 
@@ -502,7 +501,6 @@ struct THCCachingAllocator
         }
       }
     } else {
-    */
       cudaError_t err = cudaMalloc(devPtr, size);
       if (err != cudaSuccess) {
 //        cudaGetLastError();  // reset the last CUDA error
@@ -512,7 +510,7 @@ struct THCCachingAllocator
           return err;
         }
       }
-//    }
+    }
 
     return cudaSuccess;
   }
@@ -544,13 +542,11 @@ struct THCCachingAllocator
     while (it != end) {
       Block* block = *it;
       if (!block->prev && !block->next) {
-        /*
         if (at::native::arc_vm.is_vdnn()) {
           at::native::arc_vm.device_free((void *)block->ptr, block->size);
         } else {
-        */
           C10_CUDA_CHECK(cudaFree((void*)block->ptr));
-        //}
+        }
         get_stats_for_device(block->device).decreaseCached(block->size);
         auto cur = it;
         ++it;

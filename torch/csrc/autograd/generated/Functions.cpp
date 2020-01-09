@@ -20,6 +20,7 @@
 #include <functional>
 
 #include <ATen/native/cuda/arc_flag.h>
+#include <cuda_profiler_api.h>
 
 // @generated from tools/autograd/templates/Functions.cpp
 
@@ -2755,8 +2756,19 @@ variable_list BmmBackward::apply(variable_list&& grads) {
   auto mat2_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
+
+  if (at::globalContext().ARCGlobal.isOnDemand()) {
+    ARCCppEngine::preFetch(this->getOid());
+  } else if (at::native::arc_vm.hard_training) {
+    ARCCppEngine::preFetch(this->getOid());
+//    at::native::arc_vm.Arcp2pCompletion(true);
+  }
+  ARCCppEngine::preFetchSync(this->getOid());
+
   auto self = self_.unpack();
   auto mat2 = mat2_.unpack();
+  at::native::arc_vm.kernelTimeStart();
+
   if (should_compute_output({ mat2_ix })) {
     auto grad_result = self.transpose(1, 2).bmm(grad);
     copy_range(grad_inputs, mat2_ix, grad_result);
@@ -2765,6 +2777,13 @@ variable_list BmmBackward::apply(variable_list&& grads) {
     auto grad_result = grad.bmm(mat2.transpose(1, 2));
     copy_range(grad_inputs, self_ix, grad_result);
   }
+
+  if (at::native::arc_vm.is_timer())
+    std::cout << "BmmBackward, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+
+  ARCCppEngine::dropTensor(this->getOid(), &self_);
+  ARCCppEngine::dropTensor(this->getOid(), &mat2_);
+
   if (at::native::arc_vm.is_vdnn() && !at::native::arc_vm.hard_training) {
     at::native::arc_vm.Arcp2pCompletion(true);
   }
@@ -4465,6 +4484,9 @@ variable_list MmBackward::apply(variable_list&& grads) {
   auto self = self_.unpack();
   auto mat2 = mat2_.unpack();
   at::native::arc_vm.kernelTimeStart();
+//  if (at::native::arc_vm.is_timer())
+//    cudaProfilerStart();
+
   if (should_compute_output({ mat2_ix })) {
     auto grad_result = mm_mat2_backward(grad, self, mat2_sizes, mat2.strides(), 1);
     copy_range(grad_inputs, mat2_ix, grad_result);
@@ -4477,6 +4499,8 @@ variable_list MmBackward::apply(variable_list&& grads) {
   }
   if (at::native::arc_vm.is_timer())
     std::cout << "MmBackward, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+//    cudaProfilerStop();
+
   ARCCppEngine::dropTensor(this->getOid(), &self_);
   ARCCppEngine::dropTensor(this->getOid(), &mat2_);
 
@@ -4519,24 +4543,31 @@ variable_list MulBackward0::apply(variable_list&& grads) {
   auto self = self_.unpack();
   auto other = other_.unpack();
 
+  at::native::arc_vm.kernelTimeStart();
+//  if (at::native::arc_vm.is_timer())
+//    cudaProfilerStart();
+
   if (should_compute_output({ other_ix })) {
-    at::native::arc_vm.kernelTimeStart();
     auto grad_result = grad * self;
     copy_range(grad_inputs, other_ix, grad_result);
     at::native::arc_vm.gradient_map_accum += (double)grad_result.nbytes() / 1024 / 1024;
-    if (at::native::arc_vm.is_timer())
-      std::cout << "MulBackward0_1, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
-    ARCCppEngine::dropTensor(this->getOid(), &self_);
   }
   if (should_compute_output({ self_ix })) {
-    at::native::arc_vm.kernelTimeStart();
     auto grad_result = grad * other;
     copy_range(grad_inputs, self_ix, grad_result);
-    if (at::native::arc_vm.is_timer())
-      std::cout << "MulBackward0_2, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
-    ARCCppEngine::dropTensor(this->getOid(), &other_);
   }
 
+  if (at::native::arc_vm.is_timer())
+    std::cout << "MulBackward0, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+//    cudaProfilerStop();
+
+  if (should_compute_output({ other_ix })) {
+    ARCCppEngine::dropTensor(this->getOid(), &self_);
+  }
+
+  if (should_compute_output({ self_ix })) {
+    ARCCppEngine::dropTensor(this->getOid(), &other_);
+  }
   if (at::native::arc_vm.is_vdnn() && !at::native::arc_vm.hard_training) {
     at::native::arc_vm.Arcp2pCompletion(true);
   }
@@ -6027,12 +6058,11 @@ variable_list UnsqueezeBackward0::apply(variable_list&& grads) {
   auto self_ix = gen.range(1);
   variable_list grad_inputs(gen.size());
   auto& grad = grads[0];
-//  at::native::arc_vm.kernelTimeStart();
+  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ self_ix })) {
     auto grad_result = grad.squeeze(dim);
     copy_range(grad_inputs, self_ix, grad_result);
   }
-//  std::cout << "UnsqueezeBackward0, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
   return grad_inputs;
 }
 variable_list UnsqueezeBackward1::apply(variable_list&& grads) {
@@ -6600,6 +6630,9 @@ variable_list ReluBackward1::apply(variable_list&& grads) {
   auto result = result_.unpack(shared_from_this());
   
   at::native::arc_vm.kernelTimeStart();
+//  if (at::native::arc_vm.is_timer())
+//    cudaProfilerStart();
+
   if (should_compute_output({ self_ix })) {
     auto grad_result = threshold_backward(grad, result, 0);
     copy_range(grad_inputs, self_ix, grad_result);
@@ -6607,6 +6640,7 @@ variable_list ReluBackward1::apply(variable_list&& grads) {
   }
   if (at::native::arc_vm.is_timer())
     std::cout << "ReluBackward1, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+//    cudaProfilerStop();
   
   ARCCppEngine::dropTensor(this->getOid(), &result_);
 
@@ -7495,7 +7529,7 @@ variable_list ThnnConv2DBackward::apply(variable_list&& grads) {
   auto weight = weight_.unpack();
   auto finput = finput_.unpack(shared_from_this());
   auto fgrad_input = fgrad_input_.unpack(shared_from_this());
-  at::native::arc_vm.kernelTimeStart();
+//  at::native::arc_vm.kernelTimeStart();
   if (should_compute_output({ self_ix, weight_ix, bias_ix })) {
       auto grad_input_mask = std::array<bool, 3>{
         should_compute_output({ self_ix }),
@@ -7516,8 +7550,8 @@ variable_list ThnnConv2DBackward::apply(variable_list&& grads) {
         at::native::arc_vm.gradient_map_accum += (double)std::get<2>(grad_result).nbytes() / 1024 / 1024;
       }
   }
-  if (at::native::arc_vm.is_timer())
-    std::cout << "AddmmBackward, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+//  if (at::native::arc_vm.is_timer())
+//    std::cout << "AddmmBackward, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
   ARCCppEngine::dropTensor(this->getOid(), &self_);
 
   if (at::native::arc_vm.is_vdnn() && !at::native::arc_vm.hard_training) {
@@ -8654,11 +8688,13 @@ variable_list CudnnConvolutionBackward::apply(variable_list&& grads) {
 //    at::native::arc_vm.Arcp2pCompletion(true);
   }
   ARCCppEngine::preFetchSync(this->getOid());
-  
 
   auto self = self_.unpack();
   auto weight = weight_.unpack();
   at::native::arc_vm.kernelTimeStart();
+//  if (at::native::arc_vm.is_timer())
+//    cudaProfilerStart();
+
   if (should_compute_output({ self_ix, weight_ix, bias_ix })) {
       auto grad_input_mask = std::array<bool, 3>{
         should_compute_output({ self_ix }),
@@ -8681,6 +8717,8 @@ variable_list CudnnConvolutionBackward::apply(variable_list&& grads) {
   }
   if (at::native::arc_vm.is_timer())
     std::cout << "CudnnConvolutionBackward, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+//    cudaProfilerStop();
+
   ARCCppEngine::dropTensor(this->getOid(), &self_);
 
   if (at::native::arc_vm.is_vdnn() && !at::native::arc_vm.hard_training) {
@@ -8776,6 +8814,9 @@ variable_list CudnnBatchNormBackward::apply(variable_list&& grads) {
   auto result1 = result1_.unpack(shared_from_this());
   auto result2 = result2_.unpack(shared_from_this());
   at::native::arc_vm.kernelTimeStart();
+//  if (at::native::arc_vm.is_timer())
+//    cudaProfilerStart();
+
   if (should_compute_output({ input_ix, weight_ix, bias_ix })) {
       auto grad_input_mask = std::array<bool, 3>{
         should_compute_output({ input_ix }),
@@ -8796,8 +8837,10 @@ variable_list CudnnBatchNormBackward::apply(variable_list&& grads) {
         at::native::arc_vm.gradient_map_accum += (double)std::get<2>(grad_result).nbytes() / 1024 / 1024;
       }
   }
+
   if (at::native::arc_vm.is_timer())
     std::cout << "CudnnBatchNormBackward, " << this->getOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << std::endl;
+//    cudaProfilerStop();
 
   ARCCppEngine::dropTensor(this->getOid(), &input_);
 

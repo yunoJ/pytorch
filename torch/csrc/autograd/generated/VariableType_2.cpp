@@ -5,6 +5,8 @@
 #include <c10/cuda/CUDAGuard.h>
 #include <c10/cuda/CUDAStream.h>
 
+#include <cuda_profiler_api.h>
+
 // @generated from tools/autograd/templates/VariableType.cpp
 
 // NOTE [Sharded File]: on this file's split-into-shards state
@@ -3191,33 +3193,13 @@ Tensor VariableType::cudnn_affine_grid_generator(const Tensor & theta, int64_t N
 Tensor VariableType::cudnn_convolution(Tensor & self, const Tensor & weight, const Tensor & bias, IntArrayRef padding, IntArrayRef stride, IntArrayRef dilation, int64_t groups, bool benchmark, bool deterministic) {
   RECORD_FUNCTION("cudnn_convolution", std::vector<c10::IValue>({self, weight, bias}), Node::peek_at_next_sequence_nr());
   at::native::arc_vm.kernelTimeStart();
+//  if (at::native::arc_vm.is_timer())
+//    cudaProfilerStart();
 
   auto& self_ = unpack(self, "self", 0);
   auto& weight_ = unpack(weight, "weight", 1);
   auto bias_ = unpack_opt(bias, "bias", 2);
   std::shared_ptr<CudnnConvolutionBackward> grad_fn;
-
-  if (compute_requires_grad( self, weight, bias )) {
-    grad_fn = std::shared_ptr<CudnnConvolutionBackward>(new CudnnConvolutionBackward(), deleteNode);
-    grad_fn->set_next_edges(collect_next_edges( self, weight, bias ));
-    if (at::globalContext().ARCGlobal.isForward()){
-      ARCCppEngine::offLoad(self, /*(TraceableFunction *)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
-      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
-    }
-    else {
-      grad_fn->self_ = SavedVariable(self, false);
-    }
-    grad_fn->weight_ = SavedVariable(weight, false);
-    grad_fn->padding = padding.vec();
-    grad_fn->stride = stride.vec();
-    grad_fn->dilation = dilation.vec();
-    grad_fn->groups = groups;
-    grad_fn->benchmark = benchmark;
-    grad_fn->deterministic = deterministic;
-
-    if (at::native::arc_vm.is_using_ssd())
-      at::native::arc_vm.Arcp2pCompletion(false);
-  }
 
   torch::jit::Node* node = nullptr;
   std::shared_ptr<jit::tracer::TracingState> tracer_state;
@@ -3276,7 +3258,29 @@ Tensor VariableType::cudnn_convolution(Tensor & self, const Tensor & weight, con
 
   if (at::native::arc_vm.is_timer())
     cout << "cudnn_convolution, " << at::globalContext().ARCGlobal.getCurOid() << ", " << *at::native::arc_vm.kernelTimeEnd() << ", " << self.sizes() << std::endl;
+//    cudaProfilerStop();
 
+  if (compute_requires_grad( self, weight, bias )) {
+    grad_fn = std::shared_ptr<CudnnConvolutionBackward>(new CudnnConvolutionBackward(), deleteNode);
+    grad_fn->set_next_edges(collect_next_edges( self, weight, bias ));
+    if (at::globalContext().ARCGlobal.isForward()){
+      ARCCppEngine::offLoad(self, /*(TraceableFunction *)(grad_fn.get()), Async,*/ at::globalContext().ARCGlobal.getCurOid(), &(grad_fn->self_), false);
+      grad_fn->setOid(at::globalContext().ARCGlobal.getCurOid());
+    }
+    else {
+      grad_fn->self_ = SavedVariable(self, false);
+    }
+    grad_fn->weight_ = SavedVariable(weight, false);
+    grad_fn->padding = padding.vec();
+    grad_fn->stride = stride.vec();
+    grad_fn->dilation = dilation.vec();
+    grad_fn->groups = groups;
+    grad_fn->benchmark = benchmark;
+    grad_fn->deterministic = deterministic;
+
+    if (at::native::arc_vm.is_using_ssd())
+      at::native::arc_vm.Arcp2pCompletion(false);
+  }
   if (grad_fn) {
       set_history(flatten_tensor_args( result ), grad_fn);
   }
@@ -7463,6 +7467,7 @@ Tensor & VariableType::mm_out(Tensor & out, const Tensor & self, const Tensor & 
   auto& self_ = unpack(self, "self", 1);
   auto& mat2_ = unpack(mat2, "mat2", 2);
   std::shared_ptr<Node> grad_fn;
+
   if (compute_requires_grad( self, mat2 )) {
     throw_error_out_requires_grad("mm");
   }
@@ -7517,6 +7522,10 @@ Tensor & VariableType::mm_out(Tensor & out, const Tensor & self, const Tensor & 
     AT_ASSERT(mat2__storage_saved.value().is_alias_of(mat2_.storage()));
   if (mat2__impl_saved) AT_ASSERT(mat2__impl_saved == mat2_.getIntrusivePtr());
   #endif
+
+  if (at::native::arc_vm.is_timer())
+    std::cout << "mm_out, " << at::globalContext().ARCGlobal.getCurOid() << endl;
+
   increment_version(out);
   if (grad_fn) {
       rebase_history(flatten_tensor_args( out ), grad_fn);
